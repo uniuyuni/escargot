@@ -11,6 +11,7 @@ from kivy_garden.matplotlib.backend_kivyagg import FigureCanvasKivyAgg
 
 import noise2void
 import DRBNet
+import colorcorrect.algorithm as cca
 
 import core
 import imageset
@@ -45,7 +46,7 @@ class NoiseLayer(AdjustmentLayer):
         if state == "down":
             self.diff = noise2void.predict(img, NoiseLayer.__net, 'mps')
         if state == "normal":
-            self.diff = img
+            self.diff = None
 
 class DefocusLayer(AdjustmentLayer):
     __net = None
@@ -61,7 +62,17 @@ class DefocusLayer(AdjustmentLayer):
         if state == "down":
             self.diff = DRBNet.predict(img, DefocusLayer.__net, 'mps')
         if state == "normal":
-            self.diff = img
+            self.diff = None
+
+class ColorCorrectLayer(AdjustmentLayer):
+
+    def make_diff(self, img, widget):
+        state = widget.ids["toggle_color_correct"].state
+        if state == "down":
+            self.diff = cca.automatic_color_equalization(img*255.0)
+            self.diff = self.diff.astype(np.float32)/255.0
+        if state == "normal":
+            self.diff = None
 
 class ExposureLayer(AdjustmentLayer):
 
@@ -264,6 +275,7 @@ class MainWidget(Widget):
     def __create_layer(layer):
         layer['noise'] = NoiseLayer()
         layer['defocus'] = DefocusLayer()
+        layer['color_correct'] = ColorCorrectLayer()
         layer['exposure'] = ExposureLayer()
         layer['contrast'] = ContrastLayer()
         layer['tone'] = ToneLayer()
@@ -352,6 +364,9 @@ class MainWidget(Widget):
         else:
             rgb = img.copy()
         diff = dic['defocus'].diff
+        if diff is not None:
+            rgb = diff
+        diff = dic['color_correct'].diff
         if diff is not None:
             rgb = diff
     

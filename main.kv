@@ -55,6 +55,16 @@ MainWidget:
                         orientation: 'horizontal'
                         Label:
                             size_hint_x: 4
+                            text: "color_correct"
+                        ToggleButton:
+                            id: toggle_color_correct
+                            on_state: root.adjust_key('color_correct')
+
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
                             text: "exposure"
                         Slider:
                             size_hint_x: 6
