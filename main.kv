@@ -1,0 +1,779 @@
+
+MainWidget:
+
+<MainWidget>:
+    BoxLayout:
+        orientation: 'vertical'
+        size: root.size
+
+        BoxLayout:
+            orientation: 'horizontal'
+            size_hint_y: 9
+
+            BoxLayout:
+                id: info
+                orientation: 'vertical'
+                size_hint_x: 2
+
+                Label:
+                    text: "Info"
+            
+            Image:
+                id: preview
+                size_hint_x: 6
+
+            ScrollView:
+                size_hint_x: 2
+
+                BoxLayout:
+                    size_hint_y: None
+                    orientation: "vertical"
+                    height: self.minimum_height
+
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
+                            text: "noise"
+                        ToggleButton:
+                            id: toggle_noise
+                            on_state: root.adjust_key('noise')
+
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
+                            text: "defocus"
+                        ToggleButton:
+                            id: toggle_defocus
+                            on_state: root.adjust_key('defocus')
+
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
+                            text: "exposure"
+                        Slider:
+                            size_hint_x: 6
+                            id: slider_exposure
+                            min: -5.0
+                            max: 5.0
+                            value: 0.0
+                            step: 0.1
+                            on_value: root.adjust_key('exposure')
+
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
+                            text: "contrast"
+                        Slider:
+                            size_hint_x: 6
+                            id: slider_contrast
+                            min: -100.0
+                            max: 100.0
+                            value: 0.0
+                            step: 1.0
+                            on_value: root.adjust_key('contrast')
+
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
+                            text: "hilight"
+                        Slider:
+                            size_hint_x: 6
+                            id: slider_hilight
+                            min: -100.0
+                            max: 100.0
+                            value: 0.0
+                            step: 1.0
+                            on_value: root.adjust_key('tone')
+
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
+                            text: "shadow"
+                        Slider:
+                            size_hint_x: 6
+                            id: slider_shadow
+                            min: -100.0
+                            max: 100.0
+                            value: 0.0
+                            step: 1.0
+                            on_value: root.adjust_key('tone')
+
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
+                            text: "white"
+                        Slider:
+                            size_hint_x: 6
+                            id: slider_white
+                            min: -100.0
+                            max: 100.0
+                            value: 0.0
+                            step: 1.0
+                            on_value: root.adjust_key('tone')
+
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
+                            text: "black"
+                        Slider:
+                            size_hint_x: 6
+                            id: slider_black
+                            min: -100.0
+                            max: 100.0
+                            value: 0.0
+                            step: 1.0
+                            on_value: root.adjust_key('tone')
+
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
+                            text: "saturation"
+                        Slider:
+                            size_hint_x: 6
+                            id: slider_saturation
+                            min: -1.0
+                            max: 1.0
+                            value: 0.0
+                            step: 0.01
+                            on_value: root.adjust_key('saturation')
+
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
+                            text: "vibrance"
+                        Slider:
+                            size_hint_x: 6
+                            id: slider_vibrance
+                            min: -1.0
+                            max: 1.0
+                            value: 0.0
+                            step: 0.01
+                            on_value: root.adjust_key('saturation')
+
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
+                            text: "dehaze"
+                        Slider:
+                            size_hint_x: 6
+                            id: slider_dehaze
+                            min: -1.0
+                            max: 1.0
+                            value: 0.0
+                            step: 0.01
+                            on_value: root.adjust_key('dehaze')
+
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
+                            text: "black level"
+                        Slider:
+                            size_hint_x: 6
+                            id: slider_black_level
+                            min: 0
+                            max: 255
+                            value: 0
+                            step: 1
+                            on_value: root.adjust_key('level')
+
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
+                            text: "mid"
+                        Slider:
+                            size_hint_x: 6
+                            id: slider_mid
+                            min: 0
+                            max: 255
+                            value: 128
+                            step: 1
+                            on_value: root.adjust_key('level')
+
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
+                            text: "white level"
+                        Slider:
+                            size_hint_x: 6
+                            id: slider_white_level
+                            min: 0
+                            max: 255
+                            value: 255
+                            step: 1
+                            on_value: root.adjust_key('level')
+
+                    TabbedPanel:
+                        size_hint_y: None
+                        tab_width: 40
+                        tab_height: 40
+                        do_default_tab: False
+                        row_default_height: 200
+                        height: self.minimum_height
+
+                        TabbedPanelItem:
+                            text: 'T'
+                            BoxLayout:
+                                size_hint_y: None
+                                height: 200
+                                orientation: 'vertical'
+                                Label:
+                                    size_hint_y: 1
+                                    text: "tonecurve"
+                                CurveWidget:
+                                    size_hint_y: 9
+                                    id: tonecurve
+                                    start_y: 0.0
+                                    end_y: 1.0
+                                    on_curve: root.adjust_key('tonecurve')
+
+                        TabbedPanelItem:
+                            text: 'slider_red_val'
+                            BoxLayout:
+                                size_hint_y: None
+                                height: 200
+                                orientation: 'vertical'
+                                Label:
+                                    size_hint_y: 1
+                                    text: "red"
+                                CurveWidget:
+                                    size_hint_y: 9
+                                    id: tonecurve_red
+                                    start_y: 0.0
+                                    end_y: 1.0
+                                    on_curve: root.adjust_key('tonecurve_red')
+
+                        TabbedPanelItem:
+                            text: 'G'
+                            BoxLayout:
+                                size_hint_y: None
+                                height: 200
+                                orientation: 'vertical'
+                                Label:
+                                    size_hint_y: 1
+                                    text: "green"
+                                CurveWidget:
+                                    size_hint_y: 9
+                                    id: tonecurve_green
+                                    start_y: 0.0
+                                    end_y: 1.0
+                                    on_curve: root.adjust_key('tonecurve_green')
+
+                        TabbedPanelItem:
+                            text: 'B'
+                            BoxLayout:
+                                size_hint_y: None
+                                height: 200
+                                orientation: 'vertical'
+                                Label:
+                                    size_hint_y: 1
+                                    text: "blue"
+                                CurveWidget:
+                                    size_hint_y: 9
+                                    id: tonecurve_blue
+                                    start_y: 0.0
+                                    end_y: 1.0
+                                    on_curve: root.adjust_key('tonecurve_blue')
+
+                        TabbedPanelItem:
+                            text: 'LL'
+                            BoxLayout:
+                                size_hint_y: None
+                                height: 200
+                                orientation: 'vertical'
+                                Label:
+                                    size_hint_y: 1
+                                    text: "Lum vs Lum"
+                                CurveWidget:
+                                    size_hint_y: 9
+                                    id: LumvsLum
+                                    start_y: 0.5
+                                    end_y: 0.5
+                                    on_curve: root.adjust_key('LumvsLum')
+
+                        TabbedPanelItem:
+                            text: 'HH'
+                            BoxLayout:
+                                size_hint_y: None
+                                height: 200
+                                orientation: 'vertical'
+                                Label:
+                                    size_hint_y: 1
+                                    text: "Hue vs Hue"
+                                CurveWidget:
+                                    size_hint_y: 9
+                                    id: HuevsHue
+                                    start_y: 0.5
+                                    end_y: 0.5
+                                    on_curve: root.adjust_key('HuevsHue')
+
+                        TabbedPanelItem:
+                            text: 'HS'
+                            BoxLayout:
+                                size_hint_y: None
+                                height: 200
+                                orientation: 'vertical'
+                                Label:
+                                    size_hint_y: 1
+                                    text: "Hue vs Sat"
+                                CurveWidget:
+                                    size_hint_y: 9
+                                    id: HuevsSat
+                                    start_y: 0.5
+                                    end_y: 0.5
+                                    on_curve: root.adjust_key('HuevsSat')
+
+                        TabbedPanelItem:
+                            text: 'HL'
+                            BoxLayout:
+                                size_hint_y: None
+                                height: 200
+                                orientation: 'vertical'
+                                Label:
+                                    size_hint_y: 1
+                                    text: "Hue vs Lum"
+                                CurveWidget:
+                                    size_hint_y: 9
+                                    id: HuevsLum
+                                    start_y: 0.5
+                                    end_y: 0.5
+                                    on_curve: root.adjust_key('HuevsLum')
+
+                        TabbedPanelItem:
+                            text: 'LS'
+                            BoxLayout:
+                                size_hint_y: None
+                                height: 200
+                                orientation: 'vertical'
+                                Label:
+                                    size_hint_y: 1
+                                    text: "Lum vs Sat"
+                                CurveWidget:
+                                    size_hint_y: 9
+                                    id: LumvsSat
+                                    start_y: 0.5
+                                    end_y: 0.5
+                                    on_curve: root.adjust_key('LumvsSat')
+
+                        TabbedPanelItem:
+                            text: 'SS'
+                            BoxLayout:
+                                size_hint_y: None
+                                height: 200
+                                orientation: 'vertical'
+                                Label:
+                                    size_hint_y: 1
+                                    text: "Sat vs Sat"
+                                CurveWidget:
+                                    size_hint_y: 9
+                                    id: SatvsSat
+                                    start_y: 0.5
+                                    end_y: 0.5
+                                    on_curve: root.adjust_key('SatvsSat')
+
+                        TabbedPanelItem:
+                            text: 'SL'
+                            BoxLayout:
+                                size_hint_y: None
+                                height: 200
+                                orientation: 'vertical'
+                                Label:
+                                    size_hint_y: 1
+                                    text: "Sat vs Lum"
+                                CurveWidget:
+                                    size_hint_y: 9
+                                    id: SatvsLum
+                                    start_y: 0.5
+                                    end_y: 0.5
+                                    on_curve: root.adjust_key('SatvsLum')
+
+
+                    TabbedPanel:
+                        size_hint_y: None
+                        tab_width: 40
+                        tab_height: 40
+                        do_default_tab: False
+                        row_default_height: 200
+                        height: self.minimum_height
+
+                        TabbedPanelItem:
+                            text: 'R'
+                            BoxLayout:
+                                orientation: 'vertical'
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "RED_HUE"
+                                    Slider:
+                                        size_hint_x: 6
+                                        id: slider_red_hue
+                                        min: -100.0
+                                        max: 100.0
+                                        value: 0.0
+                                        step: 1.0
+                                        on_value: root.adjust_key('hls_red')
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "RED_SAT"
+                                    Slider:
+                                        size_hint_x: 6
+                                        id: slider_red_sat
+                                        min: -1.0
+                                        max: 1.0
+                                        value: 0.0
+                                        step: 0.05
+                                        on_value: root.adjust_key('hls_red')
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "RED_VAL"
+                                    Slider:
+                                        size_hint_x: 6
+                                        id: slider_red_val
+                                        min: -1.0
+                                        max: 1.0
+                                        value: 0.0
+                                        step: 0.05
+                                        on_value: root.adjust_key('hls_red')
+                    
+                        TabbedPanelItem:
+                            text: 'O'
+                            BoxLayout:
+                                orientation: 'vertical'
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "ORANGE_HUE"
+                                    Slider:
+                                        size_hint_x: 6
+                                        id: slider_orange_hue
+                                        min: -100.0
+                                        max: 100.0
+                                        value: 0.0
+                                        step: 1.0
+                                        on_value: root.adjust_key('hls_orange')
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "ORANGE_SAT"
+                                    Slider:
+                                        size_hint_x: 6
+                                        id: slider_orange_sat
+                                        min: -1.0
+                                        max: 1.0
+                                        value: 0.0
+                                        step: 0.05
+                                        on_value: root.adjust_key('hls_orange')
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "ORANGE_VAL"
+                                    Slider:
+                                        size_hint_x: 6
+                                        id: slider_orange_val
+                                        min: -1.0
+                                        max: 1.0
+                                        value: 0.0
+                                        step: 0.05
+                                        on_value: root.adjust_key('hls_orange')
+                        TabbedPanelItem:
+                            text: 'Y'
+                            BoxLayout:
+                                orientation: 'vertical'
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "YELLOW_HUE"
+                                    Slider:
+                                        size_hint_x: 6
+                                        id: slider_yellow_hue
+                                        min: -100.0
+                                        max: 100.0
+                                        value: 0.0
+                                        step: 1.0
+                                        on_value: root.adjust_key('hls_yellow')
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "YELLOW_SAT"
+                                    Slider:
+                                        size_hint_x: 6
+                                        id: slider_yellow_sat
+                                        min: -1.0
+                                        max: 1.0
+                                        value: 0.0
+                                        step: 0.05
+                                        on_value: root.adjust_key('hls_yellow')
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "YELLOW_VAL"
+                                    Slider:
+                                        size_hint_x: 6
+                                        id: slider_yellow_val
+                                        min: -1.0
+                                        max: 1.0
+                                        value: 0.0
+                                        step: 0.05
+                                        on_value: root.adjust_key('hls_yellow')
+                        TabbedPanelItem:
+                            text: 'G'
+                            BoxLayout:
+                                orientation: 'vertical'
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "GREEN_HUE"
+                                    Slider:
+                                        size_hint_x: 6
+                                        id: slider_green_hue
+                                        min: -100.0
+                                        max: 100.0
+                                        value: 0.0
+                                        step: 1.0
+                                        on_value: root.adjust_key('hls_green')
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "GREEN_SAT"
+                                    Slider:
+                                        size_hint_x: 6
+                                        id: slider_green_sat
+                                        min: -1.0
+                                        max: 1.0
+                                        value: 0.0
+                                        step: 0.05
+                                        on_value: root.adjust_key('hls_green')
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "GREEN_VAL"
+                                    Slider:
+                                        size_hint_x: 6
+                                        id: slider_green_val
+                                        min: -1.0
+                                        max: 1.0
+                                        value: 0.0
+                                        step: 0.05
+                                        on_value: root.adjust_key('hls_green')
+                        TabbedPanelItem:
+                            text: 'C'
+                            BoxLayout:
+                                orientation: 'vertical'
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "CYAN_HUE"
+                                    Slider:
+                                        size_hint_x: 6
+                                        id: slider_cyan_hue
+                                        min: -100.0
+                                        max: 100.0
+                                        value: 0.0
+                                        step: 1.0
+                                        on_value: root.adjust_key('hls_cyan')
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "CYAN_SAT"
+                                    Slider:
+                                        size_hint_x: 6
+                                        id: slider_cyan_sat
+                                        min: -1.0
+                                        max: 1.0
+                                        value: 0.0
+                                        step: 0.05
+                                        on_value: root.adjust_key('hls_cyan')
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "CYAN_VAL"
+                                    Slider:
+                                        size_hint_x: 6
+                                        id: slider_cyan_val
+                                        min: -1.0
+                                        max: 1.0
+                                        value: 0.0
+                                        step: 0.05
+                                        on_value: root.adjust_key('hls_cyan')
+                        TabbedPanelItem:
+                            text: 'B'
+                            BoxLayout:
+                                orientation: 'vertical'
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "BLUE_HUE"
+                                    Slider:
+                                        size_hint_x: 6
+                                        id: slider_blue_hue
+                                        min: -100.0
+                                        max: 100.0
+                                        value: 0.0
+                                        step: 1.0
+                                        on_value: root.adjust_key('hls_blue')
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "BLUE_SAT"
+                                    Slider:
+                                        size_hint_x: 6
+                                        id: slider_blue_sat
+                                        min: -1.0
+                                        max: 1.0
+                                        value: 0.0
+                                        step: 0.05
+                                        on_value: root.adjust_key('hls_blue')
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "BLUE_VAL"
+                                    Slider:
+                                        size_hint_x: 6
+                                        id: slider_blue_val
+                                        min: -1.0
+                                        max: 1.0
+                                        value: 0.0
+                                        step: 0.05
+                                        on_value: root.adjust_key('hls_blue')
+                        TabbedPanelItem:
+                            text: 'P'
+                            BoxLayout:
+                                orientation: 'vertical'
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "PURPLE_HUE"
+                                    Slider:
+                                        size_hint_x: 6
+                                        id: slider_purple_hue
+                                        min: -100.0
+                                        max: 100.0
+                                        value: 0.0
+                                        step: 1.0
+                                        on_value: root.adjust_key('hls_purple')
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "PURPLE_SAT"
+                                    Slider:
+                                        size_hint_x: 6
+                                        id: slider_purple_sat
+                                        min: -1.0
+                                        max: 1.0
+                                        value: 0.0
+                                        step: 0.05
+                                        on_value: root.adjust_key('hls_purple')
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "PURPLE_VAL"
+                                    Slider:
+                                        size_hint_x: 6
+                                        id: slider_purple_val
+                                        min: -1.0
+                                        max: 1.0
+                                        value: 0.0
+                                        step: 0.05
+                                        on_value: root.adjust_key('hls_purple')
+                        TabbedPanelItem:
+                            text: 'M'
+                            BoxLayout:
+                                orientation: 'vertical'
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "MAGENTA_HUE"
+                                    Slider:
+                                        size_hint_x: 6
+                                        id: slider_magenta_hue
+                                        min: -100.0
+                                        max: 100.0
+                                        value: 0.0
+                                        step: 1.0
+                                        on_value: root.adjust_key('hls_magenta')
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "MAGENTA_SAT"
+                                    Slider:
+                                        size_hint_x: 6
+                                        id: slider_magenta_sat
+                                        min: -1.0
+                                        max: 1.0
+                                        value: 0.0
+                                        step: 0.05
+                                        on_value: root.adjust_key('hls_magenta')
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "MAGENTA_VAL"
+                                    Slider:
+                                        size_hint_x: 6
+                                        id: slider_magenta_val
+                                        min: -1.0
+                                        max: 1.0
+                                        value: 0.0
+                                        step: 0.05
+                                        on_value: root.adjust_key('hls_magenta')
+
+        BoxLayout:
+            orientation: 'vertical'
+            size_hint_y: 1
+
+            Label:        
+                text: "Data Stlip"
+
+<CurveWidget>:

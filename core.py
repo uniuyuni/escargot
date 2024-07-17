@@ -1,0 +1,360 @@
+import cv2
+import numpy as np
+from scipy.interpolate import PchipInterpolator
+from scipy.interpolate import interp1d
+
+import dehazing.dehaze
+import sigmoid
+import dehazing
+
+
+# 画像の読み込み
+def imgread(filename):
+    # filename: ファイル名
+    img = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
+    img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
+    img = img.astype(np.float32)
+
+    return img
+
+
+# マスクイメージの読み込み
+def mskread(filename):
+    # ファイル名
+    msk = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
+    msk = msk.astype(np.float32)/255.0
+
+    return msk
+
+# RGBからグレイスケールへの変換
+def cvtToGrayColor(rgb):
+    # 変換元画像 RGB
+    gry = np.dot(rgb[...,:3], [0.2989, 0.5870, 0.1140])
+
+    return gry
+
+# ガンマ補正
+def apply_gamma(img, gamma):
+    # img: 変換元画像 RGB
+    # gamma: ガンマ値
+    #apply_img = 65535.0*(img/65535.0)**gamma
+    apply_img = img**gamma
+
+    return apply_img
+
+
+# 露出補正
+def adjust_exposure(img, ev):
+    # img: 変換元画像
+    # ev: 補正値 -5.0〜5.0
+
+    if ev == 0.0:
+        img2 = img.copy()
+    else:
+        img2 = img*(2.0**ev)
+
+    return img2
+
+
+# コントラスト補正
+def adjust_contrast(img, cf):
+    # img: 変換元画像
+    # cf: コントラストファクター -100.0〜100.0
+
+    c = 0.5   # 中心値
+    f = cf/100.0*5.0  #-5.0〜5.0に変換
+
+    if f == 0.0:
+        adjust_img = img.copy()
+    elif f > 0.0:
+        adjust_img = sigmoid.scaled_sigmoid(img, f, c)
+    else:
+        adjust_img = sigmoid.scaled_inverse_sigmoid(img, f, c)
+
+    return adjust_img
+
+
+# 画像の明るさを制御点を元に補正する
+def apply_curve(image, control_points, control_values, return_spline=False):    
+    # image: 入力画像 HLS(float32)のLだけ
+    # control_points : ピクセル値の制御点 list of float32 
+    # control_values : 各制御点に対する補正値 list of float32
+    # return_spline : Trueの場合、スプライン補間のオブジェクトを返す bool
+
+    # エルミート補間
+    cs = PchipInterpolator(control_points, control_values)
+    
+    # 画像データに補正を適用
+    corrected_image = cs(image)
+
+    # 値をuint16の範囲内にクリッピング
+    # corrected_image = np.clip(corrected_image, 0, 65535).astype(np.float32)
+
+    if return_spline:
+        return corrected_image, cs
+    else:
+        return corrected_image
+
+# 黒レベル補正
+def adjust_shadow(img, black):
+    f = -black/100.0*5.0
+
+    if f == 0.0:
+        adjust_img = img.copy()
+    elif f > 0.0:
+        adjust_img = sigmoid.scaled_sigmoid(img, f, 0.90)
+    else:
+        adjust_img = sigmoid.scaled_inverse_sigmoid(img, f, 0.90)
+
+    return adjust_img
+
+# 白レベル補正
+def adjust_hilight(img, white):
+    f = white/100.0*5.0
+
+    if f == 0.0:
+        adjust_img = img.copy()
+    elif f > 0.0:
+        adjust_img = sigmoid.scaled_sigmoid(img, f, 0.1)
+    else:
+        adjust_img = sigmoid.scaled_inverse_sigmoid(img, f, 0.1)
+
+    return adjust_img
+
+# レベル補正
+def apply_level_adjustment(image, black_level, white_level, midtone_level):
+    # image: 変換元イメージ
+    # black_level: 黒レベル 0〜255
+    # white_level: 白レベル 0〜255
+    # midtone_level: 中間色レベル 0〜255
+
+    # 16ビット画像の最大値
+    max_val = 255
+
+    # 指定された0-255のレベルを0-65535にスケーリング
+    scale_factor = max_val / 255.0
+    black_level_scaled = black_level * scale_factor
+    white_level_scaled = white_level * scale_factor
+    midtone_factor = midtone_level / 128.0
+
+    # ルックアップテーブル (LUT) の作成
+    lut = np.linspace(0, max_val, max_val+1, dtype=np.float32)  # Liner space creation
+
+    # Pre-calculate constants
+    range_inv = 1.0 / (white_level_scaled - black_level_scaled)
+    #lut = np.clip((lut - black_level_scaled) * range_inv, 0, 1)  # Scale and clip
+    lut = (lut - black_level_scaled) * range_inv  # Scale
+    lut = np.power(lut, midtone_factor) * max_val  # Apply midtone factor and scale
+    #lut = np.clip(lut, 0, max_val).astype(np.uint16)  # Final clip and type conversion
+    lut = np.clip(lut, 0, max_val)  # Final clip and type conversion
+  
+    # 画像全体にルックアップテーブルを適用
+    adjusted_image = lut[np.clip(image*max_val, 0, max_val).astype(np.uint16)]
+    adjusted_image = (adjusted_image/max_val).astype(np.float32)
+
+    return adjusted_image
+
+# 彩度補正と自然な彩度補正
+def adjust_saturation(s, sat, vib):
+    # s: HLS画像 (彩度チャネル)
+    # sat: 彩度の変更値
+    # vib: 自然な彩度の変更値
+
+    # 彩度変更値と自然な彩度変更値を計算
+    sat = 1.0 + sat
+
+    # 自然な彩度調整
+    if vib == 0.0:
+        final_s = s
+
+    elif vib > 0.0:
+        # 通常の計算
+        vib = vib**2
+        final_s = np.log(1.0 + vib * s) / np.log(1.0 + vib)
+    else:
+        # 逆関数を使用
+        vib = vib**2
+        final_s = (np.exp(s * np.log(1.0 + vib)) - 1.0) / vib
+
+    # 彩度を適用
+    final_s = final_s * sat
+
+    return final_s
+
+def apply_dehaze(img, dehaze):
+    img2 = dehazing.dehaze.dehaze(img)
+    
+    img2 = dehaze * img2 + (1.0 - dehaze) * img
+    return img2
+
+# スプラインカーブの適用
+def apply_spline(img, spline):
+    # img: 適用イメージ RGB
+    # spline: スプライン
+
+    x, y = spline
+
+    # Generate the tone curve mapping
+    lut = np.interp(np.arange(65536), x*65535, y*65535).astype(np.float32)
+
+    # Apply the tone curve mapping to the image
+    img2 = lut[(img*65535).astype(np.uint16)]
+    img2 = img2/65535.0
+
+    return img2
+
+def __adjust_hls(hls_img, mask, adjust):
+    hls = hls_img.copy()
+    hls[mask, 0] = hls_img[mask, 0] + adjust[0]*1.8
+    hls[mask, 1] = np.clip(hls_img[mask, 1] * (2.0**adjust[2]), 0, 1.0)
+    hls[mask, 2] = np.clip(hls_img[mask, 2] * (2.0**adjust[1]), 0, 1.0)
+    return hls
+
+def adjust_hls_red(hls_img, red_adjust):
+    hue_img = hls_img[:, :, 0]
+
+    # 赤
+    red_mask = ((hue_img >= 0) & (hue_img < 22.5)) | ((hue_img >= 337.5) & (hue_img < 360))
+    hls_img = __adjust_hls(hls_img, red_mask, red_adjust)
+
+    return hls_img
+
+def adjust_hls_orange(hls_img, orange_adjust):
+    hue_img = hls_img[:, :, 0]
+
+    # オレンジ
+    orange_mask = (hue_img >= 22.5) & (hue_img < 45)
+    hls_img = __adjust_hls(hls_img, orange_mask, orange_adjust)
+
+    return hls_img
+
+def adjust_hls_yellow(hls_img, yellow_adjust):
+    hue_img = hls_img[:, :, 0]
+
+    # 黄色
+    yellow_mask = (hue_img >= 45) & (hue_img < 75)
+    hls_img = __adjust_hls(hls_img, yellow_mask, yellow_adjust)
+
+    return hls_img
+
+def adjust_hls_green(hls_img, green_adjust):
+    hue_img = hls_img[:, :, 0]
+
+    # 緑
+    green_mask = (hue_img >= 75) & (hue_img < 150)
+    hls_img = __adjust_hls(hls_img, green_mask, green_adjust)
+
+    return hls_img
+
+def adjust_hls_cyan(hls_img, cyan_adjust):
+    hue_img = hls_img[:, :, 0]
+
+    # シアン
+    cyan_mask = (hue_img >= 150) & (hue_img < 210)
+    hls_img = __adjust_hls(hls_img, cyan_mask, cyan_adjust)
+
+    return hls_img
+
+def adjust_hls_blue(hls_img, blue_adjust):
+    hue_img = hls_img[:, :, 0]
+
+    # 青
+    blue_mask = (hue_img >= 210) & (hue_img < 270)
+    hls_img = __adjust_hls(hls_img, blue_mask, blue_adjust)
+
+    return hls_img
+
+def adjust_hls_purple(hls_img, purple_adjust):
+    hue_img = hls_img[:, :, 0]
+
+    # 紫
+    purple_mask = (hue_img >= 270) & (hue_img < 300)
+    hls_img = __adjust_hls(hls_img, purple_mask, purple_adjust)
+
+    return hls_img
+
+def adjust_hls_magenta(hls_img, magenta_adjust):
+    hue_img = hls_img[:, :, 0]
+
+    # マゼンタ
+    magenta_mask = (hue_img >= 300) & (hue_img < 337.5)
+    hls_img = __adjust_hls(hls_img, magenta_mask, magenta_adjust)
+
+    return hls_img
+
+def adjust_histogram(img, center, direction, intensity):
+    """
+    Adjust the histogram of a float64 image with 65536 levels.
+    
+    Parameters:
+    img (numpy.ndarray): Input image as a float64 numpy array with values in the range [0, 65535].
+    center (float): Desired histogram center (0-65535).
+    direction (int): Shift direction (-1 for left, 1 for right).
+    intensity (float): Shift intensity.
+    
+    Returns:
+    numpy.ndarray: Adjusted image.
+    """
+    # Normalize the input image to the range [0, 1]
+    img_normalized = img / 65535.0
+    
+    # Compute the histogram
+    hist, bin_edges = np.histogram(img_normalized, bins=65536, range=(0, 1))
+    
+    # Compute the cumulative distribution function (CDF)
+    cdf = hist.cumsum()
+    cdf_normalized = cdf / cdf.max()
+    
+    # Create a lookup table (LUT) based on the CDF and desired center shift
+    lut = np.arange(65536, dtype=np.float32)
+    adjustment = direction * intensity * (center / 65535.0 - lut / 65535.0)
+    lut = np.clip(lut + adjustment * 65535, 0, 65535)
+
+    # Apply the LUT to the normalized image
+    adjusted_img_normalized = lut[(img_normalized * 65535).astype(np.uint16)] / 65535.0
+    
+    # Rescale the image back to the original range [0, 65535]
+    adjusted_img = (adjusted_img_normalized * 65535).astype(np.float32)
+    
+    return adjusted_img
+
+def make_clip(img, msk, scale, x, y, w, h):
+    if scale == 1.0:
+        img2 = img[y:y+h, x:x+w]
+        if msk is not None:
+            msk2 = msk[y:y+h, x:x+w]
+        else:
+            msk2 = None
+    else:
+        
+        # 2. 各ピクセルの位置を計算
+        yy, xx = np.indices((h, w))
+
+        # 3. スケールと開始座標を考慮して新しい画像の座標を計算
+        px = x + (xx / scale).astype(int)
+        py = y + (yy / scale).astype(int)
+
+        # 4. 元の画像およびマスク範囲内の座標のみを残すためのマスクを作成
+        valid_mask = (0 <= px) & (px < img.shape[1]) & (0 <= py) & (py < img.shape[0])
+
+        # 5. 有効な座標のみ抽出して、結果を代入
+        img2 = np.zeros((h, w, 3), dtype=np.float32)
+        img2[valid_mask] = img[py[valid_mask], px[valid_mask]]
+        if msk is not None:
+            msk2 = np.zeros((h, w), dtype=np.float32)
+            msk2[valid_mask] = msk[py[valid_mask], px[valid_mask]]
+        else:
+            msk2 = None
+
+    return img2, msk2
+
+# マスクイメージの適用
+def apply_mask(img1, img2, msk=None):
+    # img1: 元イメージ RGB
+    # img2: 変更後イメージ RGB
+    # msk: マスク
+
+    if msk is not None:
+        img = msk[:, :, np.newaxis] * img2 + (1.0 - msk[:, :, np.newaxis]) * img1
+
+    return img
