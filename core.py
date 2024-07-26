@@ -42,6 +42,45 @@ def apply_gamma(img, gamma):
 
     return apply_img
 
+# ハイパスフィルタ
+def highpass_filter(img, r):
+    """
+    gry = cvtToGrayColor(img)
+    fft_img = np.fft.fft2(gry)
+    shift_fft_img = np.fft.fftshift(fft_img)
+
+    h,w = shift_fft_img.shape
+    cy = int(h/2)
+    cx = int(w/2)
+    filter = np.ones(shift_fft_img.shape, dtype=np.float32)
+    #cv2.circle(filter,(cx,cy),r,0.0,thickness=-1)
+    cv2.rectangle(filter, (cx-r, cy-r), (cx+r, cy+r), 0.5, thickness=-1, lineType=cv2.LINE_AA)
+    filter = cv2.GaussianBlur(filter, ksize=(31, 31), sigmaX=0.0)
+    shift_fft_img *= filter
+    
+    fds = np.fft.ifftshift(shift_fft_img)
+    ds = np.fft.ifft2(fds).astype(np.float32)
+    #ds = shift_fft_img.astype(np.float32)
+    dss = np.stack([ds, ds, ds], axis=2)
+
+    return dss
+    """
+
+    hpf = img - cv2.GaussianBlur(img, ksize=(r, r), sigmaX=0.0)+0.5
+
+    return hpf
+
+# オーバーレイ合成
+def blend_overlay(base, over):
+    result = np.zeros(base.shape, dtype=np.float32)
+    darker = over < 0.5
+    base_inv = 1.0-base
+    over_inv = 1.0-over
+    result[darker] = base[darker]*over[darker] * 2
+    #result[~darker] = (base[~darker]+over[~darker] - base[~darker]*over[~darker])*2-1
+    result[~darker] = 1 - base_inv[~darker] * over_inv[~darker] * 2
+    
+    return result
 
 # 露出補正
 def adjust_exposure(img, ev):
@@ -191,6 +230,9 @@ def apply_dehaze(img, dehaze):
 def apply_spline(img, spline):
     # img: 適用イメージ RGB
     # spline: スプライン
+
+    if spline is None:
+        return img
 
     x, y = spline
 

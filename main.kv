@@ -65,8 +65,66 @@ MainWidget:
                         orientation: 'horizontal'
                         Label:
                             size_hint_x: 4
+                            text: "bilateral filter"
+                        MDSlider:
+                            size_hint_x: 6
+                            id: slider_bilateral_filter
+                            min: 0
+                            max: 15
+                            value: 0
+                            step: 1
+                            on_value: root.adjust_key('bilateral_filter')
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
+                            text: "color"
+                        MDSlider:
+                            size_hint_x: 6
+                            id: slider_bilateral_filter_color
+                            min: 1
+                            max: 100
+                            value: 75
+                            step: 1
+                            on_value: root.adjust_key('bilateral_filter')
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
+                            text: "space"
+                        MDSlider:
+                            size_hint_x: 6
+                            id: slider_bilateral_filter_space
+                            min: 1
+                            max: 100
+                            value: 75
+                            step: 1
+                            on_value: root.adjust_key('bilateral_filter')
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
+                            text: "highpass filter"
+                        MDSlider:
+                            size_hint_x: 6
+                            id: slider_highpass_filter
+                            min: 1
+                            max: 99
+                            value: 1
+                            step: 2
+                            on_value: root.adjust_key('bilateral_filter')
+
+
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
                             text: "exposure"
-                        Slider:
+                        MDSlider:
                             size_hint_x: 6
                             id: slider_exposure
                             min: -5.0
@@ -81,7 +139,7 @@ MainWidget:
                         Label:
                             size_hint_x: 4
                             text: "contrast"
-                        Slider:
+                        MDSlider:
                             size_hint_x: 6
                             id: slider_contrast
                             min: -100.0
@@ -96,7 +154,7 @@ MainWidget:
                         Label:
                             size_hint_x: 4
                             text: "hilight"
-                        Slider:
+                        MDSlider:
                             size_hint_x: 6
                             id: slider_hilight
                             min: -100.0
@@ -111,7 +169,7 @@ MainWidget:
                         Label:
                             size_hint_x: 4
                             text: "shadow"
-                        Slider:
+                        MDSlider:
                             size_hint_x: 6
                             id: slider_shadow
                             min: -100.0
@@ -126,7 +184,7 @@ MainWidget:
                         Label:
                             size_hint_x: 4
                             text: "white"
-                        Slider:
+                        MDSlider:
                             size_hint_x: 6
                             id: slider_white
                             min: -100.0
@@ -141,7 +199,7 @@ MainWidget:
                         Label:
                             size_hint_x: 4
                             text: "black"
-                        Slider:
+                        MDSlider:
                             size_hint_x: 6
                             id: slider_black
                             min: -100.0
@@ -156,7 +214,7 @@ MainWidget:
                         Label:
                             size_hint_x: 4
                             text: "saturation"
-                        Slider:
+                        MDSlider:
                             size_hint_x: 6
                             id: slider_saturation
                             min: -1.0
@@ -171,7 +229,7 @@ MainWidget:
                         Label:
                             size_hint_x: 4
                             text: "vibrance"
-                        Slider:
+                        MDSlider:
                             size_hint_x: 6
                             id: slider_vibrance
                             min: -1.0
@@ -186,7 +244,7 @@ MainWidget:
                         Label:
                             size_hint_x: 4
                             text: "dehaze"
-                        Slider:
+                        MDSlider:
                             size_hint_x: 6
                             id: slider_dehaze
                             min: -1.0
@@ -201,7 +259,7 @@ MainWidget:
                         Label:
                             size_hint_x: 4
                             text: "black level"
-                        Slider:
+                        MDSlider:
                             size_hint_x: 6
                             id: slider_black_level
                             min: 0
@@ -215,13 +273,13 @@ MainWidget:
                         orientation: 'horizontal'
                         Label:
                             size_hint_x: 4
-                            text: "mid"
-                        Slider:
+                            text: "mid level"
+                        MDSlider:
                             size_hint_x: 6
-                            id: slider_mid
+                            id: slider_mid_level
                             min: 0
                             max: 255
-                            value: 128
+                            value: 127
                             step: 1
                             on_value: root.adjust_key('level')
 
@@ -231,7 +289,7 @@ MainWidget:
                         Label:
                             size_hint_x: 4
                             text: "white level"
-                        Slider:
+                        MDSlider:
                             size_hint_x: 6
                             id: slider_white_level
                             min: 0
@@ -424,6 +482,69 @@ MainWidget:
                                     end_y: 0.5
                                     on_curve: root.adjust_key('SatvsLum')
 
+                    TabbedPanel:
+                        size_hint_y: None
+                        tab_width: 40
+                        tab_height: 40
+                        do_default_tab: False
+                        row_default_height: 200
+                        height: self.minimum_height
+
+                        TabbedPanelItem:
+                            text: 'G'
+                            BoxLayout:
+                                size_hint_y: None
+                                height: 200
+                                orientation: 'vertical'
+                                Label:
+                                    size_hint_y: 1
+                                    text: "grading"
+                                CurveWidget:
+                                    size_hint_y: 9
+                                    id: grading
+                                    start_y: 0.0
+                                    end_y: 0.0
+                                    on_curve: root.adjust_key('grading')
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "grading hue"
+                                    MDSlider:
+                                        size_hint_x: 6
+                                        id: slider_grading_hue
+                                        min: 0.0
+                                        max: 360.0
+                                        value: 0.0
+                                        step: 1.0
+                                        on_value: root.adjust_key('grading')
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "grading sat"
+                                    MDSlider:
+                                        size_hint_x: 6
+                                        id: slider_grading_sat
+                                        min: 0.0
+                                        max: 100.0
+                                        value: 50.0
+                                        step: 1.0
+                                        on_value: root.adjust_key('grading')
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "grading lum"
+                                    MDSlider:
+                                        size_hint_x: 6
+                                        id: slider_grading_lum
+                                        min: 0.0
+                                        max: 100.0
+                                        value: 50.0
+                                        step: 1.0
+                                        on_value: root.adjust_key('grading')
+
 
                     TabbedPanel:
                         size_hint_y: None
@@ -442,7 +563,7 @@ MainWidget:
                                     Label:
                                         size_hint_x: 4
                                         text: "RED_HUE"
-                                    Slider:
+                                    MDSlider:
                                         size_hint_x: 6
                                         id: slider_red_hue
                                         min: -100.0
@@ -455,7 +576,7 @@ MainWidget:
                                     Label:
                                         size_hint_x: 4
                                         text: "RED_SAT"
-                                    Slider:
+                                    MDSlider:
                                         size_hint_x: 6
                                         id: slider_red_sat
                                         min: -1.0
@@ -468,7 +589,7 @@ MainWidget:
                                     Label:
                                         size_hint_x: 4
                                         text: "RED_VAL"
-                                    Slider:
+                                    MDSlider:
                                         size_hint_x: 6
                                         id: slider_red_val
                                         min: -1.0
@@ -486,7 +607,7 @@ MainWidget:
                                     Label:
                                         size_hint_x: 4
                                         text: "ORANGE_HUE"
-                                    Slider:
+                                    MDSlider:
                                         size_hint_x: 6
                                         id: slider_orange_hue
                                         min: -100.0
@@ -499,7 +620,7 @@ MainWidget:
                                     Label:
                                         size_hint_x: 4
                                         text: "ORANGE_SAT"
-                                    Slider:
+                                    MDSlider:
                                         size_hint_x: 6
                                         id: slider_orange_sat
                                         min: -1.0
@@ -512,7 +633,7 @@ MainWidget:
                                     Label:
                                         size_hint_x: 4
                                         text: "ORANGE_VAL"
-                                    Slider:
+                                    MDSlider:
                                         size_hint_x: 6
                                         id: slider_orange_val
                                         min: -1.0
@@ -529,7 +650,7 @@ MainWidget:
                                     Label:
                                         size_hint_x: 4
                                         text: "YELLOW_HUE"
-                                    Slider:
+                                    MDSlider:
                                         size_hint_x: 6
                                         id: slider_yellow_hue
                                         min: -100.0
@@ -542,7 +663,7 @@ MainWidget:
                                     Label:
                                         size_hint_x: 4
                                         text: "YELLOW_SAT"
-                                    Slider:
+                                    MDSlider:
                                         size_hint_x: 6
                                         id: slider_yellow_sat
                                         min: -1.0
@@ -555,7 +676,7 @@ MainWidget:
                                     Label:
                                         size_hint_x: 4
                                         text: "YELLOW_VAL"
-                                    Slider:
+                                    MDSlider:
                                         size_hint_x: 6
                                         id: slider_yellow_val
                                         min: -1.0
@@ -572,7 +693,7 @@ MainWidget:
                                     Label:
                                         size_hint_x: 4
                                         text: "GREEN_HUE"
-                                    Slider:
+                                    MDSlider:
                                         size_hint_x: 6
                                         id: slider_green_hue
                                         min: -100.0
@@ -585,7 +706,7 @@ MainWidget:
                                     Label:
                                         size_hint_x: 4
                                         text: "GREEN_SAT"
-                                    Slider:
+                                    MDSlider:
                                         size_hint_x: 6
                                         id: slider_green_sat
                                         min: -1.0
@@ -598,7 +719,7 @@ MainWidget:
                                     Label:
                                         size_hint_x: 4
                                         text: "GREEN_VAL"
-                                    Slider:
+                                    MDSlider:
                                         size_hint_x: 6
                                         id: slider_green_val
                                         min: -1.0
@@ -615,7 +736,7 @@ MainWidget:
                                     Label:
                                         size_hint_x: 4
                                         text: "CYAN_HUE"
-                                    Slider:
+                                    MDSlider:
                                         size_hint_x: 6
                                         id: slider_cyan_hue
                                         min: -100.0
@@ -628,7 +749,7 @@ MainWidget:
                                     Label:
                                         size_hint_x: 4
                                         text: "CYAN_SAT"
-                                    Slider:
+                                    MDSlider:
                                         size_hint_x: 6
                                         id: slider_cyan_sat
                                         min: -1.0
@@ -641,7 +762,7 @@ MainWidget:
                                     Label:
                                         size_hint_x: 4
                                         text: "CYAN_VAL"
-                                    Slider:
+                                    MDSlider:
                                         size_hint_x: 6
                                         id: slider_cyan_val
                                         min: -1.0
@@ -658,7 +779,7 @@ MainWidget:
                                     Label:
                                         size_hint_x: 4
                                         text: "BLUE_HUE"
-                                    Slider:
+                                    MDSlider:
                                         size_hint_x: 6
                                         id: slider_blue_hue
                                         min: -100.0
@@ -671,7 +792,7 @@ MainWidget:
                                     Label:
                                         size_hint_x: 4
                                         text: "BLUE_SAT"
-                                    Slider:
+                                    MDSlider:
                                         size_hint_x: 6
                                         id: slider_blue_sat
                                         min: -1.0
@@ -684,7 +805,7 @@ MainWidget:
                                     Label:
                                         size_hint_x: 4
                                         text: "BLUE_VAL"
-                                    Slider:
+                                    MDSlider:
                                         size_hint_x: 6
                                         id: slider_blue_val
                                         min: -1.0
@@ -701,7 +822,7 @@ MainWidget:
                                     Label:
                                         size_hint_x: 4
                                         text: "PURPLE_HUE"
-                                    Slider:
+                                    MDSlider:
                                         size_hint_x: 6
                                         id: slider_purple_hue
                                         min: -100.0
@@ -714,7 +835,7 @@ MainWidget:
                                     Label:
                                         size_hint_x: 4
                                         text: "PURPLE_SAT"
-                                    Slider:
+                                    MDSlider:
                                         size_hint_x: 6
                                         id: slider_purple_sat
                                         min: -1.0
@@ -727,7 +848,7 @@ MainWidget:
                                     Label:
                                         size_hint_x: 4
                                         text: "PURPLE_VAL"
-                                    Slider:
+                                    MDSlider:
                                         size_hint_x: 6
                                         id: slider_purple_val
                                         min: -1.0
@@ -744,7 +865,7 @@ MainWidget:
                                     Label:
                                         size_hint_x: 4
                                         text: "MAGENTA_HUE"
-                                    Slider:
+                                    MDSlider:
                                         size_hint_x: 6
                                         id: slider_magenta_hue
                                         min: -100.0
@@ -757,7 +878,7 @@ MainWidget:
                                     Label:
                                         size_hint_x: 4
                                         text: "MAGENTA_SAT"
-                                    Slider:
+                                    MDSlider:
                                         size_hint_x: 6
                                         id: slider_magenta_sat
                                         min: -1.0
@@ -770,7 +891,7 @@ MainWidget:
                                     Label:
                                         size_hint_x: 4
                                         text: "MAGENTA_VAL"
-                                    Slider:
+                                    MDSlider:
                                         size_hint_x: 6
                                         id: slider_magenta_val
                                         min: -1.0
