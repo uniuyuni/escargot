@@ -1,7 +1,9 @@
 
 MainWidget:
 
+
 <MainWidget>:
+    
     BoxLayout:
         orientation: 'vertical'
         size: root.size
@@ -13,17 +15,20 @@ MainWidget:
             BoxLayout:
                 id: info
                 orientation: 'vertical'
-                size_hint_x: 2
+                size_hint_x: 1
 
                 Label:
                     text: "Info"
             
-            Image:
-                id: preview
+            RelativeLayout:
+                id: preview_widget
                 size_hint_x: 6
+                Image:
+                    pos: [0, 0]
+                    id: preview
 
             ScrollView:
-                size_hint_x: 2
+                size_hint_x: 3
 
                 BoxLayout:
                     size_hint_y: None
@@ -35,10 +40,23 @@ MainWidget:
                         orientation: 'horizontal'
                         Label:
                             size_hint_x: 4
-                            text: "noise"
+                            text: "noise reduction"
                         ToggleButton:
-                            id: toggle_noise
-                            on_state: root.adjust_key('noise')
+                            id: toggle_noise_reduction
+                            on_state: root.adjust_lv0('noise_reduction')
+
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
+                            text: "inpaint"
+                        ToggleButton:
+                            id: toggle_inpaint
+                            on_state: root.adjust_lv0('inpaint')
+                        Button:
+                            id: button_inpaint
+                            on_press: root.adjust_lv0('inpaint')
 
                     BoxLayout:
                         size_hint_y: None
@@ -48,7 +66,7 @@ MainWidget:
                             text: "defocus"
                         ToggleButton:
                             id: toggle_defocus
-                            on_state: root.adjust_key('defocus')
+                            on_state: root.adjust_lv0('defocus')
 
                     BoxLayout:
                         size_hint_y: None
@@ -58,50 +76,22 @@ MainWidget:
                             text: "color_correct"
                         ToggleButton:
                             id: toggle_color_correct
-                            on_state: root.adjust_key('color_correct')
+                            on_state: root.adjust_lv1('color_correct')
 
                     BoxLayout:
                         size_hint_y: None
                         orientation: 'horizontal'
                         Label:
                             size_hint_x: 4
-                            text: "bilateral filter"
+                            text: "lowpass filter"
                         MDSlider:
                             size_hint_x: 6
-                            id: slider_bilateral_filter
+                            id: slider_lowpass_filter
                             min: 0
-                            max: 15
+                            max: 100
                             value: 0
-                            step: 1
-                            on_value: root.adjust_key('bilateral_filter')
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "color"
-                        MDSlider:
-                            size_hint_x: 6
-                            id: slider_bilateral_filter_color
-                            min: 1
-                            max: 100
-                            value: 75
-                            step: 1
-                            on_value: root.adjust_key('bilateral_filter')
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "space"
-                        MDSlider:
-                            size_hint_x: 6
-                            id: slider_bilateral_filter_space
-                            min: 1
-                            max: 100
-                            value: 75
-                            step: 1
-                            on_value: root.adjust_key('bilateral_filter')
+                            step: 2
+                            on_value: root.adjust_lv0('lowpass_filter')
                     BoxLayout:
                         size_hint_y: None
                         orientation: 'horizontal'
@@ -111,12 +101,80 @@ MainWidget:
                         MDSlider:
                             size_hint_x: 6
                             id: slider_highpass_filter
-                            min: 1
-                            max: 99
-                            value: 1
+                            min: 0
+                            max: 100
+                            value: 0
                             step: 2
-                            on_value: root.adjust_key('bilateral_filter')
+                            on_value: root.adjust_lv0('lowpass_filter')
 
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
+                            text: "perlin noise"
+                        MDSlider:
+                            size_hint_x: 6
+                            id: slider_perlin_noise
+                            min: 0
+                            max: 10
+                            value: 0
+                            step: 1
+                            on_value: root.adjust_lv0('perlin_noise')
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
+                            text: "perlin noise opacity"
+                        MDSlider:
+                            size_hint_x: 6
+                            id: slider_perlin_noise_opacity
+                            min: 0
+                            max: 100
+                            value: 100
+                            step: 1
+                            on_value: root.adjust_lv0('perlin_noise')
+
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
+                            text: "color temperature"
+                        MDSlider:
+                            size_hint_x: 6
+                            id: slider_color_temperature
+                            min: 1000
+                            max: 40000
+                            value: 5600
+                            step: 100
+                            on_value: root.adjust_lv1('color_temperature')
+
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
+                            text: "color temperature strength"
+                        MDSlider:
+                            size_hint_x: 6
+                            id: slider_color_temperature_strength
+                            min: 0
+                            max: 100
+                            value: 0
+                            step: 1
+                            on_value: root.adjust_lv1('color_temperature')
+
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: 'horizontal'
+                        Label:
+                            size_hint_x: 4
+                            text: "LUT"
+                        ToggleButton:
+                            id: toggle_lut
+                            on_state: root.adjust_lv0('lut')
 
                     BoxLayout:
                         size_hint_y: None
@@ -131,7 +189,7 @@ MainWidget:
                             max: 5.0
                             value: 0.0
                             step: 0.1
-                            on_value: root.adjust_key('exposure')
+                            on_value: root.adjust_lv1('exposure')
 
                     BoxLayout:
                         size_hint_y: None
@@ -146,7 +204,7 @@ MainWidget:
                             max: 100.0
                             value: 0.0
                             step: 1.0
-                            on_value: root.adjust_key('contrast')
+                            on_value: root.adjust_lv1('contrast')
 
                     BoxLayout:
                         size_hint_y: None
@@ -161,7 +219,7 @@ MainWidget:
                             max: 100.0
                             value: 0.0
                             step: 1.0
-                            on_value: root.adjust_key('tone')
+                            on_value: root.adjust_lv1('tone')
 
                     BoxLayout:
                         size_hint_y: None
@@ -176,7 +234,7 @@ MainWidget:
                             max: 100.0
                             value: 0.0
                             step: 1.0
-                            on_value: root.adjust_key('tone')
+                            on_value: root.adjust_lv1('tone')
 
                     BoxLayout:
                         size_hint_y: None
@@ -191,7 +249,7 @@ MainWidget:
                             max: 100.0
                             value: 0.0
                             step: 1.0
-                            on_value: root.adjust_key('tone')
+                            on_value: root.adjust_lv1('tone')
 
                     BoxLayout:
                         size_hint_y: None
@@ -206,7 +264,7 @@ MainWidget:
                             max: 100.0
                             value: 0.0
                             step: 1.0
-                            on_value: root.adjust_key('tone')
+                            on_value: root.adjust_lv1('tone')
 
                     BoxLayout:
                         size_hint_y: None
@@ -221,7 +279,7 @@ MainWidget:
                             max: 1.0
                             value: 0.0
                             step: 0.01
-                            on_value: root.adjust_key('saturation')
+                            on_value: root.adjust_lv1('saturation')
 
                     BoxLayout:
                         size_hint_y: None
@@ -236,7 +294,7 @@ MainWidget:
                             max: 1.0
                             value: 0.0
                             step: 0.01
-                            on_value: root.adjust_key('saturation')
+                            on_value: root.adjust_lv1('saturation')
 
                     BoxLayout:
                         size_hint_y: None
@@ -251,7 +309,7 @@ MainWidget:
                             max: 1.0
                             value: 0.0
                             step: 0.01
-                            on_value: root.adjust_key('dehaze')
+                            on_value: root.adjust_lv1('dehaze')
 
                     BoxLayout:
                         size_hint_y: None
@@ -266,7 +324,7 @@ MainWidget:
                             max: 255
                             value: 0
                             step: 1
-                            on_value: root.adjust_key('level')
+                            on_value: root.adjust_lv1('level')
 
                     BoxLayout:
                         size_hint_y: None
@@ -281,7 +339,7 @@ MainWidget:
                             max: 255
                             value: 127
                             step: 1
-                            on_value: root.adjust_key('level')
+                            on_value: root.adjust_lv1('level')
 
                     BoxLayout:
                         size_hint_y: None
@@ -296,7 +354,7 @@ MainWidget:
                             max: 255
                             value: 255
                             step: 1
-                            on_value: root.adjust_key('level')
+                            on_value: root.adjust_lv1('level')
 
                     TabbedPanel:
                         size_hint_y: None
@@ -320,7 +378,7 @@ MainWidget:
                                     id: tonecurve
                                     start_y: 0.0
                                     end_y: 1.0
-                                    on_curve: root.adjust_key('tonecurve')
+                                    on_curve: root.adjust_lv1('tonecurve')
 
                         TabbedPanelItem:
                             text: 'slider_red_val'
@@ -336,7 +394,7 @@ MainWidget:
                                     id: tonecurve_red
                                     start_y: 0.0
                                     end_y: 1.0
-                                    on_curve: root.adjust_key('tonecurve_red')
+                                    on_curve: root.adjust_lv1('tonecurve_red')
 
                         TabbedPanelItem:
                             text: 'G'
@@ -352,7 +410,7 @@ MainWidget:
                                     id: tonecurve_green
                                     start_y: 0.0
                                     end_y: 1.0
-                                    on_curve: root.adjust_key('tonecurve_green')
+                                    on_curve: root.adjust_lv1('tonecurve_green')
 
                         TabbedPanelItem:
                             text: 'B'
@@ -368,7 +426,7 @@ MainWidget:
                                     id: tonecurve_blue
                                     start_y: 0.0
                                     end_y: 1.0
-                                    on_curve: root.adjust_key('tonecurve_blue')
+                                    on_curve: root.adjust_lv1('tonecurve_blue')
 
                         TabbedPanelItem:
                             text: 'LL'
@@ -384,7 +442,7 @@ MainWidget:
                                     id: LumvsLum
                                     start_y: 0.5
                                     end_y: 0.5
-                                    on_curve: root.adjust_key('LumvsLum')
+                                    on_curve: root.adjust_lv1('LumvsLum')
 
                         TabbedPanelItem:
                             text: 'HH'
@@ -400,7 +458,7 @@ MainWidget:
                                     id: HuevsHue
                                     start_y: 0.5
                                     end_y: 0.5
-                                    on_curve: root.adjust_key('HuevsHue')
+                                    on_curve: root.adjust_lv1('HuevsHue')
 
                         TabbedPanelItem:
                             text: 'HS'
@@ -416,7 +474,7 @@ MainWidget:
                                     id: HuevsSat
                                     start_y: 0.5
                                     end_y: 0.5
-                                    on_curve: root.adjust_key('HuevsSat')
+                                    on_curve: root.adjust_lv1('HuevsSat')
 
                         TabbedPanelItem:
                             text: 'HL'
@@ -432,7 +490,7 @@ MainWidget:
                                     id: HuevsLum
                                     start_y: 0.5
                                     end_y: 0.5
-                                    on_curve: root.adjust_key('HuevsLum')
+                                    on_curve: root.adjust_lv1('HuevsLum')
 
                         TabbedPanelItem:
                             text: 'LS'
@@ -448,7 +506,7 @@ MainWidget:
                                     id: LumvsSat
                                     start_y: 0.5
                                     end_y: 0.5
-                                    on_curve: root.adjust_key('LumvsSat')
+                                    on_curve: root.adjust_lv1('LumvsSat')
 
                         TabbedPanelItem:
                             text: 'SS'
@@ -464,7 +522,7 @@ MainWidget:
                                     id: SatvsSat
                                     start_y: 0.5
                                     end_y: 0.5
-                                    on_curve: root.adjust_key('SatvsSat')
+                                    on_curve: root.adjust_lv1('SatvsSat')
 
                         TabbedPanelItem:
                             text: 'SL'
@@ -480,7 +538,7 @@ MainWidget:
                                     id: SatvsLum
                                     start_y: 0.5
                                     end_y: 0.5
-                                    on_curve: root.adjust_key('SatvsLum')
+                                    on_curve: root.adjust_lv1('SatvsLum')
 
                     TabbedPanel:
                         size_hint_y: None
@@ -504,7 +562,7 @@ MainWidget:
                                     id: grading
                                     start_y: 0.0
                                     end_y: 0.0
-                                    on_curve: root.adjust_key('grading')
+                                    on_curve: root.adjust_lv1('grading')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
@@ -517,20 +575,7 @@ MainWidget:
                                         max: 360.0
                                         value: 0.0
                                         step: 1.0
-                                        on_value: root.adjust_key('grading')
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "grading sat"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_grading_sat
-                                        min: 0.0
-                                        max: 100.0
-                                        value: 50.0
-                                        step: 1.0
-                                        on_value: root.adjust_key('grading')
+                                        on_value: root.adjust_lv1('grading')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
@@ -541,9 +586,22 @@ MainWidget:
                                         id: slider_grading_lum
                                         min: 0.0
                                         max: 100.0
-                                        value: 50.0
+                                        value: 0.0
                                         step: 1.0
-                                        on_value: root.adjust_key('grading')
+                                        on_value: root.adjust_lv1('grading')
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "grading sat"
+                                    MDSlider:
+                                        size_hint_x: 6
+                                        id: slider_grading_sat
+                                        min: 0.0
+                                        max: 100.0
+                                        value: 0.0
+                                        step: 1.0
+                                        on_value: root.adjust_lv1('grading')
 
 
                     TabbedPanel:
@@ -562,41 +620,41 @@ MainWidget:
                                     orientation: 'horizontal'
                                     Label:
                                         size_hint_x: 4
-                                        text: "RED_HUE"
+                                        text: "RED HUE"
                                     MDSlider:
                                         size_hint_x: 6
-                                        id: slider_red_hue
+                                        id: slider_hls_red_hue
                                         min: -100.0
                                         max: 100.0
                                         value: 0.0
                                         step: 1.0
-                                        on_value: root.adjust_key('hls_red')
+                                        on_value: root.adjust_lv1('hls_red')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
                                         size_hint_x: 4
-                                        text: "RED_SAT"
+                                        text: "RED_LUM"
                                     MDSlider:
                                         size_hint_x: 6
-                                        id: slider_red_sat
+                                        id: slider_hls_red_lum
                                         min: -1.0
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_key('hls_red')
+                                        on_value: root.adjust_lv1('hls_red')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
                                         size_hint_x: 4
-                                        text: "RED_VAL"
+                                        text: "RED SAT"
                                     MDSlider:
                                         size_hint_x: 6
-                                        id: slider_red_val
+                                        id: slider_hls_red_sat
                                         min: -1.0
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_key('hls_red')
+                                        on_value: root.adjust_lv1('hls_red')
                     
                         TabbedPanelItem:
                             text: 'O'
@@ -606,41 +664,41 @@ MainWidget:
                                     orientation: 'horizontal'
                                     Label:
                                         size_hint_x: 4
-                                        text: "ORANGE_HUE"
+                                        text: "ORANGE HUE"
                                     MDSlider:
                                         size_hint_x: 6
-                                        id: slider_orange_hue
+                                        id: slider_hls_orange_hue
                                         min: -100.0
                                         max: 100.0
                                         value: 0.0
                                         step: 1.0
-                                        on_value: root.adjust_key('hls_orange')
+                                        on_value: root.adjust_lv1('hls_orange')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
                                         size_hint_x: 4
-                                        text: "ORANGE_SAT"
+                                        text: "ORANGE LUM"
                                     MDSlider:
                                         size_hint_x: 6
-                                        id: slider_orange_sat
+                                        id: slider_hls_orange_lum
                                         min: -1.0
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_key('hls_orange')
+                                        on_value: root.adjust_lv1('hls_orange')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
                                         size_hint_x: 4
-                                        text: "ORANGE_VAL"
+                                        text: "ORANGE SAT"
                                     MDSlider:
                                         size_hint_x: 6
-                                        id: slider_orange_val
+                                        id: slider_hls_orange_sat
                                         min: -1.0
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_key('hls_orange')
+                                        on_value: root.adjust_lv1('hls_orange')
                         TabbedPanelItem:
                             text: 'Y'
                             BoxLayout:
@@ -649,41 +707,41 @@ MainWidget:
                                     orientation: 'horizontal'
                                     Label:
                                         size_hint_x: 4
-                                        text: "YELLOW_HUE"
+                                        text: "YELLOW HUE"
                                     MDSlider:
                                         size_hint_x: 6
-                                        id: slider_yellow_hue
+                                        id: slider_hls_yellow_hue
                                         min: -100.0
                                         max: 100.0
                                         value: 0.0
                                         step: 1.0
-                                        on_value: root.adjust_key('hls_yellow')
+                                        on_value: root.adjust_lv1('hls_yellow')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
                                         size_hint_x: 4
-                                        text: "YELLOW_SAT"
+                                        text: "YELLOW LUM"
                                     MDSlider:
                                         size_hint_x: 6
-                                        id: slider_yellow_sat
+                                        id: slider_hls_yellow_lum
                                         min: -1.0
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_key('hls_yellow')
+                                        on_value: root.adjust_lv1('hls_yellow')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
                                         size_hint_x: 4
-                                        text: "YELLOW_VAL"
+                                        text: "YELLOW SAT"
                                     MDSlider:
                                         size_hint_x: 6
-                                        id: slider_yellow_val
+                                        id: slider_hls_yellow_sat
                                         min: -1.0
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_key('hls_yellow')
+                                        on_value: root.adjust_lv1('hls_yellow')
                         TabbedPanelItem:
                             text: 'G'
                             BoxLayout:
@@ -692,41 +750,41 @@ MainWidget:
                                     orientation: 'horizontal'
                                     Label:
                                         size_hint_x: 4
-                                        text: "GREEN_HUE"
+                                        text: "GREEN HUE"
                                     MDSlider:
                                         size_hint_x: 6
-                                        id: slider_green_hue
+                                        id: slider_hls_green_hue
                                         min: -100.0
                                         max: 100.0
                                         value: 0.0
                                         step: 1.0
-                                        on_value: root.adjust_key('hls_green')
+                                        on_value: root.adjust_lv1('hls_green')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
                                         size_hint_x: 4
-                                        text: "GREEN_SAT"
+                                        text: "GREEN LUM"
                                     MDSlider:
                                         size_hint_x: 6
-                                        id: slider_green_sat
+                                        id: slider_hls_green_lum
                                         min: -1.0
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_key('hls_green')
+                                        on_value: root.adjust_lv1('hls_green')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
                                         size_hint_x: 4
-                                        text: "GREEN_VAL"
+                                        text: "GREEN SAT"
                                     MDSlider:
                                         size_hint_x: 6
-                                        id: slider_green_val
+                                        id: slider_hls_green_sat
                                         min: -1.0
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_key('hls_green')
+                                        on_value: root.adjust_lv1('hls_green')
                         TabbedPanelItem:
                             text: 'C'
                             BoxLayout:
@@ -735,41 +793,41 @@ MainWidget:
                                     orientation: 'horizontal'
                                     Label:
                                         size_hint_x: 4
-                                        text: "CYAN_HUE"
+                                        text: "CYAN HUE"
                                     MDSlider:
                                         size_hint_x: 6
-                                        id: slider_cyan_hue
+                                        id: slider_hls_cyan_hue
                                         min: -100.0
                                         max: 100.0
                                         value: 0.0
                                         step: 1.0
-                                        on_value: root.adjust_key('hls_cyan')
+                                        on_value: root.adjust_lv1('hls_cyan')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
                                         size_hint_x: 4
-                                        text: "CYAN_SAT"
+                                        text: "CYAN LUM"
                                     MDSlider:
                                         size_hint_x: 6
-                                        id: slider_cyan_sat
+                                        id: slider_hls_cyan_lum
                                         min: -1.0
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_key('hls_cyan')
+                                        on_value: root.adjust_lv1('hls_cyan')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
                                         size_hint_x: 4
-                                        text: "CYAN_VAL"
+                                        text: "CYAN SAT"
                                     MDSlider:
                                         size_hint_x: 6
-                                        id: slider_cyan_val
+                                        id: slider_hls_cyan_sat
                                         min: -1.0
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_key('hls_cyan')
+                                        on_value: root.adjust_lv1('hls_cyan')
                         TabbedPanelItem:
                             text: 'B'
                             BoxLayout:
@@ -778,15 +836,28 @@ MainWidget:
                                     orientation: 'horizontal'
                                     Label:
                                         size_hint_x: 4
-                                        text: "BLUE_HUE"
+                                        text: "BLUE HUE"
                                     MDSlider:
                                         size_hint_x: 6
-                                        id: slider_blue_hue
+                                        id: slider_hls_blue_hue
                                         min: -100.0
                                         max: 100.0
                                         value: 0.0
                                         step: 1.0
-                                        on_value: root.adjust_key('hls_blue')
+                                        on_value: root.adjust_lv1('hls_blue')
+                                BoxLayout:
+                                    orientation: 'horizontal'
+                                    Label:
+                                        size_hint_x: 4
+                                        text: "BLUE LUM"
+                                    MDSlider:
+                                        size_hint_x: 6
+                                        id: slider_hls_blue_lum
+                                        min: -1.0
+                                        max: 1.0
+                                        value: 0.0
+                                        step: 0.05
+                                        on_value: root.adjust_lv1('hls_blue')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
@@ -794,25 +865,12 @@ MainWidget:
                                         text: "BLUE_SAT"
                                     MDSlider:
                                         size_hint_x: 6
-                                        id: slider_blue_sat
+                                        id: slider_hls_blue_sat
                                         min: -1.0
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_key('hls_blue')
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "BLUE_VAL"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_blue_val
-                                        min: -1.0
-                                        max: 1.0
-                                        value: 0.0
-                                        step: 0.05
-                                        on_value: root.adjust_key('hls_blue')
+                                        on_value: root.adjust_lv1('hls_blue')
                         TabbedPanelItem:
                             text: 'P'
                             BoxLayout:
@@ -821,41 +879,41 @@ MainWidget:
                                     orientation: 'horizontal'
                                     Label:
                                         size_hint_x: 4
-                                        text: "PURPLE_HUE"
+                                        text: "PURPLE HUE"
                                     MDSlider:
                                         size_hint_x: 6
-                                        id: slider_purple_hue
+                                        id: slider_hls_purple_hue
                                         min: -100.0
                                         max: 100.0
                                         value: 0.0
                                         step: 1.0
-                                        on_value: root.adjust_key('hls_purple')
+                                        on_value: root.adjust_lv1('hls_purple')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
                                         size_hint_x: 4
-                                        text: "PURPLE_SAT"
+                                        text: "PURPLE LUM"
                                     MDSlider:
                                         size_hint_x: 6
-                                        id: slider_purple_sat
+                                        id: slider_hls_purple_lum
                                         min: -1.0
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_key('hls_purple')
+                                        on_value: root.adjust_lv1('hls_purple')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
                                         size_hint_x: 4
-                                        text: "PURPLE_VAL"
+                                        text: "PURPLE SAT"
                                     MDSlider:
                                         size_hint_x: 6
-                                        id: slider_purple_val
+                                        id: slider_hls_purple_sat
                                         min: -1.0
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_key('hls_purple')
+                                        on_value: root.adjust_lv1('hls_purple')
                         TabbedPanelItem:
                             text: 'M'
                             BoxLayout:
@@ -864,41 +922,41 @@ MainWidget:
                                     orientation: 'horizontal'
                                     Label:
                                         size_hint_x: 4
-                                        text: "MAGENTA_HUE"
+                                        text: "MAGENTA HUE"
                                     MDSlider:
                                         size_hint_x: 6
-                                        id: slider_magenta_hue
+                                        id: slider_hls_magenta_hue
                                         min: -100.0
                                         max: 100.0
                                         value: 0.0
                                         step: 1.0
-                                        on_value: root.adjust_key('hls_magenta')
+                                        on_value: root.adjust_lv1('hls_magenta')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
                                         size_hint_x: 4
-                                        text: "MAGENTA_SAT"
+                                        text: "MAGENTA LUM"
                                     MDSlider:
                                         size_hint_x: 6
-                                        id: slider_magenta_sat
+                                        id: slider_hls_magenta_lum
                                         min: -1.0
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_key('hls_magenta')
+                                        on_value: root.adjust_lv1('hls_magenta')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
                                         size_hint_x: 4
-                                        text: "MAGENTA_VAL"
+                                        text: "MAGENTA SAT"
                                     MDSlider:
                                         size_hint_x: 6
-                                        id: slider_magenta_val
+                                        id: slider_hls_magenta_sat
                                         min: -1.0
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_key('hls_magenta')
+                                        on_value: root.adjust_lv1('hls_magenta')
 
         BoxLayout:
             orientation: 'vertical'

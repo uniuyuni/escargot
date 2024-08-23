@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import math
 from scipy.interpolate import PchipInterpolator
 from scipy.interpolate import interp1d
 
@@ -42,6 +43,93 @@ def apply_gamma(img, gamma):
 
     return apply_img
 
+def convert_Kelvin2RGB(colour_temperature):
+    """
+    Converts from K to RGB, algorithm courtesy of 
+    http://www.tannerhelland.com/4435/convert-temperature-rgb-algorithm-code/
+    """
+    #range check
+    if colour_temperature < 1000: 
+        colour_temperature = 1000
+    elif colour_temperature > 40000:
+        colour_temperature = 40000
+    
+    tmp_internal = colour_temperature / 100.0
+    
+    # red 
+    if tmp_internal <= 66:
+        red = 255
+    else:
+        tmp_red = 329.698727446 * math.pow(tmp_internal - 60, -0.1332047592)
+        if tmp_red < 0:
+            red = 0
+        elif tmp_red > 255:
+            red = 255
+        else:
+            red = tmp_red
+    
+    # green
+    if tmp_internal <=66:
+        tmp_green = 99.4708025861 * math.log(tmp_internal) - 161.1195681661
+        if tmp_green < 0:
+            green = 0
+        elif tmp_green > 255:
+            green = 255
+        else:
+            green = tmp_green
+    else:
+        tmp_green = 288.1221695283 * math.pow(tmp_internal - 60, -0.0755148492)
+        if tmp_green < 0:
+            green = 0
+        elif tmp_green > 255:
+            green = 255
+        else:
+            green = tmp_green
+    
+    # blue
+    if tmp_internal >=66:
+        blue = 255
+    elif tmp_internal <= 19:
+        blue = 0
+    else:
+        tmp_blue = 138.5177312231 * math.log(tmp_internal - 10) - 305.0447927307
+        if tmp_blue < 0:
+            blue = 0
+        elif tmp_blue > 255:
+            blue = 255
+        else:
+            blue = tmp_blue
+    
+    return red/255.0, green/255.0, blue/255.0
+
+def convert_RGB2Kelvin(red, green, blue):
+    # Wide RGB D65 https://gist.github.com/popcorn245/30afa0f98eea1c2fd34d
+    X = red * 0.649926 + green * 0.103455 + blue * 0.197109
+    Y = red * 0.234327 + green * 0.743075 + blue * 0.022598
+    Z = red * 0.000000 + green * 0.053077 + blue * 1.035763
+
+    # CIEXYZ D65 https://www.image-engineering.de/library/technotes/958-how-to-convert-between-srgb-and-ciexyz
+    # X = red * 0.4124564 + green * 0.3575761 + blue * 0.1804375
+    # Y = red * 0.2126729 + green * 0.7151522 + blue * 0.0721750
+    # Z = red * 0.0193339 + green * 0.1191920 + blue * 0.9503041
+
+    x = X / (X + Y + Z)
+    y = Y / (X + Y + Z)
+    n = (x - 0.3366) / (y - 0.1735)
+    CCT = (-949.86315 + 6253.80338 * math.e**(-n / 0.92159) +
+           28.70599 * math.e**(-n / 0.20039) +
+           0.00004 * math.e**(-n / 0.07125))
+    n = (x - 0.3356) / (y - 0.1691) if CCT > 50000 else n
+    CCT = 36284.48953 + 0.00228 * math.e**(-n / 0.07861) + (
+        5.4535 * 10**-36) * math.e**(-n / 0.01543) if CCT > 50000 else CCT
+    return CCT
+
+# ローパスフィルタ
+def lowpass_filter(img, r):
+    lpf = cv2.GaussianBlur(img, ksize=(r, r), sigmaX=0.0)
+
+    return lpf
+
 # ハイパスフィルタ
 def highpass_filter(img, r):
     """
@@ -73,12 +161,12 @@ def highpass_filter(img, r):
 # オーバーレイ合成
 def blend_overlay(base, over):
     result = np.zeros(base.shape, dtype=np.float32)
-    darker = over < 0.5
+    darker = base < 0.5
     base_inv = 1.0-base
     over_inv = 1.0-over
-    result[darker] = base[darker]*over[darker] * 2
+    result[darker] = base[darker]*over[darker] *2
     #result[~darker] = (base[~darker]+over[~darker] - base[~darker]*over[~darker])*2-1
-    result[~darker] = 1 - base_inv[~darker] * over_inv[~darker] * 2
+    result[~darker] = 1 - base_inv[~darker]*over_inv[~darker] *2
     
     return result
 
@@ -87,10 +175,7 @@ def adjust_exposure(img, ev):
     # img: 変換元画像
     # ev: 補正値 -5.0〜5.0
 
-    if ev == 0.0:
-        img2 = img.copy()
-    else:
-        img2 = img*(2.0**ev)
+    img2 = img*(2.0**ev)
 
     return img2
 
@@ -248,8 +333,8 @@ def apply_spline(img, spline):
 def __adjust_hls(hls_img, mask, adjust):
     hls = hls_img.copy()
     hls[mask, 0] = hls_img[mask, 0] + adjust[0]*1.8
-    hls[mask, 1] = np.clip(hls_img[mask, 1] * (2.0**adjust[2]), 0, 1.0)
-    hls[mask, 2] = np.clip(hls_img[mask, 2] * (2.0**adjust[1]), 0, 1.0)
+    hls[mask, 1] = np.clip(hls_img[mask, 1] * (2.0**adjust[1]), 0, 1.0)
+    hls[mask, 2] = np.clip(hls_img[mask, 2] * (2.0**adjust[2]), 0, 1.0)
     return hls
 
 def adjust_hls_red(hls_img, red_adjust):

@@ -1,126 +1,141 @@
-# File: mask_editor.py
-
+import kivy
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.button import Button
-from kivy.uix.slider import Slider
-from kivy.uix.image import Image
-from kivy.graphics import Color, Ellipse, Line, Rectangle
-from kivy.graphics.texture import Texture
 from kivy.uix.widget import Widget
-from kivy.uix.scatter import Scatter
-from kivy.core.window import Window
-from PIL import Image as PILImage
+from kivy.graphics import Color, Ellipse, Line, Rectangle
+from kivy.properties import NumericProperty
+from kivy.graphics.texture import Texture
+
+import cv2
 import numpy as np
 
-class DrawingCanvas(Widget):
-    def __init__(self, **kwargs):
-        super(DrawingCanvas, self).__init__(**kwargs)
-        self.brush_size = 10
-        self.paint_mode = True
-        self.last_touch_pos = None
+class MaskEditor(Widget):
+    brush_size = NumericProperty(300)
+    zoom = NumericProperty(1.0)
+
+    def __init__(self, width=512*2, height=512*2, **kwargs):
+        super(MaskEditor, self).__init__(**kwargs)
+        self.canvas_width = width
+        self.canvas_height = height
+        self.drawing = False
+        self.erasing = False
+        self.clear_mask()
+        self.canvas_texture = Texture.create(size=(self.canvas_width, self.canvas_height), colorfmt='rgba')
+        self.update_canvas()
+        self.bind(size=self.update_canvas, pos=self.update_canvas)
+
+    def get_mask(self):
+        return self.mask[:,:,3]
+    
+    def clear_mask(self):
+        self.mask = np.zeros((self.canvas_height, self.canvas_width, 4), dtype=np.uint8)
+
+    def update_canvas(self, *args):
+        # Update canvas with the current mask
+        self.canvas_texture.blit_buffer(self.mask.tobytes(), colorfmt='rgba', bufferfmt='ubyte')
+        with self.canvas:
+            self.canvas.clear()
+            Color(1, 1, 1)
+            Rectangle(texture=self.canvas_texture, pos=self.pos, size=(self.canvas_width * self.zoom, self.canvas_height * self.zoom))
 
     def on_touch_down(self, touch):
-        with self.canvas:
-            if self.paint_mode:
-                Color(1,1,1,1)
-            else:
-                Color(0,0,0,1)
-            d = self.brush_size
-            Ellipse(pos=(touch.x - d / 2, touch.y - d / 2), size=(d, d))
-        self.last_touch_pos = touch.pos
+        if self.collide_point(touch.x, touch.y):
+            self.drawing = touch.button == 'left'
+            self.erasing = touch.button == 'right'
+            self.previous_pos = self.get_canvas_coordinates(touch.x, touch.y)
+            self.paint(touch)
+            return True
+        return super(MaskEditor, self).on_touch_down(touch)
 
     def on_touch_move(self, touch):
-        with self.canvas:
-            if self.paint_mode:
-                Color(1,1,1,1)
-            else:
-                Color(0,0,0,1)
-            d = self.brush_size
-            Ellipse(pos=(touch.x - d / 2, touch.y - d / 2), size=(d, d))
-            Line(points=[self.last_touch_pos[0], self.last_touch_pos[1], touch.x, touch.y], width=self.brush_size)
+        if self.drawing or self.erasing:
+            self.paint(touch)
+            return True
+        return super(MaskEditor, self).on_touch_move(touch)
 
-        self.last_touch_pos = touch.pos
+    def on_touch_up(self, touch):
+        self.drawing = False
+        self.erasing = False
+        return super(MaskEditor, self).on_touch_up(touch)
 
-    def change_brush_size(self, instance, value):
-        self.brush_size = value
+    def get_canvas_coordinates(self, x, y):
+        # Convert screen coordinates to canvas coordinates
+        cx = int((x - self.x) / (self.canvas_width * self.zoom) * self.canvas_width)
+        cy = int((y - self.y) / (self.canvas_height * self.zoom) * self.canvas_height)
+        return cx, cy
 
-    def set_paint_mode(self, instance):
-        self.paint_mode = True
+    def paint(self, touch):
+        x, y = self.get_canvas_coordinates(touch.x, touch.y)
+        size = int(self.brush_size / self.canvas_width * self.canvas_width)
+        radius = size // 2
 
-    def set_erase_mode(self, instance):
-        self.paint_mode = False
+        if self.drawing:
+            self.draw_circle(x, y, radius, value=[255, 255, 255, 255])
+            self.draw_line(self.previous_pos, (x, y), radius, value=[255, 255, 255, 255])
+        elif self.erasing:
+            self.draw_circle(x, y, radius, value=[0, 0, 0, 0])
+            self.draw_line(self.previous_pos, (x, y), radius, value=[0, 0, 0, 0])
 
-class MaskEditor(BoxLayout):
-    def __init__(self, **kwargs):
-        super(MaskEditor, self).__init__(**kwargs)
-        self.orientation = 'vertical'
+        self.previous_pos = (x, y)
+        self.update_canvas()
 
-        # Image canvas for drawing
-        self.canvas_widget = Scatter(do_scale=False, do_translation=False, do_rotation=False, size_hint=(1, 1))
-        self.drawing_widget = DrawingCanvas(size_hint=(None, None))
-        self.canvas_widget.add_widget(self.drawing_widget)
+    def draw_circle(self, cx, cy, radius, value):
+        cv2.circle(self.mask, (cx, cy), radius, value, thickness=-1)
+        """
+        for y in range(-radius, radius):
+            for x in range(-radius, radius):
+                if x**2 + y**2 <= radius**2:
+                    nx, ny = cx + x, cy + y
+                    if 0 <= nx < self.canvas_width and 0 <= ny < self.canvas_height:
+                        self.mask[ny, nx] = value
+        """
 
-        # Control buttons and sliders at the top
-        self.controls = BoxLayout(size_hint_y=None, height='50dp')
-        self.zoom_in_button = Button(text='Zoom In')
-        self.zoom_in_button.bind(on_press=self.zoom_in)
-        self.controls.add_widget(self.zoom_in_button)
+    def draw_line(self, start, end, radius, value):
+        x0, y0 = start
+        x1, y1 = end
+        dx = abs(x1 - x0)
+        dy = abs(y1 - y0)
+        sx = 1 if x0 < x1 else -1
+        sy = 1 if y0 < y1 else -1
+        err = dx - dy
 
-        self.zoom_out_button = Button(text='Zoom Out')
-        self.zoom_out_button.bind(on_press=self.zoom_out)
-        self.controls.add_widget(self.zoom_out_button)
+        while True:
+            self.draw_circle(x0, y0, radius, value)
+            if x0 == x1 and y0 == y1:
+                break
+            e2 = err * 2
+            if e2 > -dy:
+                err -= dy
+                x0 += sx
+            if e2 < dx:
+                err += dx
+                y0 += sy
 
-        self.brush_size_slider = Slider(min=1, max=50, value=10)
-        self.brush_size_slider.bind(value=self.drawing_widget.change_brush_size)
-        self.controls.add_widget(self.brush_size_slider)
+    def on_mouse_scroll(self, window, pos, scroll):
+        self.brush_size = max(1, self.brush_size + scroll)
 
-        self.paint_button = Button(text='Paint')
-        self.paint_button.bind(on_press=self.drawing_widget.set_paint_mode)
-        self.controls.add_widget(self.paint_button)
+    def load_mask(self, filepath):
+        image = Image.open(filepath).convert('L')
+        self.canvas_width, self.canvas_height = image.size
+        self.mask = np.array(image, dtype=np.uint8)
+        self.canvas_texture = Texture.create(size=(self.canvas_width, self.canvas_height), colorfmt='rgba')
+        self.update_canvas()
 
-        self.erase_button = Button(text='Erase')
-        self.erase_button.bind(on_press=self.drawing_widget.set_erase_mode)
-        self.controls.add_widget(self.erase_button)
+    def save_mask(self, filepath):
+        image = Image.fromarray(self.mask)
+        image.save(filepath, format='PNG')
 
-        self.save_button = Button(text='Save Mask')
-        self.save_button.bind(on_press=self.save_mask)
-        self.controls.add_widget(self.save_button)
-
-        self.add_widget(self.controls)
-        self.add_widget(self.canvas_widget)
-
-        self.mask_texture = None
-        self.load_image('your_image.png')
-
-        self.bind(size=self.update_canvas)
-
-    def zoom_in(self, instance):
-        self.canvas_widget.scale = min(2.0, self.canvas_widget.scale + 0.1)
-
-    def zoom_out(self, instance):
-        self.canvas_widget.scale = max(0.1, self.canvas_widget.scale - 0.1)
-
-    def update_canvas(self, instance, value):
-        self.drawing_widget.size = self.canvas_widget.size
-        self.drawing_widget.pos = self.canvas_widget.pos
-        pass
-
-    def load_image(self, image_path):
-        pil_image = PILImage.open(image_path)
-        image_data = pil_image.tobytes()
-        self.mask_texture = Texture.create(size=pil_image.size)
-        self.mask_texture.blit_buffer(image_data, colorfmt='rgba')
-        self.drawing_widget.size = pil_image.size
-        self.canvas_widget.size = pil_image.size
-
-    def save_mask(self, instance):
-        pil_image = PILImage.frombytes('RGBA', self.drawing_widget.size, self.drawing_widget.texture.pixels)
-        pil_image.save('mask.png')
-
-class MaskEditorApp(App):
+class MyApp(App):
     def build(self):
-        return MaskEditor()
+        layout = BoxLayout(orientation='vertical')
+        
+        # MaskDrawingWidgetのインスタンスを作成
+        mask_widget = MaskEditor(width=1024, height=1024)
+        
+        # 他のUI要素と一緒にレイアウトに追加
+        layout.add_widget(mask_widget)
+        
+        return layout
 
 if __name__ == '__main__':
-    MaskEditorApp().run()
+    MyApp().run()

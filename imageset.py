@@ -2,9 +2,7 @@ import cv2
 import numpy as np
 import core
 import rawpy
-#import colour
 import os
-import dcptool
 #import maxim_util
 
 class ImageSet:
