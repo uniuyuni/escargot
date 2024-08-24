@@ -39,10 +39,19 @@ class MainWidget(MDWidget):
         self.param['src_size'] = self.imgset.img.shape
 
         # self.texture = Texture.create(size=(img.shape[1], img.shape[0]))
-        self.tex = Texture.create(size=(1024, 1024), bufferfmt='ushort')
+        shape = self.imgset.img.shape
+        if shape[1] >= shape[0]:
+            w = 1024
+            s = 1024.0/shape[1]
+            h = int(1024*shape[0]/shape[1])
+        else:
+            w = int(1024*shape[1]/shape[0])
+            s = 1024.0/shape[0]
+            h = 1024
+        self.scale = s
+        
+        self.tex = Texture.create(size=(w, h), bufferfmt='ushort')
         self.tex.flip_vertical()
-
-        self.scale = 1024.0/max(self.imgset.img.shape)
 
         self.imgset.make_clip(self.scale, self.prv_x, self.prv_y, self.tex.width, self.tex.height)
         self.adjust_all()
@@ -89,9 +98,14 @@ class MainWidget(MDWidget):
         self.imglayer[0][layer].set_param(self.param, self)
         self.adjust_all()
         return True
-    
+
     def adjust_lv1(self, layer):
         self.imglayer[1][layer].set_param(self.param, self)
+        self.adjust_all()
+        return True
+    
+    def adjust_lv2(self, layer):
+        self.imglayer[2][layer].set_param(self.param, self)
         self.adjust_all()
         return True
     

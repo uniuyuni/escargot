@@ -1,6 +1,5 @@
 
 import cv2
-import skimage
 import numpy as np
 import colorsys
 
@@ -8,12 +7,11 @@ import noise2void
 import DRBNet
 import colorcorrect.algorithm as cca
 import perlin
-import noise
 import lama
 
 import core
 import cubelut
-from mask_editor import MaskEditor
+import mask_editor
 
 #補正既定クラス
 class AdjustmentLayer():
@@ -76,7 +74,7 @@ class InpaintLayer(AdjustmentLayer):
 
         if param['inpaint'] > 0:
             if self.mask_editor is None:
-                self.mask_editor = MaskEditor(param['src_size'][1], param['src_size'][0])
+                self.mask_editor = mask_editor.MaskEditor(param['src_size'][1], param['src_size'][0])
                 self.mask_editor.zoom = widget.scale
                 self.mask_editor.pos = [0, 0]
                 widget.ids["preview_widget"].add_widget(self.mask_editor)
@@ -89,15 +87,10 @@ class InpaintLayer(AdjustmentLayer):
     def make_diff(self, img, param):
         ip = param.get('inpaint', 0)
         ipp = param.get('inpaint_predict', 0)
-        if (ip > 0 and ipp > 0) is False:
-            self.diff = None
-            self.hash = None
-        else:
-            param_hash = hash((ip, ipp))
-            if self.hash != param_hash:
-                self.diff = lama.predict(img, self.mask_editor.get_mask(), InpaintLayer.__net)
-                self.mask_editor.clear_mask()
-                self.hash = param_hash
+        if (ip > 0 and ipp > 0) is True:
+            self.diff = lama.predict(img, self.mask_editor.get_mask(), InpaintLayer.__net)
+            self.mask_editor.clear_mask()
+            self.mask_editor.update_canvas()
         
         return self.diff
 
@@ -865,10 +858,10 @@ def pipeline_lv0(img, layer, param):
     diff = l.make_diff(img, param)
     if diff is not None:
         rgb = diff
-    if pre_diff is not diff:
-        lv1reset = True
     else:
         rgb = img.copy()
+    if pre_diff is not diff:
+        lv1reset = True
 
     if lv1reset == True:
         for v in layer[1].values():
@@ -887,14 +880,14 @@ def pipeline_lv1(img, layer, param):
     diff = l.make_diff(img, param)
     if diff is not None:
         rgb = diff
+    else:
+        rgb = img.copy()
     if pre_diff is not diff:
         lv1['lut'].reset()
         lv1['defocus'].reset()
         lv1['lowpass_filter'].reset()
         lv1['perlin_noise'].reset()
         lv1reset = True
-    else:
-        rgb = img.copy()
 
     l = lv1['lut']
     pre_diff = l.diff

@@ -2,14 +2,15 @@ import kivy
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.widget import Widget
-from kivy.graphics import Color, Ellipse, Line, Rectangle
+from kivy.uix.image import Image
+from kivy.graphics import Rectangle
 from kivy.properties import NumericProperty
 from kivy.graphics.texture import Texture
 
 import cv2
 import numpy as np
 
-class MaskEditor(Widget):
+class MaskEditor(Image):
     brush_size = NumericProperty(300)
     zoom = NumericProperty(1.0)
 
@@ -21,6 +22,7 @@ class MaskEditor(Widget):
         self.erasing = False
         self.clear_mask()
         self.canvas_texture = Texture.create(size=(self.canvas_width, self.canvas_height), colorfmt='rgba')
+        self.canvas_texture.flip_vertical()
         self.update_canvas()
         self.bind(size=self.update_canvas, pos=self.update_canvas)
 
@@ -33,10 +35,12 @@ class MaskEditor(Widget):
     def update_canvas(self, *args):
         # Update canvas with the current mask
         self.canvas_texture.blit_buffer(self.mask.tobytes(), colorfmt='rgba', bufferfmt='ubyte')
+        self.texture = self.canvas_texture
         with self.canvas:
             self.canvas.clear()
-            Color(1, 1, 1)
-            Rectangle(texture=self.canvas_texture, pos=self.pos, size=(self.canvas_width * self.zoom, self.canvas_height * self.zoom))
+            zw = self.canvas_width * self.zoom
+            zh = self.canvas_height * self.zoom
+            Rectangle(texture=self.canvas_texture, pos=((self.size[0]-zw)/2, (self.size[1]-zh)/2), size=(zw, zh))
 
     def on_touch_down(self, touch):
         if self.collide_point(touch.x, touch.y):
@@ -58,10 +62,16 @@ class MaskEditor(Widget):
         self.erasing = False
         return super(MaskEditor, self).on_touch_up(touch)
 
+    def get_shift_pos(self):
+        zw = self.canvas_width * self.zoom
+        zh = self.canvas_height * self.zoom
+        return int((self.size[0]-zw)/2), int((self.size[1]-zh)/2)
+
     def get_canvas_coordinates(self, x, y):
         # Convert screen coordinates to canvas coordinates
-        cx = int((x - self.x) / (self.canvas_width * self.zoom) * self.canvas_width)
-        cy = int((y - self.y) / (self.canvas_height * self.zoom) * self.canvas_height)
+        sx, sy = self.get_shift_pos()
+        cx = int((x -self.x -sx) / (self.canvas_width * self.zoom) * self.canvas_width)
+        cy = int((self.size[1]-(y -self.y +sy)) / (self.canvas_height * self.zoom) * self.canvas_height)
         return cx, cy
 
     def paint(self, touch):

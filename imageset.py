@@ -70,8 +70,7 @@ class ImageSet:
         return True
 
     def make_clip(self, scale, x, y, w, h):
-        img2, msk2 = core.make_clip(self.img, self.img_msk, scale, x, y, w, h)
+        img2 = core.make_clip(self.img, scale, x, y, w, h)
         self.prv = img2
-        self.prv_msk = msk2
 
-        return img2, msk2
+        return img2

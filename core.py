@@ -2,7 +2,6 @@ import cv2
 import numpy as np
 import math
 from scipy.interpolate import PchipInterpolator
-from scipy.interpolate import interp1d
 
 import dehazing.dehaze
 import sigmoid
@@ -445,35 +444,22 @@ def adjust_histogram(img, center, direction, intensity):
     
     return adjusted_img
 
-def make_clip(img, msk, scale, x, y, w, h):
-    if scale == 1.0:
-        img2 = img[y:y+h, x:x+w]
-        if msk is not None:
-            msk2 = msk[y:y+h, x:x+w]
-        else:
-            msk2 = None
-    else:
+def make_clip(img, scale, x, y, w, h):
         
-        # 2. 各ピクセルの位置を計算
-        yy, xx = np.indices((h, w))
+    img2 = cv2.resize(img, None, fx=scale, fy=scale)
 
-        # 3. スケールと開始座標を考慮して新しい画像の座標を計算
-        px = x + (xx / scale).astype(int)
-        py = y + (yy / scale).astype(int)
+    xx = int(x * scale)
+    yy = int(y * scale)
+    px = xx+w
+    if px > img2.shape[1]:
+        px = img2.shape[1]
+    py = yy+h
+    if py > img2.shape[0]:
+        py = img2.shape[0]
 
-        # 4. 元の画像およびマスク範囲内の座標のみを残すためのマスクを作成
-        valid_mask = (0 <= px) & (px < img.shape[1]) & (0 <= py) & (py < img.shape[0])
-
-        # 5. 有効な座標のみ抽出して、結果を代入
-        img2 = np.zeros((h, w, 3), dtype=np.float32)
-        img2[valid_mask] = img[py[valid_mask], px[valid_mask]]
-        if msk is not None:
-            msk2 = np.zeros((h, w), dtype=np.float32)
-            msk2[valid_mask] = msk[py[valid_mask], px[valid_mask]]
-        else:
-            msk2 = None
-
-    return img2, msk2
+    img3 = img2[yy:py, xx:px]
+        
+    return img3
 
 # マスクイメージの適用
 def apply_mask(img1, img2, msk=None):

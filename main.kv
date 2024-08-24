@@ -43,7 +43,7 @@ MainWidget:
                             text: "noise reduction"
                         ToggleButton:
                             id: toggle_noise_reduction
-                            on_state: root.adjust_lv0('noise_reduction')
+                            on_state: root.adjust_lv1('noise_reduction')
 
                     BoxLayout:
                         size_hint_y: None
@@ -66,7 +66,7 @@ MainWidget:
                             text: "defocus"
                         ToggleButton:
                             id: toggle_defocus
-                            on_state: root.adjust_lv0('defocus')
+                            on_state: root.adjust_lv1('defocus')
 
                     BoxLayout:
                         size_hint_y: None
@@ -76,7 +76,7 @@ MainWidget:
                             text: "color_correct"
                         ToggleButton:
                             id: toggle_color_correct
-                            on_state: root.adjust_lv1('color_correct')
+                            on_state: root.adjust_lv2('color_correct')
 
                     BoxLayout:
                         size_hint_y: None
@@ -91,7 +91,7 @@ MainWidget:
                             max: 100
                             value: 0
                             step: 2
-                            on_value: root.adjust_lv0('lowpass_filter')
+                            on_value: root.adjust_lv1('lowpass_filter')
                     BoxLayout:
                         size_hint_y: None
                         orientation: 'horizontal'
@@ -105,7 +105,7 @@ MainWidget:
                             max: 100
                             value: 0
                             step: 2
-                            on_value: root.adjust_lv0('lowpass_filter')
+                            on_value: root.adjust_lv1('lowpass_filter')
 
                     BoxLayout:
                         size_hint_y: None
@@ -120,7 +120,7 @@ MainWidget:
                             max: 10
                             value: 0
                             step: 1
-                            on_value: root.adjust_lv0('perlin_noise')
+                            on_value: root.adjust_lv1('perlin_noise')
                     BoxLayout:
                         size_hint_y: None
                         orientation: 'horizontal'
@@ -134,7 +134,7 @@ MainWidget:
                             max: 100
                             value: 100
                             step: 1
-                            on_value: root.adjust_lv0('perlin_noise')
+                            on_value: root.adjust_lv1('perlin_noise')
 
                     BoxLayout:
                         size_hint_y: None
@@ -149,7 +149,7 @@ MainWidget:
                             max: 40000
                             value: 5600
                             step: 100
-                            on_value: root.adjust_lv1('color_temperature')
+                            on_value: root.adjust_lv2('color_temperature')
 
                     BoxLayout:
                         size_hint_y: None
@@ -164,7 +164,7 @@ MainWidget:
                             max: 100
                             value: 0
                             step: 1
-                            on_value: root.adjust_lv1('color_temperature')
+                            on_value: root.adjust_lv2('color_temperature')
 
                     BoxLayout:
                         size_hint_y: None
@@ -174,7 +174,7 @@ MainWidget:
                             text: "LUT"
                         ToggleButton:
                             id: toggle_lut
-                            on_state: root.adjust_lv0('lut')
+                            on_state: root.adjust_lv1('lut')
 
                     BoxLayout:
                         size_hint_y: None
@@ -189,7 +189,7 @@ MainWidget:
                             max: 5.0
                             value: 0.0
                             step: 0.1
-                            on_value: root.adjust_lv1('exposure')
+                            on_value: root.adjust_lv2('exposure')
 
                     BoxLayout:
                         size_hint_y: None
@@ -204,7 +204,7 @@ MainWidget:
                             max: 100.0
                             value: 0.0
                             step: 1.0
-                            on_value: root.adjust_lv1('contrast')
+                            on_value: root.adjust_lv2('contrast')
 
                     BoxLayout:
                         size_hint_y: None
@@ -219,7 +219,7 @@ MainWidget:
                             max: 100.0
                             value: 0.0
                             step: 1.0
-                            on_value: root.adjust_lv1('tone')
+                            on_value: root.adjust_lv2('tone')
 
                     BoxLayout:
                         size_hint_y: None
@@ -234,7 +234,7 @@ MainWidget:
                             max: 100.0
                             value: 0.0
                             step: 1.0
-                            on_value: root.adjust_lv1('tone')
+                            on_value: root.adjust_lv2('tone')
 
                     BoxLayout:
                         size_hint_y: None
@@ -249,7 +249,7 @@ MainWidget:
                             max: 100.0
                             value: 0.0
                             step: 1.0
-                            on_value: root.adjust_lv1('tone')
+                            on_value: root.adjust_lv2('tone')
 
                     BoxLayout:
                         size_hint_y: None
@@ -264,7 +264,7 @@ MainWidget:
                             max: 100.0
                             value: 0.0
                             step: 1.0
-                            on_value: root.adjust_lv1('tone')
+                            on_value: root.adjust_lv2('tone')
 
                     BoxLayout:
                         size_hint_y: None
@@ -279,7 +279,7 @@ MainWidget:
                             max: 1.0
                             value: 0.0
                             step: 0.01
-                            on_value: root.adjust_lv1('saturation')
+                            on_value: root.adjust_lv2('saturation')
 
                     BoxLayout:
                         size_hint_y: None
@@ -294,7 +294,7 @@ MainWidget:
                             max: 1.0
                             value: 0.0
                             step: 0.01
-                            on_value: root.adjust_lv1('saturation')
+                            on_value: root.adjust_lv2('saturation')
 
                     BoxLayout:
                         size_hint_y: None
@@ -309,7 +309,7 @@ MainWidget:
                             max: 1.0
                             value: 0.0
                             step: 0.01
-                            on_value: root.adjust_lv1('dehaze')
+                            on_value: root.adjust_lv2('dehaze')
 
                     BoxLayout:
                         size_hint_y: None
@@ -324,7 +324,7 @@ MainWidget:
                             max: 255
                             value: 0
                             step: 1
-                            on_value: root.adjust_lv1('level')
+                            on_value: root.adjust_lv2('level')
 
                     BoxLayout:
                         size_hint_y: None
@@ -339,7 +339,7 @@ MainWidget:
                             max: 255
                             value: 127
                             step: 1
-                            on_value: root.adjust_lv1('level')
+                            on_value: root.adjust_lv2('level')
 
                     BoxLayout:
                         size_hint_y: None
@@ -354,7 +354,7 @@ MainWidget:
                             max: 255
                             value: 255
                             step: 1
-                            on_value: root.adjust_lv1('level')
+                            on_value: root.adjust_lv2('level')
 
                     TabbedPanel:
                         size_hint_y: None
@@ -378,7 +378,7 @@ MainWidget:
                                     id: tonecurve
                                     start_y: 0.0
                                     end_y: 1.0
-                                    on_curve: root.adjust_lv1('tonecurve')
+                                    on_curve: root.adjust_lv2('tonecurve')
 
                         TabbedPanelItem:
                             text: 'slider_red_val'
@@ -394,7 +394,7 @@ MainWidget:
                                     id: tonecurve_red
                                     start_y: 0.0
                                     end_y: 1.0
-                                    on_curve: root.adjust_lv1('tonecurve_red')
+                                    on_curve: root.adjust_lv2('tonecurve_red')
 
                         TabbedPanelItem:
                             text: 'G'
@@ -410,7 +410,7 @@ MainWidget:
                                     id: tonecurve_green
                                     start_y: 0.0
                                     end_y: 1.0
-                                    on_curve: root.adjust_lv1('tonecurve_green')
+                                    on_curve: root.adjust_lv2('tonecurve_green')
 
                         TabbedPanelItem:
                             text: 'B'
@@ -426,7 +426,7 @@ MainWidget:
                                     id: tonecurve_blue
                                     start_y: 0.0
                                     end_y: 1.0
-                                    on_curve: root.adjust_lv1('tonecurve_blue')
+                                    on_curve: root.adjust_lv2('tonecurve_blue')
 
                         TabbedPanelItem:
                             text: 'LL'
@@ -442,7 +442,7 @@ MainWidget:
                                     id: LumvsLum
                                     start_y: 0.5
                                     end_y: 0.5
-                                    on_curve: root.adjust_lv1('LumvsLum')
+                                    on_curve: root.adjust_lv2('LumvsLum')
 
                         TabbedPanelItem:
                             text: 'HH'
@@ -458,7 +458,7 @@ MainWidget:
                                     id: HuevsHue
                                     start_y: 0.5
                                     end_y: 0.5
-                                    on_curve: root.adjust_lv1('HuevsHue')
+                                    on_curve: root.adjust_lv2('HuevsHue')
 
                         TabbedPanelItem:
                             text: 'HS'
@@ -474,7 +474,7 @@ MainWidget:
                                     id: HuevsSat
                                     start_y: 0.5
                                     end_y: 0.5
-                                    on_curve: root.adjust_lv1('HuevsSat')
+                                    on_curve: root.adjust_lv2('HuevsSat')
 
                         TabbedPanelItem:
                             text: 'HL'
@@ -490,7 +490,7 @@ MainWidget:
                                     id: HuevsLum
                                     start_y: 0.5
                                     end_y: 0.5
-                                    on_curve: root.adjust_lv1('HuevsLum')
+                                    on_curve: root.adjust_lv2('HuevsLum')
 
                         TabbedPanelItem:
                             text: 'LS'
@@ -506,7 +506,7 @@ MainWidget:
                                     id: LumvsSat
                                     start_y: 0.5
                                     end_y: 0.5
-                                    on_curve: root.adjust_lv1('LumvsSat')
+                                    on_curve: root.adjust_lv2('LumvsSat')
 
                         TabbedPanelItem:
                             text: 'SS'
@@ -522,7 +522,7 @@ MainWidget:
                                     id: SatvsSat
                                     start_y: 0.5
                                     end_y: 0.5
-                                    on_curve: root.adjust_lv1('SatvsSat')
+                                    on_curve: root.adjust_lv2('SatvsSat')
 
                         TabbedPanelItem:
                             text: 'SL'
@@ -538,7 +538,7 @@ MainWidget:
                                     id: SatvsLum
                                     start_y: 0.5
                                     end_y: 0.5
-                                    on_curve: root.adjust_lv1('SatvsLum')
+                                    on_curve: root.adjust_lv2('SatvsLum')
 
                     TabbedPanel:
                         size_hint_y: None
@@ -562,7 +562,7 @@ MainWidget:
                                     id: grading
                                     start_y: 0.0
                                     end_y: 0.0
-                                    on_curve: root.adjust_lv1('grading')
+                                    on_curve: root.adjust_lv2('grading')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
@@ -575,7 +575,7 @@ MainWidget:
                                         max: 360.0
                                         value: 0.0
                                         step: 1.0
-                                        on_value: root.adjust_lv1('grading')
+                                        on_value: root.adjust_lv2('grading')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
@@ -588,7 +588,7 @@ MainWidget:
                                         max: 100.0
                                         value: 0.0
                                         step: 1.0
-                                        on_value: root.adjust_lv1('grading')
+                                        on_value: root.adjust_lv2('grading')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
@@ -601,7 +601,7 @@ MainWidget:
                                         max: 100.0
                                         value: 0.0
                                         step: 1.0
-                                        on_value: root.adjust_lv1('grading')
+                                        on_value: root.adjust_lv2('grading')
 
 
                     TabbedPanel:
@@ -628,7 +628,7 @@ MainWidget:
                                         max: 100.0
                                         value: 0.0
                                         step: 1.0
-                                        on_value: root.adjust_lv1('hls_red')
+                                        on_value: root.adjust_lv2('hls_red')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
@@ -641,7 +641,7 @@ MainWidget:
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_lv1('hls_red')
+                                        on_value: root.adjust_lv2('hls_red')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
@@ -654,7 +654,7 @@ MainWidget:
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_lv1('hls_red')
+                                        on_value: root.adjust_lv2('hls_red')
                     
                         TabbedPanelItem:
                             text: 'O'
@@ -672,7 +672,7 @@ MainWidget:
                                         max: 100.0
                                         value: 0.0
                                         step: 1.0
-                                        on_value: root.adjust_lv1('hls_orange')
+                                        on_value: root.adjust_lv2('hls_orange')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
@@ -685,7 +685,7 @@ MainWidget:
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_lv1('hls_orange')
+                                        on_value: root.adjust_lv2('hls_orange')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
@@ -698,7 +698,7 @@ MainWidget:
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_lv1('hls_orange')
+                                        on_value: root.adjust_lv2('hls_orange')
                         TabbedPanelItem:
                             text: 'Y'
                             BoxLayout:
@@ -715,7 +715,7 @@ MainWidget:
                                         max: 100.0
                                         value: 0.0
                                         step: 1.0
-                                        on_value: root.adjust_lv1('hls_yellow')
+                                        on_value: root.adjust_lv2('hls_yellow')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
@@ -728,7 +728,7 @@ MainWidget:
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_lv1('hls_yellow')
+                                        on_value: root.adjust_lv2('hls_yellow')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
@@ -741,7 +741,7 @@ MainWidget:
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_lv1('hls_yellow')
+                                        on_value: root.adjust_lv2('hls_yellow')
                         TabbedPanelItem:
                             text: 'G'
                             BoxLayout:
@@ -758,7 +758,7 @@ MainWidget:
                                         max: 100.0
                                         value: 0.0
                                         step: 1.0
-                                        on_value: root.adjust_lv1('hls_green')
+                                        on_value: root.adjust_lv2('hls_green')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
@@ -771,7 +771,7 @@ MainWidget:
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_lv1('hls_green')
+                                        on_value: root.adjust_lv2('hls_green')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
@@ -784,7 +784,7 @@ MainWidget:
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_lv1('hls_green')
+                                        on_value: root.adjust_lv2('hls_green')
                         TabbedPanelItem:
                             text: 'C'
                             BoxLayout:
@@ -801,7 +801,7 @@ MainWidget:
                                         max: 100.0
                                         value: 0.0
                                         step: 1.0
-                                        on_value: root.adjust_lv1('hls_cyan')
+                                        on_value: root.adjust_lv2('hls_cyan')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
@@ -814,7 +814,7 @@ MainWidget:
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_lv1('hls_cyan')
+                                        on_value: root.adjust_lv2('hls_cyan')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
@@ -827,7 +827,7 @@ MainWidget:
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_lv1('hls_cyan')
+                                        on_value: root.adjust_lv2('hls_cyan')
                         TabbedPanelItem:
                             text: 'B'
                             BoxLayout:
@@ -844,7 +844,7 @@ MainWidget:
                                         max: 100.0
                                         value: 0.0
                                         step: 1.0
-                                        on_value: root.adjust_lv1('hls_blue')
+                                        on_value: root.adjust_lv2('hls_blue')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
@@ -857,7 +857,7 @@ MainWidget:
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_lv1('hls_blue')
+                                        on_value: root.adjust_lv2('hls_blue')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
@@ -870,7 +870,7 @@ MainWidget:
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_lv1('hls_blue')
+                                        on_value: root.adjust_lv2('hls_blue')
                         TabbedPanelItem:
                             text: 'P'
                             BoxLayout:
@@ -887,7 +887,7 @@ MainWidget:
                                         max: 100.0
                                         value: 0.0
                                         step: 1.0
-                                        on_value: root.adjust_lv1('hls_purple')
+                                        on_value: root.adjust_lv2('hls_purple')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
@@ -900,7 +900,7 @@ MainWidget:
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_lv1('hls_purple')
+                                        on_value: root.adjust_lv2('hls_purple')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
@@ -913,7 +913,7 @@ MainWidget:
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_lv1('hls_purple')
+                                        on_value: root.adjust_lv2('hls_purple')
                         TabbedPanelItem:
                             text: 'M'
                             BoxLayout:
@@ -930,7 +930,7 @@ MainWidget:
                                         max: 100.0
                                         value: 0.0
                                         step: 1.0
-                                        on_value: root.adjust_lv1('hls_magenta')
+                                        on_value: root.adjust_lv2('hls_magenta')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
@@ -943,7 +943,7 @@ MainWidget:
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_lv1('hls_magenta')
+                                        on_value: root.adjust_lv2('hls_magenta')
                                 BoxLayout:
                                     orientation: 'horizontal'
                                     Label:
@@ -956,7 +956,7 @@ MainWidget:
                                         max: 1.0
                                         value: 0.0
                                         step: 0.05
-                                        on_value: root.adjust_lv1('hls_magenta')
+                                        on_value: root.adjust_lv2('hls_magenta')
 
         BoxLayout:
             orientation: 'vertical'
