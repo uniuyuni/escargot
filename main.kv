@@ -1,6 +1,9 @@
+#:include param_slider.kv
+#:include separator.kv
+#:include spacer.kv
+#:include viewer_widget.kv
 
-MainWidget:
-
+MainWidget:   
 
 <MainWidget>:
     
@@ -27,942 +30,920 @@ MainWidget:
                     pos: [0, 0]
                     id: preview
 
-            ScrollView:
-                size_hint_x: 3
+            TabbedPanel:
+                size: 700, 0
+                size_hint_x: None
+                do_default_tab: False
 
-                BoxLayout:
-                    size_hint_y: None
-                    orientation: "vertical"
-                    height: self.minimum_height
+                TabbedPanelItem:
+                    text: 'Basic'
 
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "noise reduction"
-                        ToggleButton:
-                            id: toggle_noise_reduction
-                            on_state: root.adjust_lv1('noise_reduction')
+                    MDScrollView:
 
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "inpaint"
-                        ToggleButton:
-                            id: toggle_inpaint
-                            on_state: root.adjust_lv0('inpaint')
-                        Button:
-                            id: button_inpaint
-                            on_press: root.adjust_lv0('inpaint')
+                        BoxLayout:
+                            size_hint_y: None
+                            orientation: "vertical"
+                            height: self.minimum_height
 
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "defocus"
-                        ToggleButton:
-                            id: toggle_defocus
-                            on_state: root.adjust_lv1('defocus')
-
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "color_correct"
-                        ToggleButton:
-                            id: toggle_color_correct
-                            on_state: root.adjust_lv2('color_correct')
-
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "lowpass filter"
-                        MDSlider:
-                            size_hint_x: 6
-                            id: slider_lowpass_filter
-                            min: 0
-                            max: 100
-                            value: 0
-                            step: 2
-                            on_value: root.adjust_lv1('lowpass_filter')
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "highpass filter"
-                        MDSlider:
-                            size_hint_x: 6
-                            id: slider_highpass_filter
-                            min: 0
-                            max: 100
-                            value: 0
-                            step: 2
-                            on_value: root.adjust_lv1('lowpass_filter')
-
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "perlin noise"
-                        MDSlider:
-                            size_hint_x: 6
-                            id: slider_perlin_noise
-                            min: 0
-                            max: 10
-                            value: 0
-                            step: 1
-                            on_value: root.adjust_lv1('perlin_noise')
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "perlin noise opacity"
-                        MDSlider:
-                            size_hint_x: 6
-                            id: slider_perlin_noise_opacity
-                            min: 0
-                            max: 100
-                            value: 100
-                            step: 1
-                            on_value: root.adjust_lv1('perlin_noise')
-
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "color temperature"
-                        MDSlider:
-                            size_hint_x: 6
-                            id: slider_color_temperature
-                            min: 1000
-                            max: 40000
-                            value: 5600
-                            step: 100
-                            on_value: root.adjust_lv2('color_temperature')
-
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "color temperature strength"
-                        MDSlider:
-                            size_hint_x: 6
-                            id: slider_color_temperature_strength
-                            min: 0
-                            max: 100
-                            value: 0
-                            step: 1
-                            on_value: root.adjust_lv2('color_temperature')
-
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "LUT"
-                        ToggleButton:
-                            id: toggle_lut
-                            on_state: root.adjust_lv1('lut')
-
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "exposure"
-                        MDSlider:
-                            size_hint_x: 6
-                            id: slider_exposure
-                            min: -5.0
-                            max: 5.0
-                            value: 0.0
-                            step: 0.1
-                            on_value: root.adjust_lv2('exposure')
-
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "contrast"
-                        MDSlider:
-                            size_hint_x: 6
-                            id: slider_contrast
-                            min: -100.0
-                            max: 100.0
-                            value: 0.0
-                            step: 1.0
-                            on_value: root.adjust_lv2('contrast')
-
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "hilight"
-                        MDSlider:
-                            size_hint_x: 6
-                            id: slider_hilight
-                            min: -100.0
-                            max: 100.0
-                            value: 0.0
-                            step: 1.0
-                            on_value: root.adjust_lv2('tone')
-
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "shadow"
-                        MDSlider:
-                            size_hint_x: 6
-                            id: slider_shadow
-                            min: -100.0
-                            max: 100.0
-                            value: 0.0
-                            step: 1.0
-                            on_value: root.adjust_lv2('tone')
-
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "white"
-                        MDSlider:
-                            size_hint_x: 6
-                            id: slider_white
-                            min: -100.0
-                            max: 100.0
-                            value: 0.0
-                            step: 1.0
-                            on_value: root.adjust_lv2('tone')
-
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "black"
-                        MDSlider:
-                            size_hint_x: 6
-                            id: slider_black
-                            min: -100.0
-                            max: 100.0
-                            value: 0.0
-                            step: 1.0
-                            on_value: root.adjust_lv2('tone')
-
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "saturation"
-                        MDSlider:
-                            size_hint_x: 6
-                            id: slider_saturation
-                            min: -1.0
-                            max: 1.0
-                            value: 0.0
-                            step: 0.01
-                            on_value: root.adjust_lv2('saturation')
-
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "vibrance"
-                        MDSlider:
-                            size_hint_x: 6
-                            id: slider_vibrance
-                            min: -1.0
-                            max: 1.0
-                            value: 0.0
-                            step: 0.01
-                            on_value: root.adjust_lv2('saturation')
-
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "dehaze"
-                        MDSlider:
-                            size_hint_x: 6
-                            id: slider_dehaze
-                            min: -1.0
-                            max: 1.0
-                            value: 0.0
-                            step: 0.01
-                            on_value: root.adjust_lv2('dehaze')
-
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "black level"
-                        MDSlider:
-                            size_hint_x: 6
-                            id: slider_black_level
-                            min: 0
-                            max: 255
-                            value: 0
-                            step: 1
-                            on_value: root.adjust_lv2('level')
-
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "mid level"
-                        MDSlider:
-                            size_hint_x: 6
-                            id: slider_mid_level
-                            min: 0
-                            max: 255
-                            value: 127
-                            step: 1
-                            on_value: root.adjust_lv2('level')
-
-                    BoxLayout:
-                        size_hint_y: None
-                        orientation: 'horizontal'
-                        Label:
-                            size_hint_x: 4
-                            text: "white level"
-                        MDSlider:
-                            size_hint_x: 6
-                            id: slider_white_level
-                            min: 0
-                            max: 255
-                            value: 255
-                            step: 1
-                            on_value: root.adjust_lv2('level')
-
-                    TabbedPanel:
-                        size_hint_y: None
-                        tab_width: 40
-                        tab_height: 40
-                        do_default_tab: False
-                        row_default_height: 200
-                        height: self.minimum_height
-
-                        TabbedPanelItem:
-                            text: 'T'
-                            BoxLayout:
+                            Label:
+                                text_size: self.size
+                                size: 0, 40
                                 size_hint_y: None
-                                height: 200
-                                orientation: 'vertical'
-                                Label:
-                                    size_hint_y: 1
-                                    text: "tonecurve"
-                                CurveWidget:
-                                    size_hint_y: 9
-                                    id: tonecurve
-                                    start_y: 0.0
-                                    end_y: 1.0
-                                    on_curve: root.adjust_lv2('tonecurve')
+                                text: ' White Balance'
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
+ 
+                            ParamSlider:
+                                id: slider_color_temperature
+                                text: "Temperature"
+                                min: 1000
+                                max: 40000
+                                value: 5600
+                                step: 100
+                                on_value: root.adjust_lv2('color_temperature')
 
-                        TabbedPanelItem:
-                            text: 'slider_red_val'
-                            BoxLayout:
+                            ParamSlider:
+                                id: slider_color_tint
+                                text: "Tint"
+                                min: -100
+                                max: 100
+                                value: 0
+                                step: 1
+                                on_value: root.adjust_lv2('color_tint')
+
+                            HSeparator:
+                                height: 30
+ 
+                            Label:
+                                text_size: self.size
+                                size: 0, 40
                                 size_hint_y: None
-                                height: 200
-                                orientation: 'vertical'
-                                Label:
-                                    size_hint_y: 1
-                                    text: "red"
-                                CurveWidget:
-                                    size_hint_y: 9
-                                    id: tonecurve_red
-                                    start_y: 0.0
-                                    end_y: 1.0
-                                    on_curve: root.adjust_lv2('tonecurve_red')
+                                text: ' Tone'
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
 
-                        TabbedPanelItem:
-                            text: 'G'
-                            BoxLayout:
+                            ParamSlider:
+                                id: slider_exposure
+                                text: "Exposure"                            
+                                min: -5.0
+                                max: 5.0
+                                value: 0.0
+                                step: 0.1
+                                on_value: root.adjust_lv2('exposure')
+
+                            ParamSlider:
+                                id: slider_contrast
+                                text: "Contrast"
+                                min: -100.0
+                                max: 100.0
+                                value: 0.0
+                                step: 1.0
+                                on_value: root.adjust_lv2('contrast')
+
+                            HSeparator:
+                                height: 20
+
+                            ParamSlider:
+                                id: slider_hilight
+                                text: "Hilights"
+                                min: -100.0
+                                max: 100.0
+                                value: 0.0
+                                step: 1.0
+                                on_value: root.adjust_lv2('tone')
+
+                            ParamSlider:
+                                id: slider_shadow
+                                text: "Shadows"
+                                min: -100.0
+                                max: 100.0
+                                value: 0.0
+                                step: 1.0
+                                on_value: root.adjust_lv2('tone')
+
+                            ParamSlider:
+                                id: slider_white
+                                text: "Whites"
+                                min: -100.0
+                                max: 100.0
+                                value: 0.0
+                                step: 1.0
+                                on_value: root.adjust_lv2('tone')
+
+                            ParamSlider:
+                                id: slider_black
+                                text: "Blacks"
+                                min: -100.0
+                                max: 100.0
+                                value: 0.0
+                                step: 1.0
+                                on_value: root.adjust_lv2('tone')
+
+                            HSeparator:
+                                height: 30
+                            
+                            Label:
+                                text_size: self.size
+                                size: 0, 40
                                 size_hint_y: None
-                                height: 200
-                                orientation: 'vertical'
-                                Label:
-                                    size_hint_y: 1
-                                    text: "green"
-                                CurveWidget:
-                                    size_hint_y: 9
-                                    id: tonecurve_green
-                                    start_y: 0.0
-                                    end_y: 1.0
-                                    on_curve: root.adjust_lv2('tonecurve_green')
+                                text: ' Precence'
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
 
-                        TabbedPanelItem:
-                            text: 'B'
-                            BoxLayout:
+                            ParamSlider:
+                                id: slider_dehaze
+                                text: "Dehaze"
+                                min: -1.0
+                                max: 1.0
+                                value: 0.0
+                                step: 0.01
+                                on_value: root.adjust_lv2('dehaze')
+
+                            HSeparator:
+                                height: 20
+                            
+                            ParamSlider:
+                                text: "Saturation"
+                                id: slider_saturation
+                                min: -1.0
+                                max: 1.0
+                                value: 0.0
+                                step: 0.01
+                                on_value: root.adjust_lv2('saturation')
+
+                            ParamSlider:
+                                text: "Vibrance"
+                                id: slider_vibrance
+                                min: -1.0
+                                max: 1.0
+                                value: 0.0
+                                step: 0.01
+                                on_value: root.adjust_lv2('saturation')
+
+                            HSeparator:
+                                height: 30
+                            
+                            Label:
+                                text_size: self.size
+                                size: 0, 40
                                 size_hint_y: None
-                                height: 200
-                                orientation: 'vertical'
-                                Label:
-                                    size_hint_y: 1
-                                    text: "blue"
-                                CurveWidget:
-                                    size_hint_y: 9
-                                    id: tonecurve_blue
-                                    start_y: 0.0
-                                    end_y: 1.0
-                                    on_curve: root.adjust_lv2('tonecurve_blue')
+                                text: ' Tone Curve'
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
 
-                        TabbedPanelItem:
-                            text: 'LL'
-                            BoxLayout:
+                            TabbedPanel:
+                                size: 700, 700
+                                size_hint: None, None
+                                tab_width: 80
+                                tab_height: 40
+                                do_default_tab: False
+
+                                TabbedPanelItem:
+                                    text: 'All'
+
+                                    CurveWidget:
+                                        id: tonecurve
+                                        start_y: 0.0
+                                        end_y: 1.0
+                                        on_curve: root.adjust_lv2('tonecurve')
+
+                                TabbedPanelItem:
+                                    text: 'Red'
+
+                                    CurveWidget:
+                                        id: tonecurve_red
+                                        start_y: 0.0
+                                        end_y: 1.0
+                                        on_curve: root.adjust_lv2('tonecurve_red')
+
+                                TabbedPanelItem:
+                                    text: 'Green'
+
+                                    CurveWidget:
+                                        id: tonecurve_green
+                                        start_y: 0.0
+                                        end_y: 1.0
+                                        on_curve: root.adjust_lv2('tonecurve_green')
+
+                                TabbedPanelItem:
+                                    text: 'Blue'
+
+                                    CurveWidget:
+                                        id: tonecurve_blue
+                                        start_y: 0.0
+                                        end_y: 1.0
+                                        on_curve: root.adjust_lv2('tonecurve_blue')
+
+                            HSeparator:
+                                height: 30
+                            
+                            Label:
+                                text_size: self.size
+                                size: 0, 40
                                 size_hint_y: None
-                                height: 200
-                                orientation: 'vertical'
-                                Label:
-                                    size_hint_y: 1
-                                    text: "Lum vs Lum"
-                                CurveWidget:
-                                    size_hint_y: 9
-                                    id: LumvsLum
-                                    start_y: 0.5
-                                    end_y: 0.5
-                                    on_curve: root.adjust_lv2('LumvsLum')
+                                text: ' Color Mixer'
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
 
-                        TabbedPanelItem:
-                            text: 'HH'
-                            BoxLayout:
-                                size_hint_y: None
-                                height: 200
-                                orientation: 'vertical'
-                                Label:
-                                    size_hint_y: 1
-                                    text: "Hue vs Hue"
-                                CurveWidget:
-                                    size_hint_y: 9
-                                    id: HuevsHue
-                                    start_y: 0.5
-                                    end_y: 0.5
-                                    on_curve: root.adjust_lv2('HuevsHue')
+                            TabbedPanel:
+                                size: 700, 160
+                                size_hint: None, None
+                                tab_width: 120
+                                tab_height: 40
+                                do_default_tab: False
 
-                        TabbedPanelItem:
-                            text: 'HS'
-                            BoxLayout:
-                                size_hint_y: None
-                                height: 200
-                                orientation: 'vertical'
-                                Label:
-                                    size_hint_y: 1
-                                    text: "Hue vs Sat"
-                                CurveWidget:
-                                    size_hint_y: 9
-                                    id: HuevsSat
-                                    start_y: 0.5
-                                    end_y: 0.5
-                                    on_curve: root.adjust_lv2('HuevsSat')
+                                TabbedPanelItem:
+                                    text: 'Red'
 
-                        TabbedPanelItem:
-                            text: 'HL'
-                            BoxLayout:
-                                size_hint_y: None
-                                height: 200
-                                orientation: 'vertical'
-                                Label:
-                                    size_hint_y: 1
-                                    text: "Hue vs Lum"
-                                CurveWidget:
-                                    size_hint_y: 9
-                                    id: HuevsLum
-                                    start_y: 0.5
-                                    end_y: 0.5
-                                    on_curve: root.adjust_lv2('HuevsLum')
+                                    BoxLayout:
+                                        size_hint_y: None
+                                        orientation: "vertical"
+                                        height: self.minimum_height
 
-                        TabbedPanelItem:
-                            text: 'LS'
-                            BoxLayout:
-                                size_hint_y: None
-                                height: 200
-                                orientation: 'vertical'
-                                Label:
-                                    size_hint_y: 1
-                                    text: "Lum vs Sat"
-                                CurveWidget:
-                                    size_hint_y: 9
-                                    id: LumvsSat
-                                    start_y: 0.5
-                                    end_y: 0.5
-                                    on_curve: root.adjust_lv2('LumvsSat')
-
-                        TabbedPanelItem:
-                            text: 'SS'
-                            BoxLayout:
-                                size_hint_y: None
-                                height: 200
-                                orientation: 'vertical'
-                                Label:
-                                    size_hint_y: 1
-                                    text: "Sat vs Sat"
-                                CurveWidget:
-                                    size_hint_y: 9
-                                    id: SatvsSat
-                                    start_y: 0.5
-                                    end_y: 0.5
-                                    on_curve: root.adjust_lv2('SatvsSat')
-
-                        TabbedPanelItem:
-                            text: 'SL'
-                            BoxLayout:
-                                size_hint_y: None
-                                height: 200
-                                orientation: 'vertical'
-                                Label:
-                                    size_hint_y: 1
-                                    text: "Sat vs Lum"
-                                CurveWidget:
-                                    size_hint_y: 9
-                                    id: SatvsLum
-                                    start_y: 0.5
-                                    end_y: 0.5
-                                    on_curve: root.adjust_lv2('SatvsLum')
-
-                    TabbedPanel:
-                        size_hint_y: None
-                        tab_width: 40
-                        tab_height: 40
-                        do_default_tab: False
-                        row_default_height: 200
-                        height: self.minimum_height
-
-                        TabbedPanelItem:
-                            text: 'G'
-                            BoxLayout:
-                                size_hint_y: None
-                                height: 200
-                                orientation: 'vertical'
-                                Label:
-                                    size_hint_y: 1
-                                    text: "grading"
-                                CurveWidget:
-                                    size_hint_y: 9
-                                    id: grading
-                                    start_y: 0.0
-                                    end_y: 0.0
-                                    on_curve: root.adjust_lv2('grading')
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "grading hue"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_grading_hue
-                                        min: 0.0
-                                        max: 360.0
-                                        value: 0.0
-                                        step: 1.0
-                                        on_value: root.adjust_lv2('grading')
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "grading lum"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_grading_lum
-                                        min: 0.0
-                                        max: 100.0
-                                        value: 0.0
-                                        step: 1.0
-                                        on_value: root.adjust_lv2('grading')
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "grading sat"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_grading_sat
-                                        min: 0.0
-                                        max: 100.0
-                                        value: 0.0
-                                        step: 1.0
-                                        on_value: root.adjust_lv2('grading')
-
-
-                    TabbedPanel:
-                        size_hint_y: None
-                        tab_width: 40
-                        tab_height: 40
-                        do_default_tab: False
-                        row_default_height: 200
-                        height: self.minimum_height
-
-                        TabbedPanelItem:
-                            text: 'R'
-                            BoxLayout:
-                                orientation: 'vertical'
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "RED HUE"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_hls_red_hue
-                                        min: -100.0
-                                        max: 100.0
-                                        value: 0.0
-                                        step: 1.0
-                                        on_value: root.adjust_lv2('hls_red')
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "RED_LUM"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_hls_red_lum
-                                        min: -1.0
-                                        max: 1.0
-                                        value: 0.0
-                                        step: 0.05
-                                        on_value: root.adjust_lv2('hls_red')
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "RED SAT"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_hls_red_sat
-                                        min: -1.0
-                                        max: 1.0
-                                        value: 0.0
-                                        step: 0.05
-                                        on_value: root.adjust_lv2('hls_red')
+                                        Label:
+                                            text_size: self.size
+                                            size: 0, 40
+                                            size_hint_y: None
+                                            text: ' Red'
+                                            font_size: '10pt'
+                                            halign: 'left'
+                                            valign: 'center'
+                                        ParamSlider:
+                                            id: slider_hls_red_hue
+                                            text: "Hue"
+                                            min: -100.0
+                                            max: 100.0
+                                            value: 0.0
+                                            step: 1.0
+                                            on_value: root.adjust_lv2('hls_red')
+                                        ParamSlider:
+                                            id: slider_hls_red_sat
+                                            text: "Saturation"
+                                            min: -1.0
+                                            max: 1.0
+                                            value: 0.0
+                                            step: 0.05
+                                            on_value: root.adjust_lv2('hls_red')
+                                        ParamSlider:
+                                            id: slider_hls_red_lum
+                                            text: "Luminance"
+                                            min: -1.0
+                                            max: 1.0
+                                            value: 0.0
+                                            step: 0.05
+                                            on_value: root.adjust_lv2('hls_red')
                     
-                        TabbedPanelItem:
-                            text: 'O'
-                            BoxLayout:
-                                orientation: 'vertical'
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "ORANGE HUE"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_hls_orange_hue
-                                        min: -100.0
-                                        max: 100.0
-                                        value: 0.0
-                                        step: 1.0
-                                        on_value: root.adjust_lv2('hls_orange')
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "ORANGE LUM"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_hls_orange_lum
-                                        min: -1.0
-                                        max: 1.0
-                                        value: 0.0
-                                        step: 0.05
-                                        on_value: root.adjust_lv2('hls_orange')
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "ORANGE SAT"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_hls_orange_sat
-                                        min: -1.0
-                                        max: 1.0
-                                        value: 0.0
-                                        step: 0.05
-                                        on_value: root.adjust_lv2('hls_orange')
-                        TabbedPanelItem:
-                            text: 'Y'
-                            BoxLayout:
-                                orientation: 'vertical'
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "YELLOW HUE"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_hls_yellow_hue
-                                        min: -100.0
-                                        max: 100.0
-                                        value: 0.0
-                                        step: 1.0
-                                        on_value: root.adjust_lv2('hls_yellow')
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "YELLOW LUM"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_hls_yellow_lum
-                                        min: -1.0
-                                        max: 1.0
-                                        value: 0.0
-                                        step: 0.05
-                                        on_value: root.adjust_lv2('hls_yellow')
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "YELLOW SAT"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_hls_yellow_sat
-                                        min: -1.0
-                                        max: 1.0
-                                        value: 0.0
-                                        step: 0.05
-                                        on_value: root.adjust_lv2('hls_yellow')
-                        TabbedPanelItem:
-                            text: 'G'
-                            BoxLayout:
-                                orientation: 'vertical'
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "GREEN HUE"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_hls_green_hue
-                                        min: -100.0
-                                        max: 100.0
-                                        value: 0.0
-                                        step: 1.0
-                                        on_value: root.adjust_lv2('hls_green')
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "GREEN LUM"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_hls_green_lum
-                                        min: -1.0
-                                        max: 1.0
-                                        value: 0.0
-                                        step: 0.05
-                                        on_value: root.adjust_lv2('hls_green')
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "GREEN SAT"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_hls_green_sat
-                                        min: -1.0
-                                        max: 1.0
-                                        value: 0.0
-                                        step: 0.05
-                                        on_value: root.adjust_lv2('hls_green')
-                        TabbedPanelItem:
-                            text: 'C'
-                            BoxLayout:
-                                orientation: 'vertical'
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "CYAN HUE"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_hls_cyan_hue
-                                        min: -100.0
-                                        max: 100.0
-                                        value: 0.0
-                                        step: 1.0
-                                        on_value: root.adjust_lv2('hls_cyan')
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "CYAN LUM"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_hls_cyan_lum
-                                        min: -1.0
-                                        max: 1.0
-                                        value: 0.0
-                                        step: 0.05
-                                        on_value: root.adjust_lv2('hls_cyan')
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "CYAN SAT"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_hls_cyan_sat
-                                        min: -1.0
-                                        max: 1.0
-                                        value: 0.0
-                                        step: 0.05
-                                        on_value: root.adjust_lv2('hls_cyan')
-                        TabbedPanelItem:
-                            text: 'B'
-                            BoxLayout:
-                                orientation: 'vertical'
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "BLUE HUE"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_hls_blue_hue
-                                        min: -100.0
-                                        max: 100.0
-                                        value: 0.0
-                                        step: 1.0
-                                        on_value: root.adjust_lv2('hls_blue')
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "BLUE LUM"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_hls_blue_lum
-                                        min: -1.0
-                                        max: 1.0
-                                        value: 0.0
-                                        step: 0.05
-                                        on_value: root.adjust_lv2('hls_blue')
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "BLUE_SAT"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_hls_blue_sat
-                                        min: -1.0
-                                        max: 1.0
-                                        value: 0.0
-                                        step: 0.05
-                                        on_value: root.adjust_lv2('hls_blue')
-                        TabbedPanelItem:
-                            text: 'P'
-                            BoxLayout:
-                                orientation: 'vertical'
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "PURPLE HUE"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_hls_purple_hue
-                                        min: -100.0
-                                        max: 100.0
-                                        value: 0.0
-                                        step: 1.0
-                                        on_value: root.adjust_lv2('hls_purple')
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "PURPLE LUM"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_hls_purple_lum
-                                        min: -1.0
-                                        max: 1.0
-                                        value: 0.0
-                                        step: 0.05
-                                        on_value: root.adjust_lv2('hls_purple')
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "PURPLE SAT"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_hls_purple_sat
-                                        min: -1.0
-                                        max: 1.0
-                                        value: 0.0
-                                        step: 0.05
-                                        on_value: root.adjust_lv2('hls_purple')
-                        TabbedPanelItem:
-                            text: 'M'
-                            BoxLayout:
-                                orientation: 'vertical'
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "MAGENTA HUE"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_hls_magenta_hue
-                                        min: -100.0
-                                        max: 100.0
-                                        value: 0.0
-                                        step: 1.0
-                                        on_value: root.adjust_lv2('hls_magenta')
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "MAGENTA LUM"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_hls_magenta_lum
-                                        min: -1.0
-                                        max: 1.0
-                                        value: 0.0
-                                        step: 0.05
-                                        on_value: root.adjust_lv2('hls_magenta')
-                                BoxLayout:
-                                    orientation: 'horizontal'
-                                    Label:
-                                        size_hint_x: 4
-                                        text: "MAGENTA SAT"
-                                    MDSlider:
-                                        size_hint_x: 6
-                                        id: slider_hls_magenta_sat
-                                        min: -1.0
-                                        max: 1.0
-                                        value: 0.0
-                                        step: 0.05
-                                        on_value: root.adjust_lv2('hls_magenta')
+                                TabbedPanelItem:
+                                    text: 'Orange'
 
-        BoxLayout:
-            orientation: 'vertical'
-            size_hint_y: 1
+                                    BoxLayout:
+                                        size_hint_y: None
+                                        orientation: "vertical"
+                                        height: self.minimum_height
+                                        Label:
+                                            text_size: self.size
+                                            size: 0, 40
+                                            size_hint_y: None
+                                            text: ' Orange'
+                                            font_size: '10pt'
+                                            halign: 'left'
+                                            valign: 'center'
+                                        ParamSlider:
+                                            id: slider_hls_orange_hue
+                                            text: "Hue"
+                                            min: -100.0
+                                            max: 100.0
+                                            value: 0.0
+                                            step: 1.0
+                                            on_value: root.adjust_lv2('hls_orange')
+                                        ParamSlider:
+                                            id: slider_hls_orange_sat
+                                            text: "Saturation"
+                                            min: -1.0
+                                            max: 1.0
+                                            value: 0.0
+                                            step: 0.05
+                                            on_value: root.adjust_lv2('hls_orange')
+                                        ParamSlider:
+                                            id: slider_hls_orange_lum
+                                            text: "Luminance"
+                                            min: -1.0
+                                            max: 1.0
+                                            value: 0.0
+                                            step: 0.05
+                                            on_value: root.adjust_lv2('hls_orange')
 
-            Label:        
-                text: "Data Stlip"
+                                TabbedPanelItem:
+                                    text: 'Yellow'
+
+                                    BoxLayout:
+                                        size_hint_y: None
+                                        orientation: "vertical"
+                                        height: self.minimum_height
+                                        Label:
+                                            text_size: self.size
+                                            size: 0, 40
+                                            size_hint_y: None
+                                            text: ' Yellow'
+                                            font_size: '10pt'
+                                            halign: 'left'
+                                            valign: 'center'
+                                        ParamSlider:
+                                            id: slider_hls_yellow_hue
+                                            text: "hue"
+                                            min: -100.0
+                                            max: 100.0
+                                            value: 0.0
+                                            step: 1.0
+                                            on_value: root.adjust_lv2('hls_yellow')
+                                        ParamSlider:
+                                            id: slider_hls_yellow_sat
+                                            text: "Saturation"
+                                            min: -1.0
+                                            max: 1.0
+                                            value: 0.0
+                                            step: 0.05
+                                            on_value: root.adjust_lv2('hls_yellow')
+                                        ParamSlider:
+                                            id: slider_hls_yellow_lum
+                                            text: "Luminance"
+                                            min: -1.0
+                                            max: 1.0
+                                            value: 0.0
+                                            step: 0.05
+                                            on_value: root.adjust_lv2('hls_yellow')
+
+                                TabbedPanelItem:
+                                    text: 'Green'
+
+                                    BoxLayout:
+                                        size_hint_y: None
+                                        orientation: "vertical"
+                                        height: self.minimum_height
+                                        Label:
+                                            text_size: self.size
+                                            size: 0, 40
+                                            size_hint_y: None
+                                            text: ' Green'
+                                            font_size: '10pt'
+                                            halign: 'left'
+                                            valign: 'center'
+                                        ParamSlider:
+                                            id: slider_hls_green_hue
+                                            text: "Hue"
+                                            min: -100.0
+                                            max: 100.0
+                                            value: 0.0
+                                            step: 1.0
+                                            on_value: root.adjust_lv2('hls_green')
+                                        ParamSlider:
+                                            id: slider_hls_green_sat
+                                            text: "Saturation"
+                                            min: -1.0
+                                            max: 1.0
+                                            value: 0.0
+                                            step: 0.05
+                                            on_value: root.adjust_lv2('hls_green')
+                                        ParamSlider:
+                                            id: slider_hls_green_lum
+                                            text: "Luminance"
+                                            min: -1.0
+                                            max: 1.0
+                                            value: 0.0
+                                            step: 0.05
+                                            on_value: root.adjust_lv2('hls_green')
+
+                                TabbedPanelItem:
+                                    text: 'Cyan'
+
+                                    BoxLayout:
+                                        size_hint_y: None
+                                        orientation: "vertical"
+                                        height: self.minimum_height
+                                        Label:
+                                            text_size: self.size
+                                            size: 0, 40
+                                            size_hint_y: None
+                                            text: ' Cyan'
+                                            font_size: '10pt'
+                                            halign: 'left'
+                                            valign: 'center'
+                                        ParamSlider:
+                                            id: slider_hls_cyan_hue
+                                            text: "Hue"
+                                            min: -100.0
+                                            max: 100.0
+                                            value: 0.0
+                                            step: 1.0
+                                            on_value: root.adjust_lv2('hls_cyan')
+                                        ParamSlider:
+                                            id: slider_hls_cyan_sat
+                                            text: "Saturation"
+                                            min: -1.0
+                                            max: 1.0
+                                            value: 0.0
+                                            step: 0.05
+                                            on_value: root.adjust_lv2('hls_cyan')
+                                        ParamSlider:
+                                            id: slider_hls_cyan_lum
+                                            text: "Luminance"
+                                            min: -1.0
+                                            max: 1.0
+                                            value: 0.0
+                                            step: 0.05
+                                            on_value: root.adjust_lv2('hls_cyan')
+
+                                TabbedPanelItem:
+                                    text: 'Blue'
+
+                                    BoxLayout:
+                                        size_hint_y: None
+                                        orientation: "vertical"
+                                        height: self.minimum_height
+                                        Label:
+                                            text_size: self.size
+                                            size: 0, 40
+                                            size_hint_y: None
+                                            text: ' Blue'
+                                            font_size: '10pt'
+                                            halign: 'left'
+                                            valign: 'center'
+                                        ParamSlider:
+                                            id: slider_hls_blue_hue
+                                            text: "Hue"
+                                            min: -100.0
+                                            max: 100.0
+                                            value: 0.0
+                                            step: 1.0
+                                            on_value: root.adjust_lv2('hls_blue')
+                                        ParamSlider:
+                                            id: slider_hls_blue_sat
+                                            text: "Saturation"
+                                            min: -1.0
+                                            max: 1.0
+                                            value: 0.0
+                                            step: 0.05
+                                            on_value: root.adjust_lv2('hls_blue')
+                                        ParamSlider:
+                                            id: slider_hls_blue_lum
+                                            text: "Luminance"
+                                            min: -1.0
+                                            max: 1.0
+                                            value: 0.0
+                                            step: 0.05
+                                            on_value: root.adjust_lv2('hls_blue')
+
+                                TabbedPanelItem:
+                                    text: 'Purple'
+
+                                    BoxLayout:
+                                        size_hint_y: None
+                                        orientation: "vertical"
+                                        height: self.minimum_height
+                                        Label:
+                                            text_size: self.size
+                                            size: 0, 40
+                                            size_hint_y: None
+                                            text: ' Purple'
+                                            font_size: '10pt'
+                                            halign: 'left'
+                                            valign: 'center'
+                                        ParamSlider:
+                                            id: slider_hls_purple_hue
+                                            text: "Hue"
+                                            min: -100.0
+                                            max: 100.0
+                                            value: 0.0
+                                            step: 1.0
+                                            on_value: root.adjust_lv2('hls_purple')
+                                        ParamSlider:
+                                            id: slider_hls_purple_sat
+                                            text: "Saturation"
+                                            min: -1.0
+                                            max: 1.0
+                                            value: 0.0
+                                            step: 0.05
+                                            on_value: root.adjust_lv2('hls_purple')
+                                        ParamSlider:
+                                            id: slider_hls_purple_lum
+                                            text: "Luminance"
+                                            min: -1.0
+                                            max: 1.0
+                                            value: 0.0
+                                            step: 0.05
+                                            on_value: root.adjust_lv2('hls_purple')
+
+                                TabbedPanelItem:
+                                    text: 'Magenta'
+
+                                    BoxLayout:
+                                        size_hint_y: None
+                                        orientation: "vertical"
+                                        height: self.minimum_height
+                                        Label:
+                                            text_size: self.size
+                                            size: 0, 40
+                                            size_hint_y: None
+                                            text: ' Magenta'
+                                            font_size: '10pt'
+                                            halign: 'left'
+                                            valign: 'center'
+                                        ParamSlider:
+                                            id: slider_hls_magenta_hue
+                                            text: "Hue"
+                                            min: -100.0
+                                            max: 100.0
+                                            value: 0.0
+                                            step: 1.0
+                                            on_value: root.adjust_lv2('hls_magenta')
+                                        ParamSlider:
+                                            id: slider_hls_magenta_sat
+                                            text: "Saturation"
+                                            min: -1.0
+                                            max: 1.0
+                                            value: 0.0
+                                            step: 0.05
+                                            on_value: root.adjust_lv2('hls_magenta')
+                                        ParamSlider:
+                                            id: slider_hls_magenta_lum
+                                            text: "Luminance"
+                                            min: -1.0
+                                            max: 1.0
+                                            value: 0.0
+                                            step: 0.05
+                                            on_value: root.adjust_lv2('hls_magenta')
+
+                TabbedPanelItem:
+                    text: 'Curves'
+
+                    MDScrollView:
+
+                        BoxLayout:
+                            size_hint_y: None
+                            orientation: "vertical"
+                            height: self.minimum_height
+
+                            Label:
+                                text_size: self.size
+                                size: 0, 40
+                                size_hint_y: None
+                                text: ' Color Grading'
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
+
+                            CurveWidget:
+                                id: grading
+                                size: 700, 700-120
+                                size_hint: None, None
+                                start_y: 0.0
+                                end_y: 0.0
+                                on_curve: root.adjust_lv2('grading')
+
+                            ParamSlider:
+                                id: slider_grading_hue
+                                text: "Hue"
+                                min: 0.0
+                                max: 360.0
+                                value: 0.0
+                                step: 1.0
+                                on_value: root.adjust_lv2('grading')
+
+                            ParamSlider:
+                                id: slider_grading_sat
+                                text: "Saturation"
+                                min: 0.0
+                                max: 100.0
+                                value: 0.0
+                                step: 1.0
+                                on_value: root.adjust_lv2('grading')
+
+                            ParamSlider:
+                                id: slider_grading_lum
+                                text: "Luminance"
+                                min: 0.0
+                                max: 100.0
+                                value: 0.0
+                                step: 1.0
+                                on_value: root.adjust_lv2('grading')
+
+                            HSeparator:
+                                height: 30
+                            
+                            Label:
+                                text_size: self.size
+                                size: 0, 40
+                                size_hint_y: None
+                                text: "Lum vs Lum"
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
+                            CurveWidget:
+                                id: LumvsLum
+                                size: 700, 700-120
+                                size_hint: None, None
+                                start_y: 0.5
+                                end_y: 0.5
+                                on_curve: root.adjust_lv2('LumvsLum')
+
+                            Label:
+                                text_size: self.size
+                                size: 0, 40
+                                size_hint_y: None
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
+                                text: "Hue vs Hue"
+                            CurveWidget:
+                                id: HuevsHue
+                                size: 700, 700-120
+                                size_hint: None, None
+                                start_y: 0.5
+                                end_y: 0.5
+                                on_curve: root.adjust_lv2('HuevsHue')
+
+                            Label:
+                                text_size: self.size
+                                size: 0, 40
+                                size_hint_y: None
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
+                                text: "Hue vs Sat"
+                            CurveWidget:
+                                id: HuevsSat
+                                size: 700, 700-120
+                                size_hint: None, None
+                                start_y: 0.5
+                                end_y: 0.5
+                                on_curve: root.adjust_lv2('HuevsSat')
+
+                            Label:
+                                text_size: self.size
+                                size: 0, 40
+                                size_hint_y: None
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
+                                text: "Hue vs Lum"
+                            CurveWidget:
+                                id: HuevsLum
+                                size: 700, 700-120
+                                size_hint: None, None
+                                start_y: 0.5
+                                end_y: 0.5
+                                on_curve: root.adjust_lv2('HuevsLum')
+
+                            Label:
+                                text_size: self.size
+                                size: 0, 40
+                                size_hint_y: None
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
+                                text: "Lum vs Sat"
+                            CurveWidget:
+                                id: LumvsSat
+                                size: 700, 700-120
+                                size_hint: None, None
+                                start_y: 0.5
+                                end_y: 0.5
+                                on_curve: root.adjust_lv2('LumvsSat')
+
+                            Label:
+                                text_size: self.size
+                                size: 0, 40
+                                size_hint_y: None
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
+                                text: "Sat vs Sat"
+                            CurveWidget:
+                                id: SatvsSat
+                                size: 700, 700-120
+                                size_hint: None, None
+                                start_y: 0.5
+                                end_y: 0.5
+                                on_curve: root.adjust_lv2('SatvsSat')
+
+                            Label:
+                                text_size: self.size
+                                size: 0, 40
+                                size_hint_y: None
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
+                                text: "Sat vs Lum"
+                            CurveWidget:
+                                id: SatvsLum
+                                size: 700, 700-120
+                                size_hint: None, None
+                                start_y: 0.5
+                                end_y: 0.5
+                                on_curve: root.adjust_lv2('SatvsLum')                            
+
+                TabbedPanelItem:
+                    text: 'Extra'
+
+                    MDScrollView:
+
+                        MDBoxLayout:
+                            size_hint_y: None
+                            orientation: "vertical"
+                            height: self.minimum_height
+
+                            Label:
+                                text_size: self.size
+                                size: 0, 40
+                                size_hint_y: None
+                                text: ' Noise Reduction'
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
+
+                            BoxLayout:
+                                size: 0, 60
+                                size_hint_y: None
+                                orientation: 'horizontal'
+                                ParamLabel:
+                                    text: "AI"
+                                VSpacer:
+                                    size_hint_x: 5
+                                Switch:
+                                    size: 200, 0
+                                    size_hint_x: None
+                                    halign: 'right'
+                                    id: toggle_noise_reduction
+                                    on_active: root.adjust_lv2('noise_reduction')
+
+                            HSeparator:
+                                height: 30
+
+                            Label:
+                                text_size: self.size
+                                size: 0, 40
+                                size_hint_y: None
+                                text: ' '
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
+
+                            BoxLayout:
+                                size: 0, 40
+                                size_hint_y: None
+                                orientation: 'horizontal'
+                                Label:
+                                    size_hint_x: 3
+                                    text: "Inpaint"
+                                ToggleButton:
+                                    size_hint_x: 3
+                                    id: toggle_inpaint
+                                    on_state: root.adjust_lv0('inpaint')
+                                Button:
+                                    size_hint_x: 4
+                                    id: button_inpaint
+                                    on_press: root.adjust_lv0('inpaint')
+
+                            BoxLayout:
+                                size: 0, 60
+                                size_hint_y: None
+                                orientation: 'horizontal'
+                                ParamLabel:
+                                    text: "Defocus"
+                                VSpacer:
+                                    size_hint_x: 5
+                                Switch:
+                                    size: 200, 0
+                                    size_hint_x: None
+                                    halign: 'right'
+                                    id: toggle_defocus
+                                    on_active: root.adjust_lv2('defocus')
+
+                            BoxLayout:
+                                size: 0, 60
+                                size_hint_y: None
+                                orientation: 'horizontal'
+                                ParamLabel:
+                                    text: "Color Correct"
+                                VSpacer:
+                                    size_hint_x: 5
+                                Switch:
+                                    size: 200, 0
+                                    size_hint_x: None
+                                    halign: 'right'
+                                    id: switch_color_correct
+                                    on_active: root.adjust_lv2('color_correct')
+
+                            HSeparator:
+                                height: 30
+
+                            Label:
+                                text_size: self.size
+                                size: 0, 40
+                                size_hint_y: None
+                                text: ' Filter'
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
+
+                            ParamSlider:
+                                id: slider_lowpass_filter
+                                text: "Lowpass Filter"
+                                min: 0
+                                max: 100
+                                value: 0
+                                step: 2
+                                on_value: root.adjust_lv1('lowpass_filter')
+
+                            ParamSlider:
+                                id: slider_highpass_filter
+                                text: "Highpass Filter"
+                                min: 0
+                                max: 100
+                                value: 0
+                                step: 2
+                                on_value: root.adjust_lv1('lowpass_filter')
+
+                            ParamSlider:
+                                id: slider_perlin_noise
+                                text: "Perlin Noise"
+                                min: 0
+                                max: 10
+                                value: 0
+                                step: 1
+                                on_value: root.adjust_lv1('perlin_noise')
+
+                            ParamSlider:
+                                id: slider_perlin_noise_opacity
+                                text: "Perlin Opacity"
+                                min: 0
+                                max: 100
+                                value: 100
+                                step: 1
+                                on_value: root.adjust_lv1('perlin_noise')
+
+                            HSeparator:
+                                height: 30
+
+                            BoxLayout:
+                                size_hint_y: None
+                                orientation: 'horizontal'
+                                ParamLabel:
+                                    text: "LUT"
+                                ToggleButton:
+                                    size_hint_x: 7
+                                    id: toggle_lut
+                                    on_state: root.adjust_lv1('lut')
+
+                            HSeparator:
+                                height: 30
+
+                            Label:
+                                text_size: self.size
+                                size: 0, 40
+                                size_hint_y: None
+                                text: ' Level'
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
+
+                            ParamSlider:
+                                id: slider_black_level
+                                text: "black level"
+                                min: 0
+                                max: 255
+                                value: 0
+                                step: 1
+                                on_value: root.adjust_lv2('level')
+
+                            ParamSlider:
+                                id: slider_mid_level
+                                text: "mid level"
+                                min: 0
+                                max: 255
+                                value: 127
+                                step: 1
+                                on_value: root.adjust_lv2('level')
+
+                            ParamSlider:
+                                id: slider_white_level
+                                text: "white level"
+                                min: 0
+                                max: 255
+                                value: 255
+                                step: 1
+                                on_value: root.adjust_lv2('level')
+
+        ViewerWidget:
+            id: viewer
+            size_hint_y: None
+            size: (0, dp(220))
+            grid_width: dp(180)
+            on_last_selected: root.on_select(self.last_selected.file_path, self.last_selected.exif_data)
 
 <CurveWidget>:

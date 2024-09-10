@@ -42,7 +42,7 @@ class NoiseLayer(AdjustmentLayer):
             NoiseLayer.__net = noise2void.setup_predict()
 
     def set_param(self, param, widget):
-        param['noise_reduction'] = 0 if widget.ids["toggle_noise_reduction"].state == "normal" else 1
+        param['noise_reduction'] = 0 if widget.ids["toggle_noise_reduction"].active == True else 1
 
     def make_diff(self, img, param):
         nr = param.get('noise_reduction', 0)
@@ -67,6 +67,7 @@ class InpaintLayer(AdjustmentLayer):
             InpaintLayer.__net = lama.setup_predict()
         
         self.mask_editor = None
+        self.crop_editor = None
 
     def set_param(self, param, widget):
         param['inpaint'] = 0 if widget.ids["toggle_inpaint"].state == "normal" else 1
@@ -104,7 +105,7 @@ class DefocusLayer(AdjustmentLayer):
             DefocusLayer.__net = DRBNet.setup_predict()
 
     def set_param(self, param, widget):
-        param['defocus'] = 0 if widget.ids["toggle_defocus"].state == "normal" else 1
+        param['defocus'] = 0 if widget.ids["toggle_defocus"].active == True else 1
 
     def make_diff(self, img, param):
         df = param.get('defocus', 0)
@@ -122,7 +123,7 @@ class DefocusLayer(AdjustmentLayer):
 class ColorCorrectLayer(AdjustmentLayer):
 
     def set_param(self, param, widget):
-        param['color_correct'] = 0 if widget.ids["toggle_color_correct"].state == "normal" else 1
+        param['color_correct'] = 0 if widget.ids["switch_color_correct"].active == True else 1
 
     def make_diff(self, rgb, param):
         cc = param.get('color_correct', 0)
@@ -217,17 +218,15 @@ class ColorTemperatureLayer(AdjustmentLayer):
 
     def set_param(self, param, widget):
         param['color_temperature'] = widget.ids["slider_color_temperature"].value
-        param['color_temperature_strength'] = widget.ids["slider_color_temperature_strength"].value
 
     def make_diff(self, rgb, param):
         ct = param.get('color_temperature', 0)
-        cts = param.get('color_temperature_strength', 0)/100.0
         if ct == 0:
             self.diff = None
             self.hash = None
 
         else:
-            param_hash = hash((ct, cts))
+            param_hash = hash((ct))
             if self.hash != param_hash:
                 r, g, b = core.convert_Kelvin2RGB(ct)
                 self.diff = np.array([r, g, b])    # RGB保存

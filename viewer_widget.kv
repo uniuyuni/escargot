@@ -1,0 +1,22 @@
+#:include spacer.kv
+
+<ViewerWidget>:
+    orientation: 'vertical'
+    
+    ScrollView:
+        scroll_type: ['bars']
+        bar_width: dp(10)
+        scroll_wheel_distance: dp(80)
+        do_scroll_x: root.do_scroll_x
+        do_scroll_y: root.do_scroll_y
+
+        MDGridLayout:
+            id: grid_layout
+            cols: root.cols
+            size_hint_x: None
+            size_hint_y: None
+            height: self.minimum_height
+            width: self.minimum_width
+            adaptive_height: False
+            padding: dp(4), dp(4)
+            spacing: dp(2)

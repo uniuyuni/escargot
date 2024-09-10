@@ -1,0 +1,42 @@
+
+<ParamLabel@MDLabel>:
+    size: 200, 0
+    size_hint_x: None
+    halign: 'right'
+    font_size: '9pt'
+    color: 'b0b0b0' 
+
+<ParamSlider>:
+    orientation: 'horizontal'
+    size: 700, 40
+    size_hint: None, None
+    text: 'Label'
+    on_text: root.change_label()
+
+    ParamLabel:
+        id: label
+        
+    MDSlider:
+        size_hint_x: 5
+        id: slider
+        hint: False
+        on_value: root.change_slider_value()
+        on_touch_down: root.press_slider(args[1])
+
+    TextInput:
+        id: input
+        size: 70, 40
+        size_hint: None, None
+        halign: 'right'
+        font_size: '9pt'
+        multiline: False
+        on_text_validate: root.change_input_text()
+
+    BoxLayout:
+        size: 50, 40
+        size_hint: None, None
+        orientation: 'vertical'
+        Button:
+            on_press: root.press_button(root.ids['slider'].step)
+        Button:
+            on_press: root.press_button(-root.ids['slider'].step)
