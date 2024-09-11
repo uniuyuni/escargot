@@ -17,15 +17,17 @@ import mask_editor
 class AdjustmentLayer():
 
     def __init__(self, **kwargs):
+        self.reeffect()
+
+    def reeffect(self):
         self.diff = None
         self.hash = None
 
-    def reset(self):
-        self.diff = None
-        self.hash = None
+    def set2widget(self, widget, param):
+        pass
 
-    def set_param(self, param, widget):
-        return param
+    def set2param(self, param, widget):
+        pass
 
     # 差分の作成
     def make_diff(self, img, param):
@@ -41,7 +43,10 @@ class NoiseLayer(AdjustmentLayer):
         if NoiseLayer.__net is None:
             NoiseLayer.__net = noise2void.setup_predict()
 
-    def set_param(self, param, widget):
+    def set2widget(self, widget, param):
+        widget.ids["toggle_noise_reduction"].active = False if param.get('noise_reduction', 0) == 0 else True
+
+    def set2param(self, param, widget):
         param['noise_reduction'] = 0 if widget.ids["toggle_noise_reduction"].active == True else 1
 
     def make_diff(self, img, param):
@@ -69,7 +74,11 @@ class InpaintLayer(AdjustmentLayer):
         self.mask_editor = None
         self.crop_editor = None
 
-    def set_param(self, param, widget):
+    def set2widget(self, widget, param):
+        widget.ids["toggle_inpaint"].state = "normal" if param.get('inpaint', 0) == 0 else "down"
+        widget.ids["button_inpaint"].state = "normal" if param.get('inpaint_predict', 0) == 0 else "down"
+
+    def set2param(self, param, widget):
         param['inpaint'] = 0 if widget.ids["toggle_inpaint"].state == "normal" else 1
         param['inpaint_predict'] = 0 if widget.ids["button_inpaint"].state == "normal" else 1
 
@@ -104,7 +113,10 @@ class DefocusLayer(AdjustmentLayer):
         if DefocusLayer.__net is None:
             DefocusLayer.__net = DRBNet.setup_predict()
 
-    def set_param(self, param, widget):
+    def set2widget(self, widget, param):
+        widget.ids["toggle_defocus"].active = False if param.get('defocus', 0) == 0 else True
+
+    def set2param(self, param, widget):
         param['defocus'] = 0 if widget.ids["toggle_defocus"].active == True else 1
 
     def make_diff(self, img, param):
@@ -122,7 +134,10 @@ class DefocusLayer(AdjustmentLayer):
 
 class ColorCorrectLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
+    def set2widget(self, widget, param):
+        widget.ids["switch_color_correct"].active = False if param.get('defcolor_correctocus', 0) == 0 else True
+
+    def set2param(self, param, widget):
         param['color_correct'] = 0 if widget.ids["switch_color_correct"].active == True else 1
 
     def make_diff(self, rgb, param):
@@ -139,9 +154,56 @@ class ColorCorrectLayer(AdjustmentLayer):
 
         return self.diff
 
+class DensityLayer(AdjustmentLayer):
+
+    def set2widget(self, widget, param):
+        widget.ids["slider_density"].value = param.get('density', 0)
+
+    def set2param(self, param, widget):
+        param['density'] = widget.ids["slider_density"].value
+
+    def make_diff(self, hls, param):
+        den = param.get('density', 0)
+        param_hash = hash((den))
+        if den == 0:
+            self.diff = None
+            self.hash = None
+
+        elif self.hash != param_hash:
+            hls2 = core.adjust_density(hls, den)
+            self.diff = hls2-hls
+            self.hash = param_hash
+
+        return self.diff
+
+class ClearColorLayer(AdjustmentLayer):
+
+    def set2widget(self, widget, param):
+        widget.ids["slider_clear_color"].value = param.get('clear_color', 0)
+
+    def set2param(self, param, widget):
+        param['clear_color'] = widget.ids["slider_clear_color"].value
+
+    def make_diff(self, hls, param):
+        cc = param.get('clear_color', 0)
+        param_hash = hash((cc))
+        if cc == 0:
+            self.diff = None
+            self.hash = None
+
+        elif self.hash != param_hash:
+            hls2 = core.adjust_clear_color(hls, cc)
+            self.diff = hls2-hls
+            self.hash = param_hash
+
+        return self.diff
+
 class LUTLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
+    def set2widget(self, widget, param):
+        widget.ids["toggle_lut"].state = "normal" if param.get('lut', 0) == 0 else "down"
+
+    def set2param(self, param, widget):
         param['lut'] = 0 if widget.ids["toggle_lut"].state == "normal" else 1
         if param['lut'] > 0:
             self.lut = cubelut.read_lut("Retro 2023.CUBE")
@@ -162,7 +224,11 @@ class LUTLayer(AdjustmentLayer):
 
 class LowpassFilterLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
+    def set2widget(self, widget, param):
+        widget.ids["slider_lowpass_filter"].value = param.get('lowpass_filter', 0)
+        widget.ids["slider_highpass_filter"].value = param.get('highpass_filter', 0)
+
+    def set2param(self, param, widget):
         param['lowpass_filter'] = widget.ids["slider_lowpass_filter"].value
         param['highpass_filter'] = widget.ids["slider_highpass_filter"].value
 
@@ -191,7 +257,11 @@ class LowpassFilterLayer(AdjustmentLayer):
 
 class PerlinNoiseLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
+    def set2widget(self, widget, param):
+        widget.ids["slider_perlin_noise"].value = param.get('perlin_noise', 0)
+        widget.ids["slider_perlin_noise_opacity"].value = param.get('perlin_noise_opacity', 100)
+
+    def set2param(self, param, widget):
         param['perlin_noise'] = widget.ids["slider_perlin_noise"].value
         param['perlin_noise_opacity'] = widget.ids["slider_perlin_noise_opacity"].value
 
@@ -216,7 +286,10 @@ class PerlinNoiseLayer(AdjustmentLayer):
 
 class ColorTemperatureLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
+    def set2widget(self, widget, param):
+        widget.ids["slider_color_temperature"].value = param.get('color_temperature', 0)
+ 
+    def set2param(self, param, widget):
         param['color_temperature'] = widget.ids["slider_color_temperature"].value
 
     def make_diff(self, rgb, param):
@@ -236,7 +309,10 @@ class ColorTemperatureLayer(AdjustmentLayer):
 
 class ExposureLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
+    def set2widget(self, widget, param):
+        widget.ids["slider_exposure"].value = param.get('exposure', 0)
+
+    def set2param(self, param, widget):
         param['exposure'] = widget.ids["slider_exposure"].value
 
     def make_diff(self, rgb, param):
@@ -255,7 +331,10 @@ class ExposureLayer(AdjustmentLayer):
 
 class ContrastLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
+    def set2widget(self, widget, param):
+        widget.ids["slider_contrast"].value = param.get('contrast', 0)
+
+    def set2param(self, param, widget):
         param['contrast'] = widget.ids["slider_contrast"].value
 
     def make_diff(self, rgb, param):
@@ -274,9 +353,15 @@ class ContrastLayer(AdjustmentLayer):
 
 class ToneLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
-        param['black'] = widget.ids["slider_black"].value*100.0
-        param['white'] = widget.ids["slider_white"].value*100.0
+    def set2widget(self, widget, param):
+        widget.ids["slider_black"].value = param.get('black', 0)
+        widget.ids["slider_white"].value = param.get('white', 0)
+        widget.ids["slider_shadow"].value = param.get('shadow', 0)
+        widget.ids["slider_hilight"].value = param.get('hilight', 0)
+
+    def set2param(self, param, widget):
+        param['black'] = widget.ids["slider_black"].value
+        param['white'] = widget.ids["slider_white"].value
         param['shadow'] = widget.ids["slider_shadow"].value
         param['hilight'] = widget.ids["slider_hilight"].value
 
@@ -294,8 +379,8 @@ class ToneLayer(AdjustmentLayer):
             # 制御点とエクスポージャー補正値を設定
             points = np.array([0.0, 13107.0, 52429.0, 65535.0])
             values = np.array([0.0, 13107.0, 52429.0, 65535.0])
-            values[1] += black
-            values[2] += white
+            values[1] += black * 100.0
+            values[2] += white * 100.0
             points /= 65535.0
             values /= 65535.0
 
@@ -309,11 +394,15 @@ class ToneLayer(AdjustmentLayer):
 
 class SaturationLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
+    def set2widget(self, widget, param):
+        widget.ids["slider_saturation"].value = param.get('saturation', 0)
+        widget.ids["slider_vibrance"].value = param.get('vibrance', 0)
+
+    def set2param(self, param, widget):
         param['saturation'] = widget.ids["slider_saturation"].value
         param['vibrance'] = widget.ids["slider_vibrance"].value
 
-    def make_diff(self, hls, param):
+    def make_diff(self, hls_s, param):
         sat = param.get('saturation', 0)
         vib = param.get('vibrance', 0)
         param_hash = hash((sat, vib))
@@ -322,7 +411,6 @@ class SaturationLayer(AdjustmentLayer):
             self.hash = None
 
         elif self.hash != param_hash:
-            hls_s = hls[:,:,2]
             hls2_s = core.adjust_saturation(hls_s, sat, vib)
             self.diff = hls2_s/hls_s    # Sのみ保存
             self.hash = param_hash
@@ -331,7 +419,10 @@ class SaturationLayer(AdjustmentLayer):
 
 class DehazeLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
+    def set2widget(self, widget, param):
+        widget.ids["slider_dehaze"].value = param.get('dehaze', 0)
+
+    def set2param(self, param, widget):
         param['dehaze'] = widget.ids["slider_dehaze"].value
 
     def make_diff(self, rgb, param):
@@ -351,7 +442,12 @@ class DehazeLayer(AdjustmentLayer):
 
 class LevelLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
+    def set2widget(self, widget, param):
+        widget.ids["slider_black_level"].value = param.get('black_level', 0)
+        widget.ids["slider_white_level"].value = param.get('white_level', 2550)
+        widget.ids["slider_mid_level"].value = param.get('mid_level',127)
+
+    def set2param(self, param, widget):
         param['black_level'] = widget.ids["slider_black_level"].value
         param['white_level'] = widget.ids["slider_white_level"].value
         param['mid_level'] = widget.ids["slider_mid_level"].value
@@ -374,19 +470,22 @@ class LevelLayer(AdjustmentLayer):
 
 class TonecurveLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
-        param['tonecurve'] = widget.ids["tonecurve"].get_spline()
+    def set2widget(self, widget, param):
+        widget.ids["tonecurve"].set_point_list(param.get('tonecurve', None))
+
+    def set2param(self, param, widget):
+        param['tonecurve'] = widget.ids["tonecurve"].get_point_list()
 
     def make_diff(self, img, param):
-        tc = param.get('tonecurve', None)
-        if tc is None:
+        pl = param.get('tonecurve', None)
+        if pl is None:
             self.diff = None
             self.hash = None
 
         else:
-            param_hash = hash(np.sum(tc))
+            param_hash = hash(np.sum(pl))
             if self.hash != param_hash:
-                img2 = core.apply_spline(img, tc)
+                img2 = core.apply_point_list(img, pl)
                 self.diff = img2-img        # RGB保存
                 self.hash = param_hash
 
@@ -394,19 +493,22 @@ class TonecurveLayer(AdjustmentLayer):
 
 class TonecurveRedLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
-        param['tonecurve_red'] = widget.ids["tonecurve_red"].get_spline()
+    def set2widget(self, widget, param):
+        widget.ids["tonecurve_red"].set_point_list(param.get('tonecurve_red', None))
+
+    def set2param(self, param, widget):
+        param['tonecurve_red'] = widget.ids["tonecurve_red"].get_point_list()
 
     def make_diff(self, img, param):
-        tred = param.get('tonecurve_red', None)
-        if tred is None:
+        pl = param.get('tonecurve_red', None)
+        if pl is None:
             self.diff = None
             self.hash = None
 
         else:
-            param_hash = hash(np.sum(tred))
+            param_hash = hash(np.sum(pl))
             if self.hash != param_hash:
-                img2 = core.apply_spline(img[:,:,0], tred)
+                img2 = core.apply_point_list(img[:,:,0], pl)
                 self.diff = img2-img[:,:,0]            # R保存
                 self.hash = param_hash
 
@@ -414,19 +516,22 @@ class TonecurveRedLayer(AdjustmentLayer):
 
 class TonecurveGreenLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
-        param['tonecurve_green'] = widget.ids["tonecurve_green"].get_spline()
+    def set2widget(self, widget, param):
+        widget.ids["tonecurve_green"].set_point_list(param.get('tonecurve_green', None))
+
+    def set2param(self, param, widget):
+        param['tonecurve_green'] = widget.ids["tonecurve_green"].get_point_list()
 
     def make_diff(self, img, param):   
-        tgreen = param.get('tonecurve_green', None)
-        if tgreen is None:
+        pl = param.get('tonecurve_green', None)
+        if pl is None:
             self.diff = None
             self.hash = None
 
         else:
-            param_hash = hash(np.sum(tgreen))
+            param_hash = hash(np.sum(pl))
             if self.hash != param_hash:
-                img2 = core.apply_spline(img[:,:,1], tgreen)
+                img2 = core.apply_point_list(img[:,:,1], pl)
                 self.diff = img2-img[:,:,1]            # G保存
                 self.hash = param_hash
 
@@ -434,19 +539,22 @@ class TonecurveGreenLayer(AdjustmentLayer):
 
 class TonecurveBlueLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
-        param['tonecurve_blue'] = widget.ids["tonecurve_blue"].get_spline()
+    def set2widget(self, widget, param):
+        widget.ids["tonecurve_blue"].set_point_list(param.get('tonecurve_blue', None))
+
+    def set2param(self, param, widget):
+        param['tonecurve_blue'] = widget.ids["tonecurve_blue"].get_point_list()
 
     def make_diff(self, img, param):
-        tblue = param.get('tonecurve_blue', None)
-        if tblue is None:
+        pl = param.get('tonecurve_blue', None)
+        if pl is None:
             self.diff = None
             self.hash = None
 
         else:
-            param_hash = hash(np.sum(tblue))
+            param_hash = hash(np.sum(pl))
             if self.hash != param_hash:
-                img2 = core.apply_spline(img[:,:,2], tblue)
+                img2 = core.apply_point_list(img[:,:,2], pl)
                 self.diff = img2-img[:,:,2]        # B保存
                 self.hash = param_hash
 
@@ -454,8 +562,11 @@ class TonecurveBlueLayer(AdjustmentLayer):
 
 class LumvsLumLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
-        param['LumvsLum'] = widget.ids["LumvsLum"].get_spline()
+    def set2widget(self, widget, param):
+        widget.ids["LumvsLum"].set_point_lsit(param.get('LumvsLum', None))
+
+    def set2param(self, param, widget):
+        param['LumvsLum'] = widget.ids["LumvsLum"].get_point_list()
 
     def make_diff(self, hls_l, param):
         ll = param.get("LumvsLum", None)
@@ -466,7 +577,7 @@ class LumvsLumLayer(AdjustmentLayer):
         else:
             param_hash = hash(np.sum(ll))
             if self.hash != param_hash:
-                hls2_l = core.apply_spline(hls_l, ll)
+                hls2_l = core.apply_point_list(hls_l, ll)
                 self.diff = 2.0**((hls2_l-0.5)*2.0)   # Lのみ保存
                 self.hash = param_hash
 
@@ -474,8 +585,11 @@ class LumvsLumLayer(AdjustmentLayer):
 
 class HuevsHueLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
-        param['HuevsHue'] = widget.ids["HuevsHue"].get_spline()
+    def set2widget(self, widget, param):
+        widget.ids["HuevsHue"].set_point_lsit(param.get('HuevsHue', None))
+
+    def set2param(self, param, widget):
+        param['HuevsHue'] = widget.ids["HuevsHue"].get_point_list()
 
     def make_diff(self, hls_h, param):
         hh = param.get("HuevsHue", None)
@@ -486,7 +600,7 @@ class HuevsHueLayer(AdjustmentLayer):
         else:
             param_hash = hash(np.sum(hh))
             if self.hash != param_hash:
-                hls2_h = core.apply_spline(hls_h/360.0, hh)
+                hls2_h = core.apply_point_list(hls_h/360.0, hh)
                 self.diff = (hls2_h-0.5)*360.0    # Hのみ保存
                 self.hash = param_hash
 
@@ -494,8 +608,11 @@ class HuevsHueLayer(AdjustmentLayer):
 
 class HuevsSatLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
-        param['HuevsSat'] = widget.ids["HuevsSat"].get_spline()
+    def set2widget(self, widget, param):
+        widget.ids["HuevsSat"].set_point_lsit(param.get('HuevsSat', None))
+
+    def set2param(self, param, widget):
+        param['HuevsSat'] = widget.ids["HuevsSat"].get_point_list()
 
     def make_diff(self, hls_h, param):
         hs = param.get("HuevsSat", None)
@@ -506,7 +623,7 @@ class HuevsSatLayer(AdjustmentLayer):
         else:
             param_hash = hash(np.sum(hs))
             if self.hash != param_hash:
-                hls2_s = core.apply_spline(hls_h, hs)
+                hls2_s = core.apply_point_list(hls_h, hs)
                 self.diff = 2.0**((hls2_s-0.5)*2.0)     # Sのみ保存
                 self.hash = param_hash
 
@@ -514,8 +631,11 @@ class HuevsSatLayer(AdjustmentLayer):
 
 class HuevsLumLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
-        param['HuevsLum'] = widget.ids["HuevsLum"].get_spline()
+    def set2widget(self, widget, param):
+        widget.ids["HuevsLum"].set_point_lsit(param.get('HuevsLum', None))
+
+    def set2param(self, param, widget):
+        param['HuevsLum'] = widget.ids["HuevsLum"].get_point_list()
 
     def make_diff(self, hls_h, param):
         hl = param.get("HuevsLum", None)
@@ -526,7 +646,7 @@ class HuevsLumLayer(AdjustmentLayer):
         else:
             param_hash = hash(np.sum(hl))
             if self.hash != param_hash:
-                hls2_l = core.apply_spline(hls_h, hl)
+                hls2_l = core.apply_point_list(hls_h, hl)
                 self.diff = 2.0**((hls2_l-0.5)*2.0)     # Lのみ保存
                 self.hash = param_hash
 
@@ -534,8 +654,11 @@ class HuevsLumLayer(AdjustmentLayer):
 
 class LumvsSatLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
-        param['LumvsSat'] = widget.ids["LumvsSat"].get_spline()
+    def set2widget(self, widget, param):
+        widget.ids["LumvsSat"].set_point_lsit(param.get('LumvsSat', None))
+
+    def set2param(self, param, widget):
+        param['LumvsSat'] = widget.ids["LumvsSat"].get_point_list()
 
     def make_diff(self, hls_l, param):
         ls = param.get("LumvsSat", None)
@@ -546,7 +669,7 @@ class LumvsSatLayer(AdjustmentLayer):
         else:
             param_hash = hash(np.sum(ls))
             if self.hash != param_hash:
-                hls2_s = core.apply_spline(hls_l, ls)
+                hls2_s = core.apply_point_list(hls_l, ls)
                 self.diff = 2.0**((hls2_s-0.5)*2.0)     # Sのみ保存
                 self.hash = param_hash
 
@@ -554,8 +677,11 @@ class LumvsSatLayer(AdjustmentLayer):
 
 class SatvsSatLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
-        param['SatvsSat'] = widget.ids["SatvsSat"].get_spline()
+    def set2widget(self, widget, param):
+        widget.ids["SatvsSat"].set_point_lsit(param.get('SatvsSat', None))
+
+    def set2param(self, param, widget):
+        param['SatvsSat'] = widget.ids["SatvsSat"].get_point_list()
 
     def make_diff(self, hls_s, param):
         ss = param.get("SatvsSat", None)
@@ -566,7 +692,7 @@ class SatvsSatLayer(AdjustmentLayer):
         else:
             param_hash = hash(np.sum(ss))
             if self.hash != param_hash:
-                hls2_s = core.apply_spline(hls_s, ss)
+                hls2_s = core.apply_point_list(hls_s, ss)
                 self.diff = 2.0**((hls2_s-0.5)*2.0)     # Sのみ保存
                 self.hash = param_hash
 
@@ -574,8 +700,11 @@ class SatvsSatLayer(AdjustmentLayer):
 
 class SatvsLumLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
-        param['SatvsLum'] = widget.ids["SatvsLum"].get_spline()
+    def set2widget(self, widget, param):
+        widget.ids["SatvsLum"].set_point_lsit(param.get('SatvsLum', None))
+
+    def set2param(self, param, widget):
+        param['SatvsLum'] = widget.ids["SatvsLum"].get_point_list()
 
     def make_diff(self, hls_s, param):
         sl = param.get("SatvsLum", None)
@@ -586,7 +715,7 @@ class SatvsLumLayer(AdjustmentLayer):
         else:
             param_hash = hash(np.sum(sl))
             if self.hash != param_hash:
-                hls2_l = core.apply_spline(hls_s, sl)
+                hls2_l = core.apply_point_list(hls_s, sl)
                 self.diff = 2.0**((hls2_l-0.5)*2.0)     # Lのみ保存
                 self.hash = param_hash
 
@@ -594,24 +723,30 @@ class SatvsLumLayer(AdjustmentLayer):
 
 class GradingLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
-        param['grading'] = widget.ids["grading"].get_spline()
+    def set2widget(self, widget, param):
+        widget.ids["grading"].set_points(param.get('grading', None))
+        widget.ids["slider_grading_hue"].value = param.get('grading_hue', 0)
+        widget.ids["slider_grading_lum"].value = param.get('grading_lum', 0)
+        widget.ids["slider_grading_sat"].value = param.get('grading_sat', 0)
+
+    def set2param(self, param, widget):
+        param['grading'] = widget.ids["grading"].get_points()
         param['grading_hue'] = widget.ids["slider_grading_hue"].value
         param['grading_lum'] = widget.ids["slider_grading_lum"].value
         param['grading_sat'] = widget.ids["slider_grading_sat"].value
 
     def make_diff(self, hls, param):
-        gr = param.get("grading", None)
+        pl = param.get("grading", None)
         gh = param.get("grading_hue", 0)
         gl = param.get("grading_lum", 0)
         gs = param.get("grading_sat", 0)
-        if gr is None and gh == 0 and gl == 0 and gs == 0:
+        if pl is None and gh == 0 and gl == 0 and gs == 0:
             self.diff = None
             self.hash = None
         else:
-            param_hash = hash((np.sum(gr), gh, gl, gs))
+            param_hash = hash((np.sum(pl), gh, gl, gs))
             if self.hash != param_hash:
-                blend = core.apply_spline(hls[:,:,1], gr)
+                blend = core.apply_point_list(hls[:,:,1], pl)
                 rgb = np.array(colorsys.hls_to_rgb(gh/360.0, gl/100.0, gs/100.0), dtype=np.float32)
                 blend_inv = 1-blend
                 self.diff = (hls*blend_inv[:, :, np.newaxis] + rgb*blend[:, :, np.newaxis]) - hls
@@ -621,7 +756,12 @@ class GradingLayer(AdjustmentLayer):
 
 class HLSRedLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
+    def set2widget(self, widget, param):
+        widget.ids["slider_hls_red_hue"].value = param.get('hls_red_hue', 0)
+        widget.ids["slider_hls_red_lum"].value = param.get('hls_red_lum', 0)
+        widget.ids["slider_hls_red_sat"].value = param.get('hls_red_sat', 0)
+
+    def set2param(self, param, widget):
         param['hls_red_hue'] = widget.ids["slider_hls_red_hue"].value
         param['hls_red_lum'] = widget.ids["slider_hls_red_lum"].value
         param['hls_red_sat'] = widget.ids["slider_hls_red_sat"].value
@@ -644,7 +784,12 @@ class HLSRedLayer(AdjustmentLayer):
 
 class HLSOrangeLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
+    def set2widget(self, widget, param):
+        widget.ids["slider_hls_orange_hue"].value = param.get('hls_orange_hue', 0)
+        widget.ids["slider_hls_orange_lum"].value = param.get('hls_orange_lum', 0)
+        widget.ids["slider_hls_orange_sat"].value = param.get('hls_orange_sat', 0)
+
+    def set2param(self, param, widget):
         param['hls_orange_hue'] = widget.ids["slider_hls_orange_hue"].value
         param['hls_orange_lum'] = widget.ids["slider_hls_orange_lum"].value
         param['hls_orange_sat'] = widget.ids["slider_hls_orange_sat"].value
@@ -667,7 +812,12 @@ class HLSOrangeLayer(AdjustmentLayer):
 
 class HLSYellowLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
+    def set2widget(self, widget, param):
+        widget.ids["slider_hls_yellow_hue"].value = param.get('hls_yellow_hue', 0)
+        widget.ids["slider_hls_yellow_lum"].value = param.get('hls_yellow_lum', 0)
+        widget.ids["slider_hls_yellow_sat"].value = param.get('hls_yellow_sat', 0)
+
+    def set2param(self, param, widget):
         param['hls_yellow_hue'] = widget.ids["slider_hls_yellow_hue"].value
         param['hls_yellow_lum'] = widget.ids["slider_hls_yellow_lum"].value
         param['hls_yellow_sat'] = widget.ids["slider_hls_yellow_sat"].value
@@ -690,7 +840,12 @@ class HLSYellowLayer(AdjustmentLayer):
 
 class HLSGreenLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
+    def set2widget(self, widget, param):
+        widget.ids["slider_hls_green_hue"].value = param.get('hls_green_hue', 0)
+        widget.ids["slider_hls_green_lum"].value = param.get('hls_green_lum', 0)
+        widget.ids["slider_hls_green_sat"].value = param.get('hls_green_sat', 0)
+
+    def set2param(self, param, widget):
         param['hls_green_hue'] = widget.ids["slider_hls_green_hue"].value
         param['hls_green_lum'] = widget.ids["slider_hls_green_lum"].value
         param['hls_green_sat'] = widget.ids["slider_hls_green_sat"].value
@@ -713,7 +868,12 @@ class HLSGreenLayer(AdjustmentLayer):
 
 class HLSCyanLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
+    def set2widget(self, widget, param):
+        widget.ids["slider_hls_cyan_hue"].value = param.get('hls_cyan_hue', 0)
+        widget.ids["slider_hls_cyan_lum"].value = param.get('hls_cyan_lum', 0)
+        widget.ids["slider_hls_cyan_sat"].value = param.get('hls_cyan_sat', 0)
+
+    def set2param(self, param, widget):
         param['hls_cyan_hue'] = widget.ids["slider_hls_cyan_hue"].value
         param['hls_cyan_lum'] = widget.ids["slider_hls_cyan_lum"].value
         param['hls_cyan_sat'] = widget.ids["slider_hls_cyan_sat"].value
@@ -736,7 +896,12 @@ class HLSCyanLayer(AdjustmentLayer):
 
 class HLSBlueLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
+    def set2widget(self, widget, param):
+        widget.ids["slider_hls_blue_hue"].value = param.get('hls_blue_hue', 0)
+        widget.ids["slider_hls_blue_lum"].value = param.get('hls_blue_lum', 0)
+        widget.ids["slider_hls_blue_sat"].value = param.get('hls_blue_sat', 0)
+
+    def set2param(self, param, widget):
         param['hls_blue_hue'] = widget.ids["slider_hls_blue_hue"].value
         param['hls_blue_lum'] = widget.ids["slider_hls_blue_lum"].value
         param['hls_blue_sat'] = widget.ids["slider_hls_blue_sat"].value
@@ -759,7 +924,12 @@ class HLSBlueLayer(AdjustmentLayer):
 
 class HLSPurpleLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
+    def set2widget(self, widget, param):
+        widget.ids["slider_hls_purple_hue"].value = param.get('hls_purple_hue', 0)
+        widget.ids["slider_hls_purple_lum"].value = param.get('hls_purple_lum', 0)
+        widget.ids["slider_hls_purple_sat"].value = param.get('hls_purple_sat', 0)
+
+    def set2param(self, param, widget):
         param['hls_purple_hue'] = widget.ids["slider_hls_purple_hue"].value
         param['hls_purple_lum'] = widget.ids["slider_hls_purple_lum"].value
         param['hls_purple_sat'] = widget.ids["slider_hls_purple_sat"].value
@@ -782,7 +952,12 @@ class HLSPurpleLayer(AdjustmentLayer):
 
 class HLSMagentaLayer(AdjustmentLayer):
 
-    def set_param(self, param, widget):
+    def set2widget(self, widget, param):
+        widget.ids["slider_hls_magenta_hue"].value = param.get('hls_magenta_hue', 0)
+        widget.ids["slider_hls_magenta_lum"].value = param.get('hls_magenta_lum', 0)
+        widget.ids["slider_hls_magenta_sat"].value = param.get('hls_magenta_sat', 0)
+
+    def set2param(self, param, widget):
         param['hls_magenta_hue'] = widget.ids["slider_hls_magenta_hue"].value
         param['hls_magenta_lum'] = widget.ids["slider_hls_magenta_lum"].value
         param['hls_magenta_sat'] = widget.ids["slider_hls_magenta_sat"].value
@@ -819,6 +994,8 @@ def create_layer():
     lv2 = layer[2]
     lv2['color_temperature'] = ColorTemperatureLayer()
     lv2['color_correct'] = ColorCorrectLayer()
+    lv2['density'] = DensityLayer()
+    lv2['clear_color'] = ClearColorLayer()
     lv2['exposure'] = ExposureLayer()
     lv2['contrast'] = ContrastLayer()
     lv2['tone'] = ToneLayer()
@@ -864,9 +1041,9 @@ def pipeline_lv0(img, layer, param):
 
     if lv1reset == True:
         for v in layer[1].values():
-            v.reset()
+            v.reeffect()
         for v in layer[2].values():
-            v.reset()
+            v.reeffect()
 
     return rgb, lv1reset
 
@@ -882,10 +1059,10 @@ def pipeline_lv1(img, layer, param):
     else:
         rgb = img.copy()
     if pre_diff is not diff:
-        lv1['lut'].reset()
-        lv1['defocus'].reset()
-        lv1['lowpass_filter'].reset()
-        lv1['perlin_noise'].reset()
+        lv1['lut'].reeffect()
+        lv1['defocus'].reeffect()
+        lv1['lowpass_filter'].reeffect()
+        lv1['perlin_noise'].reeffect()
         lv1reset = True
 
     l = lv1['lut']
@@ -894,9 +1071,9 @@ def pipeline_lv1(img, layer, param):
     if diff is not None:
         rgb = diff
     if pre_diff is not diff:
-        lv1['defocus'].reset()
-        lv1['lowpass_filter'].reset()
-        lv1['perlin_noise'].reset()
+        lv1['defocus'].reeffect()
+        lv1['lowpass_filter'].reeffect()
+        lv1['perlin_noise'].reeffect()
         lv1reset = True
 
     l = lv1['defocus']
@@ -905,8 +1082,8 @@ def pipeline_lv1(img, layer, param):
     if diff is not None:
         rgb = diff
     if pre_diff is not diff:
-        lv1['lowpass_filter'].reset()
-        lv1['perlin_noise'].reset()
+        lv1['lowpass_filter'].reeffect()
+        lv1['perlin_noise'].reeffect()
         lv1reset = True
 
     l = lv1['lowpass_filter']
@@ -915,7 +1092,7 @@ def pipeline_lv1(img, layer, param):
     if diff is not None:
         rgb = diff
     if pre_diff is not diff:
-        lv1['perlin_noise'].reset()
+        lv1['perlin_noise'].reeffect()
         lv1reset = True
 
     l = lv1['perlin_noise']
@@ -928,7 +1105,7 @@ def pipeline_lv1(img, layer, param):
 
     if lv2reset == True:
         for v in layer[1].values():
-            v.reset()
+            v.reeffect()
 
     return rgb
 
@@ -938,31 +1115,6 @@ def pipeline_lv2(img, layer, param):
 
     rgb = img.copy()
 
-    # RGB
-    diff = lv2['color_correct'].make_diff(rgb, param)
-    if diff is not None: rgb += diff
-    diff = lv2['dehaze'].make_diff(rgb, param)
-    if diff is not None: rgb += diff
-
-    rgb2 = rgb.copy()
-    diff = lv2['tonecurve'].make_diff(rgb, param)
-    if diff is not None: rgb2 += diff
-    diff = lv2['tonecurve_red'].make_diff(rgb, param)
-    if diff is not None: rgb2[:,:,0] += diff
-    diff = lv2['tonecurve_green'].make_diff(rgb, param)
-    if diff is not None: rgb2[:,:,1] += diff
-    diff = lv2['tonecurve_blue'].make_diff(rgb, param)
-    if diff is not None: rgb2[:,:,2] += diff
-    diff = lv2['grading'].make_diff(rgb, param)
-    if diff is not None: rgb2 += diff
-    rgb = rgb2
-
-    diff = lv2['contrast'].make_diff(rgb, param)
-    if diff is not None: rgb += diff
-    diff = lv2['exposure'].make_diff(rgb, param)
-    if diff is not None: rgb += diff
-    diff = lv2['color_temperature'].make_diff(rgb, param)
-    if diff is not None: rgb *= diff
 
     # 以降HLS
     hls = cv2.cvtColor(rgb, cv2.COLOR_RGB2HLS_FULL)
@@ -996,6 +1148,9 @@ def pipeline_lv2(img, layer, param):
     if diff is not None: hls2 += diff
     hls = hls2
 
+    diff = lv2['density'].make_diff(hls, param)
+    if diff is not None: hls += diff
+
     # Hのみ
     hls_h = hls[:, :, 0]
     hls2_h = hls_h.copy()
@@ -1025,7 +1180,7 @@ def pipeline_lv2(img, layer, param):
     if diff is not None: hls2_s *= diff
     hls[:, :, 2] = hls2_s
 
-    diff = lv2['saturation'].make_diff(hls, param)
+    diff = lv2['saturation'].make_diff(hls2_s, param)
     if diff is not None: hls2_s *= diff
     hls[:, :, 2] = hls2_s
 
@@ -1033,5 +1188,33 @@ def pipeline_lv2(img, layer, param):
     hls[:,:,1] = np.clip(hls[:,:,1], 0, 1.0)
     hls[:,:,2] = np.clip(hls[:,:,2], 0, 1.0)
     rgb = cv2.cvtColor(hls, cv2.COLOR_HLS2RGB_FULL)
+
+    # RGB
+    diff = lv2['color_correct'].make_diff(rgb, param)
+    if diff is not None: rgb += diff
+    diff = lv2['dehaze'].make_diff(rgb, param)
+    if diff is not None: rgb += diff
+    diff = lv2['clear_color'].make_diff(rgb, param)
+    if diff is not None: rgb += diff
+
+    rgb2 = rgb.copy()
+    diff = lv2['tonecurve'].make_diff(rgb, param)
+    if diff is not None: rgb2 += diff
+    diff = lv2['tonecurve_red'].make_diff(rgb, param)
+    if diff is not None: rgb2[:,:,0] += diff
+    diff = lv2['tonecurve_green'].make_diff(rgb, param)
+    if diff is not None: rgb2[:,:,1] += diff
+    diff = lv2['tonecurve_blue'].make_diff(rgb, param)
+    if diff is not None: rgb2[:,:,2] += diff
+    diff = lv2['grading'].make_diff(rgb, param)
+    if diff is not None: rgb2 += diff
+    rgb = rgb2
+
+    diff = lv2['contrast'].make_diff(rgb, param)
+    if diff is not None: rgb += diff
+    diff = lv2['exposure'].make_diff(rgb, param)
+    if diff is not None: rgb += diff
+    diff = lv2['color_temperature'].make_diff(rgb, param)
+    if diff is not None: rgb *= diff
 
     return rgb

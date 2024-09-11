@@ -8,8 +8,7 @@ from kivy.graphics import Color, Line, Ellipse, Translate, PushMatrix, PopMatrix
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.properties import NumericProperty
-
-kivy.require('2.0.0')
+from kivy.metrics import dp
 
 from kivy.config import Config
 Config.set('input', 'mouse', 'mouse,disable_multitouch')  # 右クリック赤丸消去
@@ -19,10 +18,10 @@ Config.set('kivy', 'exit_on_escape', '0')  # kivy ESC無効
 class DraggablePoint():
 
     def __init__(self, **kwargs):
-        self.x = 0.0
-        self.y = 0.0
-        self.width = 12
-        self.height = 12
+        self.x = kwargs.get('x', 0.0)
+        self.y = kwargs.get('y', 0.0)
+        self.width = dp(10)
+        self.height = dp(10)
 
     def collide_point(self, x, y, w, h):
         if abs(self.x-x)*w < self.width/2 and abs(self.y-y)*h < self.height/2:
@@ -44,10 +43,10 @@ class CurveWidget(Widget):
         self.selected_point = None
 
         # Add start and end points
-        self.start_point = DraggablePoint()
-        self.end_point = DraggablePoint()
-        self.end_point.x = 1.0
-        self.end_point.y = 1.0
+        self.start_point = DraggablePoint(x=0.0, y=0.0)
+        self.end_point = DraggablePoint(x=1.0, y=1.0)
+        #self.end_point.x = 1.0
+        #self.end_point.y = 1.0
 
         self.points.append(self.start_point)
         self.points.append(self.end_point)
@@ -166,19 +165,18 @@ class CurveWidget(Widget):
             
             # 変換行列をポップして元に戻す
             PopMatrix()
+    
+    def get_point_list(self):
+        point_list = [(p.x, p.y) for p in self.points]
+        return point_list
 
-    def get_spline(self):
-        # ソートとリスト内包表記をtogetherly処理
-        pts = sorted((p.x, p.y) for p in self.points)
-        
-        # unzip and convert to numpy arrays
-        x, y = map(np.array, zip(*pts))
-        
-        tck, u = splprep([x, y], k=min(3, len(x)-1), s=0)
-        unew = np.linspace(0, 1.0, 1000, dtype=np.float32)
-        out = splev(unew, tck)
-        out[1] = np.clip(out[1], 0, self.height)
-        return out
+    def set_point_list(self, point_list):
+        if point_list is not None:
+            point_list = sorted((pl[0], pl[1]) for pl in point_list)
+            self.points = [DraggablePoint(x=pl[0], y=pl[1]) for pl in point_list]
+            self.start_point = self.points[0]
+            self.end_point = self.points[len(self.points)-1]
+            self.selected_point = None    
 
 class ToneCurveApp(App):
     def build(self):

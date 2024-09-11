@@ -16,7 +16,7 @@ from kivy.uix.label import Label
 from kivymd.uix.card import MDCard
 from kivymd.uix.gridlayout import MDGridLayout
 from kivy.graphics.texture import Texture
-from kivy.properties import StringProperty, NumericProperty, DictProperty, ObjectProperty, BooleanProperty
+from kivy.properties import Property, StringProperty, NumericProperty, DictProperty, ObjectProperty, BooleanProperty
 from kivy.clock import mainthread
 
 import AppKit
@@ -26,7 +26,7 @@ from spacer import HSpacer, VSpacer
 
 class ThumbnailCard(MDCard):
     file_path = StringProperty()
-    thumb_source = ObjectProperty()
+    thumb_source = Property(None, force_dispatch=True)
     rating = NumericProperty(0)
     exif_data = DictProperty()
     grid_width = NumericProperty(dp(180))
@@ -49,7 +49,7 @@ class ThumbnailCard(MDCard):
         hbox = MDBoxLayout(size_hint_y=7)
         hbox.orientation = 'horizontal'
         hbox.add_widget(VSpacer(width=dp(4)))
-        self.image = Image(source='spinner.zip', allow_stretch=False)
+        self.image = Image(source='spinner.zip')
         self.image.anim_delay = 0.01
         hbox.add_widget(self.image)
         hbox.add_widget(VSpacer(width=dp(4)))
@@ -165,7 +165,7 @@ class ViewerWidget(MDBoxLayout):
 
                 thumb_base64 = exif_data.get('ThumbnailImage')
                 if thumb_base64 is not None:
-                    image = np.fromstring(base64.b64decode(thumb_base64[7:]), dtype=np.uint8)
+                    image = np.frombuffer(base64.b64decode(thumb_base64[7:]), dtype=np.uint8)
                     thumb = cv2.imdecode(image, 1)
                     thumb = cv2.cvtColor(thumb, cv2.COLOR_BGR2RGB)
                 else:

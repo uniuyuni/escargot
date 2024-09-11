@@ -23,7 +23,14 @@ class ImageSet:
         try:
             # RAWで読み込んでみる
             raw = rawpy.imread(filename)
-            self.src = raw.postprocess(output_color=rawpy.ColorSpace.raw, demosaic_algorithm=rawpy.DemosaicAlgorithm.LINEAR, output_bps=16, use_camera_wb=True, gamma=(1.0, 1.0), four_color_rgb=True, no_auto_bright=True)
+            self.src = raw.postprocess( output_color=rawpy.ColorSpace.sRGB,
+                                        demosaic_algorithm=rawpy.DemosaicAlgorithm.LINEAR,
+                                        output_bps=16,
+                                        no_auto_scale = False,
+                                        use_camera_wb=True,
+                                        gamma=(1.0, 0.0),
+                                        four_color_rgb=True,
+                                        no_auto_bright=False)
 
             #self.img = raw.tone_curve[self.src]
             #self.img = self.img.astype(np.float32)/65535.0

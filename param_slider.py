@@ -52,8 +52,9 @@ class ParamSlider(BoxLayout):
         self.ids['slider'].value = self.value
     
     def press_slider(self, touch):
-        if touch.is_double_tap:
-            self.ids['slider'].value = self.init_value
+        if self.collide_point(*touch.pos):
+            if touch.is_double_tap:
+                self.ids['slider'].value = self.init_value
 
 
 class WidgetApp(MDApp):

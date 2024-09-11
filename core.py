@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import math
 from scipy.interpolate import PchipInterpolator
+from scipy.interpolate import splprep, splev
 
 import dehazing.dehaze
 import sigmoid
@@ -174,7 +175,7 @@ def adjust_exposure(img, ev):
     # img: 変換元画像
     # ev: 補正値 -5.0〜5.0
 
-    img2 = img*(2.0**ev)
+    img2 = np.clip(img*(2.0**ev), 0, 1)
 
     return img2
 
@@ -311,6 +312,20 @@ def apply_dehaze(img, dehaze):
     return img2
 
 # スプラインカーブの適用
+def apply_point_list(img, point_list):
+    # ソートとリスト内包表記をtogetherly処理
+    point_list = sorted((pl[0], pl[1]) for pl in point_list)
+    
+    # unzip and convert to numpy arrays
+    x, y = map(np.array, zip(*point_list))
+    
+    tck, u = splprep([x, y], k=min(3, len(x)-1), s=0)
+    unew = np.linspace(0, 1.0, 1000, dtype=np.float32)
+    out = splev(unew, tck)
+    #out[1] = np.clip(out[1], 0, self.height)
+    
+    return apply_spline(img, out)
+
 def apply_spline(img, spline):
     # img: 適用イメージ RGB
     # spline: スプライン
@@ -407,6 +422,31 @@ def adjust_hls_magenta(hls_img, magenta_adjust):
     hls_img = __adjust_hls(hls_img, magenta_mask, magenta_adjust)
 
     return hls_img
+
+def adjust_density(hls_img, intensity):
+    hls = np.zeros_like(hls_img)
+
+    # 濃さ
+    intensity = -intensity
+    hls[:, :, 0] = hls_img[:, :, 0]
+    hls[:, :, 1] = np.clip(hls_img[:, :, 1] * (1 + intensity / 200.0), 0, 1)
+    hls[:, :, 2] = np.clip(hls_img[:, :, 2] * (1 - intensity / 100.0), 0, 1)
+
+    return hls
+
+def adjust_clear_color(rgb_img, intensity):
+
+    # 清書色、濁色
+    if intensity >= 0:
+        rgb = np.clip(rgb_img * (1 + intensity / 100.0), 0, 1)
+    else:
+        gray = cvtToGrayColor(rgb_img)
+        factor = -intensity / 200.0
+        rgb = rgb_img * (1 - factor) + gray[..., np.newaxis] * factor
+        rgb = rgb * (1 - factor * 0.3)
+        rgb = np.clip(rgb, 0, 1)
+
+    return rgb
 
 def adjust_histogram(img, center, direction, intensity):
     """

@@ -824,6 +824,18 @@ MainWidget:
                                     id: toggle_defocus
                                     on_active: root.adjust_lv2('defocus')
 
+                            HSeparator:
+                                height: 30
+
+                            Label:
+                                text_size: self.size
+                                size: 0, 40
+                                size_hint_y: None
+                                text: ' Color'
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
+
                             BoxLayout:
                                 size: 0, 60
                                 size_hint_y: None
@@ -838,6 +850,24 @@ MainWidget:
                                     halign: 'right'
                                     id: switch_color_correct
                                     on_active: root.adjust_lv2('color_correct')
+
+                            ParamSlider:
+                                id: slider_density
+                                text: "Density"
+                                min: -100
+                                max: 100
+                                value: 0
+                                step: 1
+                                on_value: root.adjust_lv2('density')
+
+                            ParamSlider:
+                                id: slider_clear_color
+                                text: "Clear Color"
+                                min: -100
+                                max: 100
+                                value: 0
+                                step: 1
+                                on_value: root.adjust_lv2('clear_color')
 
                             HSeparator:
                                 height: 30
@@ -942,8 +972,8 @@ MainWidget:
         ViewerWidget:
             id: viewer
             size_hint_y: None
-            size: (0, dp(220))
-            grid_width: dp(180)
+            size: (0, dp(160))
+            grid_width: dp(120)
             on_last_selected: root.on_select(self.last_selected.file_path, self.last_selected.exif_data)
 
 <CurveWidget>:

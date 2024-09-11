@@ -94,25 +94,35 @@ class MainWidget(MDWidget):
         Clock.schedule_once(self.draw_image, -1)
 
     def adjust_lv0(self, layer):
-        self.imglayer[0][layer].set_param(self.param, self)
+        self.imglayer[0][layer].set2param(self.param, self)
         self.adjust_all()
         return True
 
     def adjust_lv1(self, layer):
-        self.imglayer[1][layer].set_param(self.param, self)
+        self.imglayer[1][layer].set2param(self.param, self)
         self.adjust_all()
         return True
     
     def adjust_lv2(self, layer):
         try:
-            self.imglayer[2][layer].set_param(self.param, self)
+            self.imglayer[2][layer].set2param(self.param, self)
             self.adjust_all()
         except AttributeError:
             print('AttributeError: ' + layer)
         return True
     
+    def reset_param(self, param):
+        param = {}
+
+    def set2widget_all(self, layer, param):
+        for dict in layer:
+            for l in dict.values():
+                l.set2widget(self, param)
+    
     def on_select(self, file_path, exif_data):
+        self.reset_param(self.param)
         self.load_image(file_path)
+        self.set2widget_all(self.imglayer, self.param)
     
 class MainApp(MDApp):
     def __init__(self, **kwargs):
