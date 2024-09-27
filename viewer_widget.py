@@ -22,6 +22,7 @@ from kivy.clock import mainthread
 import AppKit
 from Cocoa import NSDragOperationCopy
 
+import core
 from spacer import HSpacer, VSpacer
 
 class ThumbnailCard(MDCard):
@@ -111,6 +112,7 @@ class ViewerWidget(MDBoxLayout):
         self.cards = []
         file_path_dict = {}
         file_list = os.listdir(directory)
+        file_list.sort()
         for file_name in file_list:
             file_path = os.path.join(directory, file_name)
             if self.is_supported_image(file_name):
@@ -176,7 +178,7 @@ class ViewerWidget(MDBoxLayout):
                         thumb = cv2.imread(file_path)
                         thumb = cv2.cvtColor(thumb, cv2.COLOR_BGR2RGB)
             
-                thumb_size = self.calc_resize_image((thumb.shape[1], thumb.shape[0]), self.thumb_width)
+                thumb_size = core.calc_resize_image((thumb.shape[1], thumb.shape[0]), self.thumb_width)
                 thumb = cv2.resize(thumb, thumb_size)
                 orientation = exif_data.get('Orientation')
                 if orientation is not None:
@@ -265,20 +267,6 @@ class ViewerWidget(MDBoxLayout):
             return self.cards.index(card)
         return None
     
-    def calc_resize_image(self, original_size, max_length):
-        width, height = original_size
-
-        if width > height:
-            # 幅が長辺の場合
-            scale_factor = max_length / width
-        else:
-            # 高さが長辺の場合
-            scale_factor = max_length / height
-
-        new_width = int(width * scale_factor)
-        new_height = int(height * scale_factor)
-
-        return (new_width, new_height)
 
 # テストアプリケーション
 class Viewer_WidgetApp(MDApp):

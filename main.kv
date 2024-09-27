@@ -2,6 +2,7 @@
 #:include separator.kv
 #:include spacer.kv
 #:include viewer_widget.kv
+#:include histogram_widget.kv
 
 MainWidget:   
 
@@ -16,21 +17,32 @@ MainWidget:
             size_hint_y: 9
 
             BoxLayout:
-                id: info
                 orientation: 'vertical'
-                size_hint_x: 1
+                size_hint_x: 3
+                padding: dp(4)
+                spacing: dp(4)
+
+                HistogramWidget:
+                    id: histogram
+                    size_hint: None, None
+                    size: dp(256), dp(100)
 
                 Label:
-                    text: "Info"
+                    text: "info"
+
             
             RelativeLayout:
                 id: preview_widget
-                size_hint_x: 6
+                size_hint_x: 7
                 Image:
                     pos: [0, 0]
                     id: preview
+                    on_touch_down: root.on_image_touch_down(args[1])
+                    on_touch_move: root.on_image_touch_move(args[1])
+                    on_touch_up: root.on_image_touch_up(args[1])
 
             TabbedPanel:
+                id: effects
                 size: 700, 0
                 size_hint_x: None
                 do_default_tab: False
@@ -58,10 +70,10 @@ MainWidget:
                                 id: slider_color_temperature
                                 text: "Temperature"
                                 min: 1000
-                                max: 40000
-                                value: 5600
+                                max: 14000
+                                value: 6400
                                 step: 100
-                                on_value: root.adjust_lv2('color_temperature')
+                                on_slider: root.apply_effects_lv(2, 'color_temperature')
 
                             ParamSlider:
                                 id: slider_color_tint
@@ -70,7 +82,7 @@ MainWidget:
                                 max: 100
                                 value: 0
                                 step: 1
-                                on_value: root.adjust_lv2('color_tint')
+                                on_slider: root.apply_effects_lv(2, 'color_temperature')
 
                             HSeparator:
                                 height: 30
@@ -87,20 +99,31 @@ MainWidget:
                             ParamSlider:
                                 id: slider_exposure
                                 text: "Exposure"                            
-                                min: -5.0
-                                max: 5.0
+                                min: -4.0
+                                max: 4.0
                                 value: 0.0
-                                step: 0.1
-                                on_value: root.adjust_lv2('exposure')
+                                step: 0.05
+                                for_float: True
+                                on_slider: root.apply_effects_lv(2, 'exposure')
 
                             ParamSlider:
                                 id: slider_contrast
                                 text: "Contrast"
-                                min: -100.0
-                                max: 100.0
-                                value: 0.0
-                                step: 1.0
-                                on_value: root.adjust_lv2('contrast')
+                                min: -100
+                                max: 100
+                                value: 0
+                                step: 1
+                                on_slider: root.apply_effects_lv(2, 'contrast')
+
+                            ParamSlider:
+                                id: slider_midtone
+                                text: "Midtone"                            
+                                min: -100
+                                max: 100
+                                value: 0
+                                step: 1
+                                for_float: True
+                                on_slider: root.apply_effects_lv(2, 'midtone')
 
                             HSeparator:
                                 height: 20
@@ -108,38 +131,38 @@ MainWidget:
                             ParamSlider:
                                 id: slider_hilight
                                 text: "Hilights"
-                                min: -100.0
-                                max: 100.0
-                                value: 0.0
-                                step: 1.0
-                                on_value: root.adjust_lv2('tone')
+                                min: -100
+                                max: 100
+                                value: 0
+                                step: 1
+                                on_slider: root.apply_effects_lv(2, 'tone')
 
                             ParamSlider:
                                 id: slider_shadow
                                 text: "Shadows"
-                                min: -100.0
-                                max: 100.0
-                                value: 0.0
-                                step: 1.0
-                                on_value: root.adjust_lv2('tone')
+                                min: -100
+                                max: 100
+                                value: 0
+                                step: 1
+                                on_slider: root.apply_effects_lv(2, 'tone')
 
                             ParamSlider:
                                 id: slider_white
                                 text: "Whites"
-                                min: -100.0
-                                max: 100.0
-                                value: 0.0
-                                step: 1.0
-                                on_value: root.adjust_lv2('tone')
+                                min: -100
+                                max: 100
+                                value: 0
+                                step: 1
+                                on_slider: root.apply_effects_lv(2, 'tone')
 
                             ParamSlider:
                                 id: slider_black
                                 text: "Blacks"
-                                min: -100.0
-                                max: 100.0
-                                value: 0.0
-                                step: 1.0
-                                on_value: root.adjust_lv2('tone')
+                                min: -100
+                                max: 100
+                                value: 0
+                                step: 1
+                                on_slider: root.apply_effects_lv(2, 'tone')
 
                             HSeparator:
                                 height: 30
@@ -160,7 +183,8 @@ MainWidget:
                                 max: 1.0
                                 value: 0.0
                                 step: 0.01
-                                on_value: root.adjust_lv2('dehaze')
+                                for_float: True
+                                on_slider: root.apply_effects_lv(2, 'dehaze')
 
                             HSeparator:
                                 height: 20
@@ -168,79 +192,24 @@ MainWidget:
                             ParamSlider:
                                 text: "Saturation"
                                 id: slider_saturation
-                                min: -1.0
-                                max: 1.0
-                                value: 0.0
-                                step: 0.01
-                                on_value: root.adjust_lv2('saturation')
+                                min: -100
+                                max: 100
+                                value: 0
+                                step: 1
+                                on_slider: root.apply_effects_lv(2, 'saturation')
 
                             ParamSlider:
                                 text: "Vibrance"
                                 id: slider_vibrance
-                                min: -1.0
-                                max: 1.0
-                                value: 0.0
-                                step: 0.01
-                                on_value: root.adjust_lv2('saturation')
+                                min: -100
+                                max: 100
+                                value: 0
+                                step: 1
+                                on_slider: root.apply_effects_lv(2, 'saturation')
 
                             HSeparator:
                                 height: 30
-                            
-                            Label:
-                                text_size: self.size
-                                size: 0, 40
-                                size_hint_y: None
-                                text: ' Tone Curve'
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
-
-                            TabbedPanel:
-                                size: 700, 700
-                                size_hint: None, None
-                                tab_width: 80
-                                tab_height: 40
-                                do_default_tab: False
-
-                                TabbedPanelItem:
-                                    text: 'All'
-
-                                    CurveWidget:
-                                        id: tonecurve
-                                        start_y: 0.0
-                                        end_y: 1.0
-                                        on_curve: root.adjust_lv2('tonecurve')
-
-                                TabbedPanelItem:
-                                    text: 'Red'
-
-                                    CurveWidget:
-                                        id: tonecurve_red
-                                        start_y: 0.0
-                                        end_y: 1.0
-                                        on_curve: root.adjust_lv2('tonecurve_red')
-
-                                TabbedPanelItem:
-                                    text: 'Green'
-
-                                    CurveWidget:
-                                        id: tonecurve_green
-                                        start_y: 0.0
-                                        end_y: 1.0
-                                        on_curve: root.adjust_lv2('tonecurve_green')
-
-                                TabbedPanelItem:
-                                    text: 'Blue'
-
-                                    CurveWidget:
-                                        id: tonecurve_blue
-                                        start_y: 0.0
-                                        end_y: 1.0
-                                        on_curve: root.adjust_lv2('tonecurve_blue')
-
-                            HSeparator:
-                                height: 30
-                            
+                                                        
                             Label:
                                 text_size: self.size
                                 size: 0, 40
@@ -280,7 +249,7 @@ MainWidget:
                                             max: 100.0
                                             value: 0.0
                                             step: 1.0
-                                            on_value: root.adjust_lv2('hls_red')
+                                            on_slider: root.apply_effects_lv(2, 'hls_red')
                                         ParamSlider:
                                             id: slider_hls_red_sat
                                             text: "Saturation"
@@ -288,7 +257,7 @@ MainWidget:
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_value: root.adjust_lv2('hls_red')
+                                            on_slider: root.apply_effects_lv(2, 'hls_red')
                                         ParamSlider:
                                             id: slider_hls_red_lum
                                             text: "Luminance"
@@ -296,7 +265,7 @@ MainWidget:
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_value: root.adjust_lv2('hls_red')
+                                            on_slider: root.apply_effects_lv(2, 'hls_red')
                     
                                 TabbedPanelItem:
                                     text: 'Orange'
@@ -320,7 +289,7 @@ MainWidget:
                                             max: 100.0
                                             value: 0.0
                                             step: 1.0
-                                            on_value: root.adjust_lv2('hls_orange')
+                                            on_slider: root.apply_effects_lv(2, 'hls_orange')
                                         ParamSlider:
                                             id: slider_hls_orange_sat
                                             text: "Saturation"
@@ -328,7 +297,7 @@ MainWidget:
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_value: root.adjust_lv2('hls_orange')
+                                            on_slider: root.apply_effects_lv(2, 'hls_orange')
                                         ParamSlider:
                                             id: slider_hls_orange_lum
                                             text: "Luminance"
@@ -336,7 +305,7 @@ MainWidget:
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_value: root.adjust_lv2('hls_orange')
+                                            on_slider: root.apply_effects_lv(2, 'hls_orange')
 
                                 TabbedPanelItem:
                                     text: 'Yellow'
@@ -360,7 +329,7 @@ MainWidget:
                                             max: 100.0
                                             value: 0.0
                                             step: 1.0
-                                            on_value: root.adjust_lv2('hls_yellow')
+                                            on_slider: root.apply_effects_lv(2, 'hls_yellow')
                                         ParamSlider:
                                             id: slider_hls_yellow_sat
                                             text: "Saturation"
@@ -368,7 +337,7 @@ MainWidget:
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_value: root.adjust_lv2('hls_yellow')
+                                            on_slider: root.apply_effects_lv(2, 'hls_yellow')
                                         ParamSlider:
                                             id: slider_hls_yellow_lum
                                             text: "Luminance"
@@ -376,7 +345,7 @@ MainWidget:
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_value: root.adjust_lv2('hls_yellow')
+                                            on_slider: root.apply_effects_lv(2, 'hls_yellow')
 
                                 TabbedPanelItem:
                                     text: 'Green'
@@ -400,7 +369,7 @@ MainWidget:
                                             max: 100.0
                                             value: 0.0
                                             step: 1.0
-                                            on_value: root.adjust_lv2('hls_green')
+                                            on_slider: root.apply_effects_lv(2, 'hls_green')
                                         ParamSlider:
                                             id: slider_hls_green_sat
                                             text: "Saturation"
@@ -408,7 +377,7 @@ MainWidget:
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_value: root.adjust_lv2('hls_green')
+                                            on_slider: root.apply_effects_lv(2, 'hls_green')
                                         ParamSlider:
                                             id: slider_hls_green_lum
                                             text: "Luminance"
@@ -416,7 +385,7 @@ MainWidget:
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_value: root.adjust_lv2('hls_green')
+                                            on_slider: root.apply_effects_lv(2, 'hls_green')
 
                                 TabbedPanelItem:
                                     text: 'Cyan'
@@ -440,7 +409,7 @@ MainWidget:
                                             max: 100.0
                                             value: 0.0
                                             step: 1.0
-                                            on_value: root.adjust_lv2('hls_cyan')
+                                            on_slider: root.apply_effects_lv(2, 'hls_cyan')
                                         ParamSlider:
                                             id: slider_hls_cyan_sat
                                             text: "Saturation"
@@ -448,7 +417,7 @@ MainWidget:
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_value: root.adjust_lv2('hls_cyan')
+                                            on_slider: root.apply_effects_lv(2, 'hls_cyan')
                                         ParamSlider:
                                             id: slider_hls_cyan_lum
                                             text: "Luminance"
@@ -456,7 +425,7 @@ MainWidget:
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_value: root.adjust_lv2('hls_cyan')
+                                            on_slider: root.apply_effects_lv(2, 'hls_cyan')
 
                                 TabbedPanelItem:
                                     text: 'Blue'
@@ -480,7 +449,7 @@ MainWidget:
                                             max: 100.0
                                             value: 0.0
                                             step: 1.0
-                                            on_value: root.adjust_lv2('hls_blue')
+                                            on_slider: root.apply_effects_lv(2, 'hls_blue')
                                         ParamSlider:
                                             id: slider_hls_blue_sat
                                             text: "Saturation"
@@ -488,7 +457,7 @@ MainWidget:
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_value: root.adjust_lv2('hls_blue')
+                                            on_slider: root.apply_effects_lv(2, 'hls_blue')
                                         ParamSlider:
                                             id: slider_hls_blue_lum
                                             text: "Luminance"
@@ -496,7 +465,7 @@ MainWidget:
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_value: root.adjust_lv2('hls_blue')
+                                            on_slider: root.apply_effects_lv(2, 'hls_blue')
 
                                 TabbedPanelItem:
                                     text: 'Purple'
@@ -520,7 +489,7 @@ MainWidget:
                                             max: 100.0
                                             value: 0.0
                                             step: 1.0
-                                            on_value: root.adjust_lv2('hls_purple')
+                                            on_slider: root.apply_effects_lv(2, 'hls_purple')
                                         ParamSlider:
                                             id: slider_hls_purple_sat
                                             text: "Saturation"
@@ -528,7 +497,7 @@ MainWidget:
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_value: root.adjust_lv2('hls_purple')
+                                            on_slider: root.apply_effects_lv(2, 'hls_purple')
                                         ParamSlider:
                                             id: slider_hls_purple_lum
                                             text: "Luminance"
@@ -536,7 +505,7 @@ MainWidget:
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_value: root.adjust_lv2('hls_purple')
+                                            on_slider: root.apply_effects_lv(2, 'hls_purple')
 
                                 TabbedPanelItem:
                                     text: 'Magenta'
@@ -560,7 +529,7 @@ MainWidget:
                                             max: 100.0
                                             value: 0.0
                                             step: 1.0
-                                            on_value: root.adjust_lv2('hls_magenta')
+                                            on_slider: root.apply_effects_lv(2, 'hls_magenta')
                                         ParamSlider:
                                             id: slider_hls_magenta_sat
                                             text: "Saturation"
@@ -568,7 +537,7 @@ MainWidget:
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_value: root.adjust_lv2('hls_magenta')
+                                            on_slider: root.apply_effects_lv(2, 'hls_magenta')
                                         ParamSlider:
                                             id: slider_hls_magenta_lum
                                             text: "Luminance"
@@ -576,7 +545,7 @@ MainWidget:
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_value: root.adjust_lv2('hls_magenta')
+                                            on_slider: root.apply_effects_lv(2, 'hls_magenta')
 
                 TabbedPanelItem:
                     text: 'Curves'
@@ -592,6 +561,61 @@ MainWidget:
                                 text_size: self.size
                                 size: 0, 40
                                 size_hint_y: None
+                                text: ' Tone Curve'
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
+
+                            TabbedPanel:
+                                size: 700, 700
+                                size_hint: None, None
+                                tab_width: 80
+                                tab_height: 40
+                                do_default_tab: False
+
+                                TabbedPanelItem:
+                                    text: 'All'
+
+                                    CurveWidget:
+                                        id: tonecurve
+                                        start_y: 0.0
+                                        end_y: 1.0
+                                        on_curve: root.apply_effects_lv(2, 'tonecurve')
+
+                                TabbedPanelItem:
+                                    text: 'Red'
+
+                                    CurveWidget:
+                                        id: tonecurve_red
+                                        start_y: 0.0
+                                        end_y: 1.0
+                                        on_curve: root.apply_effects_lv(2, 'tonecurve_red')
+
+                                TabbedPanelItem:
+                                    text: 'Green'
+
+                                    CurveWidget:
+                                        id: tonecurve_green
+                                        start_y: 0.0
+                                        end_y: 1.0
+                                        on_curve: root.apply_effects_lv(2, 'tonecurve_green')
+
+                                TabbedPanelItem:
+                                    text: 'Blue'
+
+                                    CurveWidget:
+                                        id: tonecurve_blue
+                                        start_y: 0.0
+                                        end_y: 1.0
+                                        on_curve: root.apply_effects_lv(2, 'tonecurve_blue')
+
+                            HSeparator:
+                                height: 30
+                                
+                            Label:
+                                text_size: self.size
+                                size: 0, 40
+                                size_hint_y: None
                                 text: ' Color Grading'
                                 font_size: '10pt'
                                 halign: 'left'
@@ -603,7 +627,7 @@ MainWidget:
                                 size_hint: None, None
                                 start_y: 0.0
                                 end_y: 0.0
-                                on_curve: root.adjust_lv2('grading')
+                                on_curve: root.apply_effects_lv(2, 'grading')
 
                             ParamSlider:
                                 id: slider_grading_hue
@@ -612,7 +636,7 @@ MainWidget:
                                 max: 360.0
                                 value: 0.0
                                 step: 1.0
-                                on_value: root.adjust_lv2('grading')
+                                on_slider: root.apply_effects_lv(2, 'grading')
 
                             ParamSlider:
                                 id: slider_grading_sat
@@ -621,7 +645,7 @@ MainWidget:
                                 max: 100.0
                                 value: 0.0
                                 step: 1.0
-                                on_value: root.adjust_lv2('grading')
+                                on_slider: root.apply_effects_lv(2, 'grading')
 
                             ParamSlider:
                                 id: slider_grading_lum
@@ -630,7 +654,7 @@ MainWidget:
                                 max: 100.0
                                 value: 0.0
                                 step: 1.0
-                                on_value: root.adjust_lv2('grading')
+                                on_slider: root.apply_effects_lv(2, 'grading')
 
                             HSeparator:
                                 height: 30
@@ -649,7 +673,7 @@ MainWidget:
                                 size_hint: None, None
                                 start_y: 0.5
                                 end_y: 0.5
-                                on_curve: root.adjust_lv2('LumvsLum')
+                                on_curve: root.apply_effects_lv(2, 'LumvsLum')
 
                             Label:
                                 text_size: self.size
@@ -665,7 +689,7 @@ MainWidget:
                                 size_hint: None, None
                                 start_y: 0.5
                                 end_y: 0.5
-                                on_curve: root.adjust_lv2('HuevsHue')
+                                on_curve: root.apply_effects_lv(2, 'HuevsHue')
 
                             Label:
                                 text_size: self.size
@@ -681,7 +705,7 @@ MainWidget:
                                 size_hint: None, None
                                 start_y: 0.5
                                 end_y: 0.5
-                                on_curve: root.adjust_lv2('HuevsSat')
+                                on_curve: root.apply_effects_lv(2, 'HuevsSat')
 
                             Label:
                                 text_size: self.size
@@ -697,7 +721,7 @@ MainWidget:
                                 size_hint: None, None
                                 start_y: 0.5
                                 end_y: 0.5
-                                on_curve: root.adjust_lv2('HuevsLum')
+                                on_curve: root.apply_effects_lv(2, 'HuevsLum')
 
                             Label:
                                 text_size: self.size
@@ -713,7 +737,7 @@ MainWidget:
                                 size_hint: None, None
                                 start_y: 0.5
                                 end_y: 0.5
-                                on_curve: root.adjust_lv2('LumvsSat')
+                                on_curve: root.apply_effects_lv(2, 'LumvsSat')
 
                             Label:
                                 text_size: self.size
@@ -729,7 +753,7 @@ MainWidget:
                                 size_hint: None, None
                                 start_y: 0.5
                                 end_y: 0.5
-                                on_curve: root.adjust_lv2('SatvsSat')
+                                on_curve: root.apply_effects_lv(2, 'SatvsSat')
 
                             Label:
                                 text_size: self.size
@@ -745,7 +769,7 @@ MainWidget:
                                 size_hint: None, None
                                 start_y: 0.5
                                 end_y: 0.5
-                                on_curve: root.adjust_lv2('SatvsLum')                            
+                                on_curve: root.apply_effects_lv(2, 'SatvsLum')                            
 
                 TabbedPanelItem:
                     text: 'Extra'
@@ -774,12 +798,30 @@ MainWidget:
                                     text: "AI"
                                 VSpacer:
                                     size_hint_x: 5
-                                Switch:
-                                    size: 200, 0
-                                    size_hint_x: None
-                                    halign: 'right'
-                                    id: toggle_noise_reduction
-                                    on_active: root.adjust_lv2('noise_reduction')
+                                MDChip:
+                                    type: 'filter'
+                                    pos_hint: {"center_x": .5, "center_y": .5}
+                                    size: 100, 40
+                                    size_hint: None, None
+                                    id: switch_ai_noise_reduction
+                                    radius: 40
+                                    line_color: 'grey'
+                                    on_active: root.apply_effects_lv(1, 'ai_noise_reduction')
+
+                                    MDChipText:
+                                        text: "AI"
+                                        font_size: '9pt'
+                                        color: 'b0b0b0' 
+
+
+                            ParamSlider:
+                                id: slider_nlm_noise_reduction
+                                text: "NLM"
+                                min: 0
+                                max: 100
+                                value: 0
+                                step: 1
+                                on_slider: root.apply_effects_lv(1, 'nlm_noise_reduction')
 
                             HSeparator:
                                 height: 30
@@ -788,7 +830,7 @@ MainWidget:
                                 text_size: self.size
                                 size: 0, 40
                                 size_hint_y: None
-                                text: ' '
+                                text: ' Details'
                                 font_size: '10pt'
                                 halign: 'left'
                                 valign: 'center'
@@ -803,11 +845,11 @@ MainWidget:
                                 ToggleButton:
                                     size_hint_x: 3
                                     id: toggle_inpaint
-                                    on_state: root.adjust_lv0('inpaint')
+                                    on_state: root.apply_effects_lv(0, 'inpaint')
                                 Button:
                                     size_hint_x: 4
-                                    id: button_inpaint
-                                    on_press: root.adjust_lv0('inpaint')
+                                    id: button_inpaint_predict
+                                    on_press: root.apply_effects_lv(0, 'inpaint')
 
                             BoxLayout:
                                 size: 0, 60
@@ -817,13 +859,30 @@ MainWidget:
                                     text: "Defocus"
                                 VSpacer:
                                     size_hint_x: 5
-                                Switch:
-                                    size: 200, 0
-                                    size_hint_x: None
-                                    halign: 'right'
-                                    id: toggle_defocus
-                                    on_active: root.adjust_lv2('defocus')
+                                MDChip:
+                                    type: 'filter'
+                                    pos_hint: {"center_x": .5, "center_y": .5}
+                                    size: 100, 40
+                                    size_hint: None, None
+                                    id: switch_defocus
+                                    radius: 40
+                                    line_color: 'grey'
+                                    on_active: root.apply_effects_lv(1, 'defocus')
 
+                                    MDChipText:
+                                        text: "AI"
+                                        font_size: '9pt'
+                                        color: 'b0b0b0' 
+
+                            ParamSlider:
+                                id: slider_deblur_filter
+                                text: "Deblur"
+                                min: 0
+                                max: 50
+                                value: 0
+                                step: 1
+                                on_slider: root.apply_effects_lv(1, 'deblur_filter')
+                                
                             HSeparator:
                                 height: 30
 
@@ -844,12 +903,20 @@ MainWidget:
                                     text: "Color Correct"
                                 VSpacer:
                                     size_hint_x: 5
-                                Switch:
-                                    size: 200, 0
-                                    size_hint_x: None
-                                    halign: 'right'
+                                MDChip:
+                                    type: 'filter'
+                                    pos_hint: {"center_x": .5, "center_y": .5}
+                                    size: 100, 40
+                                    size_hint: None, None
                                     id: switch_color_correct
-                                    on_active: root.adjust_lv2('color_correct')
+                                    radius: 40
+                                    line_color: 'grey'
+                                    on_active: root.apply_effects_lv(2, 'color_correct')
+
+                                    MDChipText:
+                                        text: "AI"
+                                        font_size: '9pt'
+                                        color: 'b0b0b0' 
 
                             ParamSlider:
                                 id: slider_density
@@ -858,7 +925,7 @@ MainWidget:
                                 max: 100
                                 value: 0
                                 step: 1
-                                on_value: root.adjust_lv2('density')
+                                on_slider: root.apply_effects_lv(2, 'density')
 
                             ParamSlider:
                                 id: slider_clear_color
@@ -867,7 +934,7 @@ MainWidget:
                                 max: 100
                                 value: 0
                                 step: 1
-                                on_value: root.adjust_lv2('clear_color')
+                                on_slider: root.apply_effects_lv(2, 'clear_color')
 
                             HSeparator:
                                 height: 30
@@ -888,7 +955,7 @@ MainWidget:
                                 max: 100
                                 value: 0
                                 step: 2
-                                on_value: root.adjust_lv1('lowpass_filter')
+                                on_slider: root.apply_effects_lv(1, 'lowpass_filter')
 
                             ParamSlider:
                                 id: slider_highpass_filter
@@ -897,7 +964,7 @@ MainWidget:
                                 max: 100
                                 value: 0
                                 step: 2
-                                on_value: root.adjust_lv1('lowpass_filter')
+                                on_slider: root.apply_effects_lv(1, 'lowpass_filter')
 
                             ParamSlider:
                                 id: slider_perlin_noise
@@ -906,7 +973,7 @@ MainWidget:
                                 max: 10
                                 value: 0
                                 step: 1
-                                on_value: root.adjust_lv1('perlin_noise')
+                                on_slider: root.apply_effects_lv(1, 'perlin_noise')
 
                             ParamSlider:
                                 id: slider_perlin_noise_opacity
@@ -915,7 +982,7 @@ MainWidget:
                                 max: 100
                                 value: 100
                                 step: 1
-                                on_value: root.adjust_lv1('perlin_noise')
+                                on_slider: root.apply_effects_lv(1, 'perlin_noise')
 
                             HSeparator:
                                 height: 30
@@ -928,7 +995,7 @@ MainWidget:
                                 ToggleButton:
                                     size_hint_x: 7
                                     id: toggle_lut
-                                    on_state: root.adjust_lv1('lut')
+                                    on_state: root.apply_effects_lv(1, 'lut')
 
                             HSeparator:
                                 height: 30
@@ -944,30 +1011,69 @@ MainWidget:
 
                             ParamSlider:
                                 id: slider_black_level
-                                text: "black level"
+                                text: "Black Level"
                                 min: 0
                                 max: 255
                                 value: 0
                                 step: 1
-                                on_value: root.adjust_lv2('level')
+                                on_slider: root.apply_effects_lv(2, 'level')
 
                             ParamSlider:
                                 id: slider_mid_level
-                                text: "mid level"
+                                text: "Mid Level"
                                 min: 0
                                 max: 255
                                 value: 127
                                 step: 1
-                                on_value: root.adjust_lv2('level')
+                                on_slider: root.apply_effects_lv(2, 'level')
 
                             ParamSlider:
                                 id: slider_white_level
-                                text: "white level"
+                                text: "White Level"
                                 min: 0
                                 max: 255
                                 value: 255
                                 step: 1
-                                on_value: root.adjust_lv2('level')
+                                on_slider: root.apply_effects_lv(2, 'level')
+
+                            HSeparator:
+                                height: 30
+
+                            Label:
+                                text_size: self.size
+                                size: 0, 40
+                                size_hint_y: None
+                                text: ' Glow Effect'
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
+
+                            ParamSlider:
+                                id: slider_glow_black
+                                text: "Black"
+                                min: 0
+                                max: 126
+                                value: 0
+                                step: 1
+                                on_slider: root.apply_effects_lv(1, 'glow')
+
+                            ParamSlider:
+                                id: slider_glow_gauss
+                                text: "Gauss"
+                                min: 0
+                                max: 100
+                                value: 0
+                                step: 2
+                                on_slider: root.apply_effects_lv(1, 'glow')
+
+                            ParamSlider:
+                                id: slider_glow_opacity
+                                text: "Opacity"
+                                min: 0
+                                max: 100
+                                value: 0
+                                step: 1
+                                on_slider: root.apply_effects_lv(1, 'glow')
 
         ViewerWidget:
             id: viewer

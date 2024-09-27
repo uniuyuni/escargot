@@ -1,13 +1,14 @@
 import cv2
 import numpy as np
-import math
+import colour
+import lensfunpy
 from scipy.interpolate import PchipInterpolator
 from scipy.interpolate import splprep, splev
 
 import dehazing.dehaze
 import sigmoid
 import dehazing
-
+import dng_temperature
 
 # 画像の読み込み
 def imgread(filename):
@@ -30,7 +31,8 @@ def mskread(filename):
 # RGBからグレイスケールへの変換
 def cvtToGrayColor(rgb):
     # 変換元画像 RGB
-    gry = np.dot(rgb[...,:3], [0.2989, 0.5870, 0.1140])
+    gry = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    # gry = np.dot(rgb[...,:3], [0.2989, 0.5870, 0.1140]).astype(np.float32)
 
     return gry
 
@@ -43,86 +45,86 @@ def apply_gamma(img, gamma):
 
     return apply_img
 
-def convert_Kelvin2RGB(colour_temperature):
-    """
-    Converts from K to RGB, algorithm courtesy of 
-    http://www.tannerhelland.com/4435/convert-temperature-rgb-algorithm-code/
-    """
-    #range check
-    if colour_temperature < 1000: 
-        colour_temperature = 1000
-    elif colour_temperature > 40000:
-        colour_temperature = 40000
-    
-    tmp_internal = colour_temperature / 100.0
-    
-    # red 
-    if tmp_internal <= 66:
-        red = 255
-    else:
-        tmp_red = 329.698727446 * math.pow(tmp_internal - 60, -0.1332047592)
-        if tmp_red < 0:
-            red = 0
-        elif tmp_red > 255:
-            red = 255
-        else:
-            red = tmp_red
-    
-    # green
-    if tmp_internal <=66:
-        tmp_green = 99.4708025861 * math.log(tmp_internal) - 161.1195681661
-        if tmp_green < 0:
-            green = 0
-        elif tmp_green > 255:
-            green = 255
-        else:
-            green = tmp_green
-    else:
-        tmp_green = 288.1221695283 * math.pow(tmp_internal - 60, -0.0755148492)
-        if tmp_green < 0:
-            green = 0
-        elif tmp_green > 255:
-            green = 255
-        else:
-            green = tmp_green
-    
-    # blue
-    if tmp_internal >=66:
-        blue = 255
-    elif tmp_internal <= 19:
-        blue = 0
-    else:
-        tmp_blue = 138.5177312231 * math.log(tmp_internal - 10) - 305.0447927307
-        if tmp_blue < 0:
-            blue = 0
-        elif tmp_blue > 255:
-            blue = 255
-        else:
-            blue = tmp_blue
-    
-    return red/255.0, green/255.0, blue/255.0
+def convert_RGB2Kelvin(rgb):
 
-def convert_RGB2Kelvin(red, green, blue):
-    # Wide RGB D65 https://gist.github.com/popcorn245/30afa0f98eea1c2fd34d
-    X = red * 0.649926 + green * 0.103455 + blue * 0.197109
-    Y = red * 0.234327 + green * 0.743075 + blue * 0.022598
-    Z = red * 0.000000 + green * 0.053077 + blue * 1.035763
+    xyz = colour.RGB_to_XYZ(rgb, 'sRGB')
 
-    # CIEXYZ D65 https://www.image-engineering.de/library/technotes/958-how-to-convert-between-srgb-and-ciexyz
-    # X = red * 0.4124564 + green * 0.3575761 + blue * 0.1804375
-    # Y = red * 0.2126729 + green * 0.7151522 + blue * 0.0721750
-    # Z = red * 0.0193339 + green * 0.1191920 + blue * 0.9503041
+    xy = colour.XYZ_to_xy(xyz)
 
-    x = X / (X + Y + Z)
-    y = Y / (X + Y + Z)
-    n = (x - 0.3366) / (y - 0.1735)
-    CCT = (-949.86315 + 6253.80338 * math.e**(-n / 0.92159) +
-           28.70599 * math.e**(-n / 0.20039) +
-           0.00004 * math.e**(-n / 0.07125))
-    n = (x - 0.3356) / (y - 0.1691) if CCT > 50000 else n
-    CCT = 36284.48953 + 0.00228 * math.e**(-n / 0.07861) + (
-        5.4535 * 10**-36) * math.e**(-n / 0.01543) if CCT > 50000 else CCT
-    return CCT
+    CCT = colour.xy_to_CCT(xy, 'hernandez1999')
+    print(CCT)
+
+    return CCT, 0
+
+def convert_Kelvin2RGB(CCT, tint):
+    xy = colour.CCT_to_xy(CCT, 'hernandez1999')
+
+    xyz = colour.xy_to_XYZ(xy)
+
+    rgb = colour.XYZ_to_RGB(xyz, 'sRGB')
+
+    return rgb
+
+def convert_RGB2TempTint(rgb):
+
+    xyz = colour.RGB_to_XYZ(rgb, 'sRGB')
+
+    xy = colour.XYZ_to_xy(xyz)
+
+    dng = dng_temperature.DngTemperature()
+    dng.set_xy_coord(xy)
+
+    return dng.fTemperature, dng.fTint, xyz[1]
+
+def convert_TempTint2RGB(temp, tint, Y):
+
+    dng = dng_temperature.DngTemperature()
+    dng.fTemperature = temp
+    dng.fTint = tint
+
+    xy = dng.get_xy_coord()
+
+    xyz = colour.xy_to_XYZ(xy)
+    xyz *= Y
+
+    rgb = colour.XYZ_to_RGB(xyz, 'sRGB')
+
+    return rgb
+
+def calc_resize_image(original_size, max_length):
+    width, height = original_size
+
+    if width > height:
+        # 幅が長辺の場合
+        scale_factor = max_length / width
+    else:
+        # 高さが長辺の場合
+        scale_factor = max_length / height
+
+    new_width = int(width * scale_factor)
+    new_height = int(height * scale_factor)
+
+    return (new_width, new_height)
+
+def lucy_richardson_gauss(srcf, iteration):
+
+    # 出力用の画像を初期化
+    destf = srcf.copy()
+
+    for i in range(iteration):
+        # ガウスぼかしを適用してぼけをシミュレーション
+        bdest = cv2.GaussianBlur(destf, ksize=(3, 3), sigmaX=0)
+
+        # 元画像とぼけた画像の比を計算
+        ratio = cv2.divide(srcf, bdest)
+
+        # 誤差の分配のために再びガウスぼかしを適用
+        ratio_blur = cv2.GaussianBlur(ratio, ksize=(3, 3), sigmaX=0)
+
+        # 元の出力画像に誤差を乗算
+        destf = cv2.multiply(destf, ratio_blur)
+    
+    return destf
 
 # ローパスフィルタ
 def lowpass_filter(img, r):
@@ -170,14 +172,50 @@ def blend_overlay(base, over):
     
     return result
 
+# スクリーン合成
+def blend_screen(base, over):
+    #result = np.zeros(base.shape, dtype=np.float32)
+    result = 1 - (1.0-base)*(1-over)
+
+    return result
+
+def modify_lens(img, exif_data):
+    db = lensfunpy.Database()
+    print(exif_data['Make'], exif_data['Model'])
+    print(exif_data['LensMake'], exif_data['LensModel'])
+    print(exif_data['FocalLength'], exif_data['ApertureValue'])
+
+    cam = db.find_cameras(exif_data['Make'], exif_data['Model'], loose_search=True)
+    print(cam)
+    lens = db.find_lenses(cam[0], exif_data['LensMake'], exif_data['LensModel'], loose_search=True)
+    print(lens)
+
+    height, width = img.shape[0], img.shape[1]
+    mod = lensfunpy.Modifier(lens[0], cam[0].crop_factor, width, height)
+    mod.initialize(float(exif_data['FocalLength'][0:-3]), exif_data['ApertureValue'], pixel_format=np.float32)
+    
+    modimg = img.copy()
+    did_apply = mod.apply_color_modification(modimg)
+
+    undist_coords = mod.apply_subpixel_distortion()
+    modimg[..., 0] = cv2.remap(modimg[..., 0], undist_coords[..., 0, :], None, cv2.INTER_LANCZOS4)
+    modimg[..., 1] = cv2.remap(modimg[..., 1], undist_coords[..., 1, :], None, cv2.INTER_LANCZOS4)
+    modimg[..., 2] = cv2.remap(modimg[..., 2], undist_coords[..., 2, :], None, cv2.INTER_LANCZOS4)
+
+    undist_coords = mod.apply_geometry_distortion()
+    modimg = cv2.remap(modimg, undist_coords, None, cv2.INTER_LANCZOS4)
+
+    return modimg
+
+
 # 露出補正
 def adjust_exposure(img, ev):
     # img: 変換元画像
-    # ev: 補正値 -5.0〜5.0
+    # ev: 補正値 -4.0〜4.0
 
-    img2 = np.clip(img*(2.0**ev), 0, 1)
+    #img2 = img*(2.0**ev)
 
-    return img2
+    return (2.0**ev)
 
 
 # コントラスト補正
@@ -186,7 +224,7 @@ def adjust_contrast(img, cf):
     # cf: コントラストファクター -100.0〜100.0
 
     c = 0.5   # 中心値
-    f = cf/100.0*5.0  #-5.0〜5.0に変換
+    f = cf/100.0*10.0  #-10.0〜10.0に変換
 
     if f == 0.0:
         adjust_img = img.copy()
@@ -219,7 +257,6 @@ def apply_curve(image, control_points, control_values, return_spline=False):
     else:
         return corrected_image
 
-# 黒レベル補正
 def adjust_shadow(img, black):
     f = -black/100.0*5.0
 
@@ -232,7 +269,6 @@ def adjust_shadow(img, black):
 
     return adjust_img
 
-# 白レベル補正
 def adjust_hilight(img, white):
     f = white/100.0*5.0
 
@@ -246,46 +282,47 @@ def adjust_hilight(img, white):
     return adjust_img
 
 # レベル補正
-def apply_level_adjustment(image, black_level, white_level, midtone_level):
+def apply_level_adjustment(image, black_level, midtone_level, white_level):
     # image: 変換元イメージ
     # black_level: 黒レベル 0〜255
     # white_level: 白レベル 0〜255
     # midtone_level: 中間色レベル 0〜255
 
     # 16ビット画像の最大値
-    max_val = 255
+    max_val = 65535
+    black_level *= 256
+    white_level *= 256
+    midtone_level *= 256
 
-    # 指定された0-255のレベルを0-65535にスケーリング
-    scale_factor = max_val / 255.0
-    black_level_scaled = black_level * scale_factor
-    white_level_scaled = white_level * scale_factor
-    midtone_factor = midtone_level / 128.0
+    # midtone_level を 1.0 を基準としてスケーリング (128が基準のため)
+    midtone_factor = midtone_level / 32768.0
 
-    # ルックアップテーブル (LUT) の作成
-    lut = np.linspace(0, max_val, max_val+1, dtype=np.float32)  # Liner space creation
+    # ルックアップテーブル (LUT) の作成 (0〜65535)
+    lut = np.linspace(0, max_val, max_val + 1, dtype=np.float32)  # Liner space creation
 
     # Pre-calculate constants
-    range_inv = 1.0 / (white_level_scaled - black_level_scaled)
-    #lut = np.clip((lut - black_level_scaled) * range_inv, 0, 1)  # Scale and clip
-    lut = (lut - black_level_scaled) * range_inv  # Scale
+    range_inv = 1.0 / (white_level - black_level)
+    
+    # LUT のスケーリングとクリッピング
+    lut = np.clip((lut - black_level) * range_inv, 0, 1)  # Scale and clip
     lut = np.power(lut, midtone_factor) * max_val  # Apply midtone factor and scale
-    #lut = np.clip(lut, 0, max_val).astype(np.uint16)  # Final clip and type conversion
-    lut = np.clip(lut, 0, max_val)  # Final clip and type conversion
-  
+    lut = np.clip(lut, 0, max_val).astype(np.uint16)  # Final clip and type conversion
+    
     # 画像全体にルックアップテーブルを適用
     adjusted_image = lut[np.clip(image*max_val, 0, max_val).astype(np.uint16)]
-    adjusted_image = (adjusted_image/max_val).astype(np.float32)
+    adjusted_image = adjusted_image.astype(np.float32)/max_val
 
     return adjusted_image
 
 # 彩度補正と自然な彩度補正
 def adjust_saturation(s, sat, vib):
-    # s: HLS画像 (彩度チャネル)
-    # sat: 彩度の変更値
-    # vib: 自然な彩度の変更値
 
     # 彩度変更値と自然な彩度変更値を計算
-    sat = 1.0 + sat
+    if sat >= 0:
+        sat = 1.0 + sat/100.0
+    else:
+        sat = 1.0 + sat/100.0
+    vib /= 50.0
 
     # 自然な彩度調整
     if vib == 0.0:
@@ -429,8 +466,9 @@ def adjust_density(hls_img, intensity):
     # 濃さ
     intensity = -intensity
     hls[:, :, 0] = hls_img[:, :, 0]
-    hls[:, :, 1] = np.clip(hls_img[:, :, 1] * (1 + intensity / 200.0), 0, 1)
-    hls[:, :, 2] = np.clip(hls_img[:, :, 2] * (1 - intensity / 100.0), 0, 1)
+    hls[:, :, 1] = adjust_shadow(hls_img[:, :, 1], intensity/2)
+    hls[:, :, 1] = adjust_hilight(hls[:, :, 1], intensity/2)
+    hls[:, :, 2] = np.clip(hls_img[:, :, 2] * (1.0 - intensity / 100.0), 0.0, 1.0)
 
     return hls
 
@@ -438,13 +476,13 @@ def adjust_clear_color(rgb_img, intensity):
 
     # 清書色、濁色
     if intensity >= 0:
-        rgb = np.clip(rgb_img * (1 + intensity / 100.0), 0, 1)
+        rgb = np.clip(rgb_img * (1 + intensity / 100.0), 0.0, 1.0)
     else:
         gray = cvtToGrayColor(rgb_img)
         factor = -intensity / 200.0
         rgb = rgb_img * (1 - factor) + gray[..., np.newaxis] * factor
         rgb = rgb * (1 - factor * 0.3)
-        rgb = np.clip(rgb, 0, 1)
+        rgb = np.clip(rgb, 0.0, 1.0)
 
     return rgb
 
@@ -483,24 +521,7 @@ def adjust_histogram(img, center, direction, intensity):
     adjusted_img = (adjusted_img_normalized * 65535).astype(np.float32)
     
     return adjusted_img
-
-def make_clip(img, scale, x, y, w, h):
-        
-    img2 = cv2.resize(img, None, fx=scale, fy=scale)
-
-    xx = int(x * scale)
-    yy = int(y * scale)
-    px = xx+w
-    if px > img2.shape[1]:
-        px = img2.shape[1]
-    py = yy+h
-    if py > img2.shape[0]:
-        py = img2.shape[0]
-
-    img3 = img2[yy:py, xx:px]
-        
-    return img3
-
+            
 # マスクイメージの適用
 def apply_mask(img1, img2, msk=None):
     # img1: 元イメージ RGB
@@ -511,3 +532,92 @@ def apply_mask(img1, img2, msk=None):
         img = msk[:, :, np.newaxis] * img2 + (1.0 - msk[:, :, np.newaxis]) * img1
 
     return img
+
+def crop_image(image, texture_width, texture_height, click_x, click_y, is_zoomed):
+    # 画像のサイズを取得
+    image_height, image_width = image.shape[:2]
+
+    # アスペクト比を計算
+    image_aspect = image_width / image_height
+    texture_aspect = texture_width / texture_height
+
+    if image_aspect > texture_aspect:
+        # 画像が横長の場合
+        new_width = texture_width
+        new_height = int(texture_width / image_aspect)
+    else:
+        # 画像が縦長の場合
+        new_width = int(texture_height * image_aspect)
+        new_height = texture_height
+
+    # 中央に配置するためのオフセットを計算
+    offset_x = (texture_width - new_width) // 2
+    offset_y = (texture_height - new_height) // 2
+
+    if not is_zoomed:
+
+        # リサイズ
+        resized_img = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_LANCZOS4)
+
+        # 背景を作成（透明な黒）
+        result = np.zeros((texture_height, texture_width, 3), dtype=np.float32)
+
+        # リサイズした画像を中央に配置
+        result[offset_y:offset_y+new_height, offset_x:offset_x+new_width] = resized_img
+        crop_info = [0, 0, 0, 0]
+
+    else:
+        # スケールを求める
+        if image_width >= image_height:
+            scale = texture_width/image_width
+        else:
+            scale = texture_height/image_height
+
+        # クリック位置を元の画像の座標系に変換
+        click_x = click_x - offset_x
+        click_y = click_y - offset_y
+        click_image_x = int(click_x / scale)
+        click_image_y = int(click_y / scale)
+
+        # 切り抜き範囲を計算
+        crop_width = int(texture_width)
+        crop_height = int(texture_height)
+
+        # クリック位置を中心にする
+        crop_x = click_image_x - crop_width // 2
+        crop_y = click_image_y - crop_height // 2
+
+        # クロップ
+        result, crop_info = crop_image2(image, [crop_x, crop_y, crop_width, crop_height], (0, 0))
+    
+    return result, crop_info
+
+def crop_image2(image, crop_info, offset):
+    
+    # 情報取得
+    image_height, image_width = image.shape[:2]
+    crop_x, crop_y, crop_width, crop_height = crop_info
+
+    # オフセット適用
+    crop_x += int(offset[0])
+    crop_y += int(offset[1])
+
+    # 画像の範囲外にならないように調整
+    crop_x = max(0, min(crop_x, image_width - crop_width))
+    crop_y = max(0, min(crop_y, image_height - crop_height))
+
+    # 画像を切り抜く
+    cropped_img = image[crop_y:crop_y+crop_height, crop_x:crop_x+crop_width]
+
+    return cropped_img, [crop_x, crop_y, crop_width, crop_height]
+
+def to_texture(pos, widget):
+    # ウィンドウ座標からローカルイメージ座標に変換
+    local_x, local_y = widget.to_widget(*widget.to_window(*pos))
+
+    # ローカル座標をテクスチャ座標に変換
+    tex_y = widget.height-local_y
+    tex_x = local_x - (widget.width - widget.texture_size[0])/2
+    tex_y = tex_y - (widget.height - widget.texture_size[1])/2
+
+    return (tex_x, tex_y)

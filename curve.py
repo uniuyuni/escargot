@@ -39,17 +39,7 @@ class CurveWidget(Widget):
     def __init__(self, **kwargs):
         super(CurveWidget, self).__init__(**kwargs)
 
-        self.points = []
-        self.selected_point = None
-
-        # Add start and end points
-        self.start_point = DraggablePoint(x=0.0, y=0.0)
-        self.end_point = DraggablePoint(x=1.0, y=1.0)
-        #self.end_point.x = 1.0
-        #self.end_point.y = 1.0
-
-        self.points.append(self.start_point)
-        self.points.append(self.end_point)
+        self.set_point_list(None)
 
         self.bind(size=self.update_grid)
         self.bind(pos=self.update_grid)
@@ -176,7 +166,17 @@ class CurveWidget(Widget):
             self.points = [DraggablePoint(x=pl[0], y=pl[1]) for pl in point_list]
             self.start_point = self.points[0]
             self.end_point = self.points[len(self.points)-1]
-            self.selected_point = None    
+            self.selected_point = None  
+        else:
+            self.points = []
+            self.selected_point = None
+
+            # Add start and end points
+            self.start_point = DraggablePoint(x=self.start_x, y=self.start_y)
+            self.end_point = DraggablePoint(x=self.end_x, y=self.end_y)
+            self.points.append(self.start_point)
+            self.points.append(self.end_point)
+        self.update_curve()
 
 class ToneCurveApp(App):
     def build(self):

@@ -11,7 +11,7 @@
     size: 700, 40
     size_hint: None, None
     text: 'Label'
-    on_text: root.change_label()
+    on_text: root.on_label_text()
 
     ParamLabel:
         id: label
@@ -20,8 +20,8 @@
         size_hint_x: 5
         id: slider
         hint: False
-        on_value: root.change_slider_value()
-        on_touch_down: root.press_slider(args[1])
+        on_value: root.on_slider_value()
+        on_touch_down: root.on_slider_touch_down(args[1])
 
     TextInput:
         id: input
@@ -30,13 +30,13 @@
         halign: 'right'
         font_size: '9pt'
         multiline: False
-        on_text_validate: root.change_input_text()
+        on_text_validate: root.on_input_text_validate()
 
     BoxLayout:
         size: 50, 40
         size_hint: None, None
         orientation: 'vertical'
         Button:
-            on_press: root.press_button(root.ids['slider'].step)
+            on_press: root.on_button_press(root.ids['slider'].step)
         Button:
-            on_press: root.press_button(-root.ids['slider'].step)
+            on_press: root.on_button_press(-root.ids['slider'].step)
