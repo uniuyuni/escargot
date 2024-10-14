@@ -3,6 +3,7 @@
 #:include spacer.kv
 #:include viewer_widget.kv
 #:include histogram_widget.kv
+#:include metainfo.kv
 
 MainWidget:   
 
@@ -27,10 +28,59 @@ MainWidget:
                     size_hint: None, None
                     size: dp(256), dp(100)
 
-                Label:
-                    text: "info"
+                MDScrollView:
 
-            
+                    BoxLayout:
+                        size_hint_y: None
+                        orientation: "vertical"
+                        height: self.minimum_height
+
+                        MetaInfo:
+                            id: exif_file_name
+                            key: "File Name"
+                        MetaInfo:
+                            id: exif_create_date
+                            key: "Create Date"
+                        MetaInfo:
+                            id: exif_image_size
+                            key: "Image Size"
+                        MetaInfo:
+                            id: exif_iso_speed
+                            key: "ISO Speed"
+                        MetaInfo:
+                            id: exif_aperture
+                            key: "Aperture"
+                        MetaInfo:
+                            id: exif_shutter_speed
+                            key: "Shutter Speed"
+                        MetaInfo:
+                            id: exif_brightness
+                            key: "Brightness"
+                        MetaInfo:
+                            id: exif_flash
+                            key: "Flash"
+                        MetaInfo:
+                            id: exif_white_balance
+                            key: "White Balance"
+                        MetaInfo:
+                            id: exif_focal_length
+                            key: "Focal Length"
+                        MetaInfo:
+                            id: exif_exposure_program
+                            key: "Exposure Program"
+                        MetaInfo:
+                            id: exif_make
+                            key: "Make"
+                        MetaInfo:
+                            id: exif_model
+                            key: "Model"
+                        MetaInfo:
+                            id: exif_lens_model
+                            key: "Lens Model"
+                        MetaInfo:
+                            id: exif_software
+                            key: "Software"
+                            
             RelativeLayout:
                 id: preview_widget
                 size_hint_x: 7
@@ -836,19 +886,34 @@ MainWidget:
                                 valign: 'center'
 
                             BoxLayout:
-                                size: 0, 40
+                                size: 0, 60
                                 size_hint_y: None
                                 orientation: 'horizontal'
-                                Label:
-                                    size_hint_x: 3
+                                ParamLabel:
                                     text: "Inpaint"
-                                ToggleButton:
-                                    size_hint_x: 3
-                                    id: toggle_inpaint
-                                    on_state: root.apply_effects_lv(0, 'inpaint')
-                                Button:
-                                    size_hint_x: 4
+                                VSpacer:
+                                    size_hint_x: 5
+                                MDChip:
+                                    type: 'filter'
+                                    pos_hint: {"center_x": .5, "center_y": .5}
+                                    size: 100, 40
+                                    size_hint: None, None
+                                    id: switch_inpaint
+                                    radius: 40
+                                    line_color: 'grey'
+                                    on_active: root.apply_effects_lv(0, 'inpaint')
+
+                                    MDChipText:
+                                        text: "Prepare"
+                                        font_size: '9pt'
+                                        color: 'b0b0b0'
+
+                                MDRoundFlatButton:
+                                    pos_hint: {"center_x": .5, "center_y": .5}
+                                    size: 100, 40
+                                    size_hint: None, None
                                     id: button_inpaint_predict
+                                    text: "Predict"
                                     on_press: root.apply_effects_lv(0, 'inpaint')
 
                             BoxLayout:
@@ -1013,7 +1078,7 @@ MainWidget:
                                 id: slider_black_level
                                 text: "Black Level"
                                 min: 0
-                                max: 255
+                                max: 253
                                 value: 0
                                 step: 1
                                 on_slider: root.apply_effects_lv(2, 'level')
@@ -1021,8 +1086,8 @@ MainWidget:
                             ParamSlider:
                                 id: slider_mid_level
                                 text: "Mid Level"
-                                min: 0
-                                max: 255
+                                min: 1
+                                max: 254
                                 value: 127
                                 step: 1
                                 on_slider: root.apply_effects_lv(2, 'level')
@@ -1030,7 +1095,7 @@ MainWidget:
                             ParamSlider:
                                 id: slider_white_level
                                 text: "White Level"
-                                min: 0
+                                min: 2
                                 max: 255
                                 value: 255
                                 step: 1
@@ -1074,6 +1139,37 @@ MainWidget:
                                 value: 0
                                 step: 1
                                 on_slider: root.apply_effects_lv(1, 'glow')
+
+                TabbedPanelItem:
+                    text: 'Geometry'
+
+                    MDScrollView:
+
+                        MDBoxLayout:
+                            size_hint_y: None
+                            orientation: "vertical"
+                            height: self.minimum_height
+
+                            Label:
+                                text_size: self.size
+                                size: 0, 40
+                                size_hint_y: None
+                                text: ' Rotation'
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
+
+                            ParamSlider:
+                                id: slider_rotation
+                                text: "Angle"
+                                min: -90.0
+                                max: 90
+                                value: 0
+                                step: 0.5
+                                on_slider: root.apply_effects_lv(0, 'rotation')
+
+                            HSeparator:
+                                height: 30
 
         ViewerWidget:
             id: viewer

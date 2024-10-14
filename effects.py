@@ -9,10 +9,12 @@ import DRBNet
 import colorcorrect.algorithm as cca
 import perlin
 import lama
+import deepfillv2
 
 import core
 import cubelut
 import mask_editor
+import crop_editor
 
 #補正既定クラス
 class Effect():
@@ -34,6 +36,32 @@ class Effect():
     def make_diff(self, img, param):
         self.diff = img
 
+    def apply_diff(self, img):
+        pass
+
+class RotationEffect(Effect):
+
+    def set2widget(self, widget, param):
+        widget.ids["slider_rotation"].set_slider_value(param.get('rotation', 0))
+
+    def set2param(self, param, widget):
+        param['rotation'] = widget.ids["slider_rotation"].value
+
+    def make_diff(self, img, param):
+        ang = param.get('rotation', 0)
+        if ang == 0:
+            self.diff = None
+            self.hash = None
+        else:
+            param_hash = hash((ang))
+            if self.hash != param_hash:
+                self.diff = core.rotation(img, ang)
+                self.hash = param_hash
+        
+        return self.diff
+    
+    def apply_diff(self, img):
+        return self.diff
 
 class AINoiseReductonEffect(Effect):
     __net = None
@@ -107,8 +135,69 @@ class DeblurFilterEffect(Effect):
 
         return self.diff
 
+"""
+class InpaintEffect(Effect):
+    __generator= None
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        if InpaintEffect.__generator is None:
+            InpaintEffect.__generator = deepfillv2.setup_predict('cpu')
+        
+        self.mask_editor = None
+        self.crop_editor = None
+
+    def set2widget(self, widget, param):
+        widget.ids["switch_inpaint"].active = False if param.get('inpaint', 0) == 0 else True
+        widget.ids["button_inpaint_predict"].state = "normal" if param.get('inpaint_predict', 0) == 0 else "down"
+
+    def set2param(self, param, widget):
+        param['inpaint'] = 0 if widget.ids["switch_inpaint"].active == False else 1
+        param['inpaint_predict'] = 0 if widget.ids["button_inpaint_predict"].state == "normal" else 1
+
+        if param['inpaint'] > 0:
+            if self.mask_editor is None:
+                self.mask_editor = mask_editor.MaskEditor(param['img_size'][1], param['img_size'][0])
+                self.mask_editor.zoom = widget.get_scale()
+                self.mask_editor.pos = [0, 0]
+                widget.ids["preview_widget"].add_widget(self.mask_editor)
+
+            if self.crop_editor is None:
+                self.crop_editor = crop_editor.CropEditor(input_width=param['img_size'][1], input_height=param['img_size'][0], scale=widget.get_scale())
+                widget.ids["preview_widget"].add_widget(self.crop_editor)
+            
+        if param['inpaint'] <= 0:
+            if self.mask_editor is not None:
+                widget.ids["preview_widget"].remove_widget(self.mask_editor)
+                self.mask_editor = None
+
+            if self.crop_editor is not None:
+                widget.ids["preview_widget"].remove_widget(self.crop_editor)
+                self.crop_editor = None
+
+    def make_diff(self, img, param):
+        ip = param.get('inpaint', 0)
+        ipp = param.get('inpaint_predict', 0)
+        if (ip > 0 and ipp > 0) is True:
+            cx, cy, cw, ch, sc = self.crop_editor.get_crop_info()
+            img2 = deepfillv2.predict(img[cy:cy+ch, cx:cx+cw], self.mask_editor.get_mask()[cy:cy+ch, cx:cx+cw], InpaintEffect.__generator, 'cpu')
+            img3 = img.copy()
+            img3[cy:cy+ch, cx:cx+cw] = img2
+            self.diff = img3
+            self.mask_editor.clear_mask()
+            self.mask_editor.update_canvas()
+        
+        return self.diff
+"""
+
+class InpaintDiff:
+    def __init__(self, **kwargs):
+        self.crop_info = kwargs.get('crop_info', None)
+        self.image = kwargs.get('image', None)
 
 class InpaintEffect(Effect):
+
     __net = None
 
     def __init__(self, **kwargs):
@@ -117,38 +206,58 @@ class InpaintEffect(Effect):
         if InpaintEffect.__net is None:
             InpaintEffect.__net = lama.setup_predict()
         
+        self.crop_info_list = []
         self.mask_editor = None
         self.crop_editor = None
 
     def set2widget(self, widget, param):
-        widget.ids["toggle_inpaint"].state = "normal" if param.get('inpaint', 0) == 0 else "down"
+        widget.ids["switch_inpaint"].active = False if param.get('inpaint', 0) == 0 else True
         widget.ids["button_inpaint_predict"].state = "normal" if param.get('inpaint_predict', 0) == 0 else "down"
 
     def set2param(self, param, widget):
-        param['inpaint'] = 0 if widget.ids["toggle_inpaint"].state == "normal" else 1
+        param['inpaint'] = 0 if widget.ids["switch_inpaint"].active == False else 1
         param['inpaint_predict'] = 0 if widget.ids["button_inpaint_predict"].state == "normal" else 1
 
         if param['inpaint'] > 0:
             if self.mask_editor is None:
                 self.mask_editor = mask_editor.MaskEditor(param['img_size'][1], param['img_size'][0])
-                self.mask_editor.zoom = widget.scale
+                self.mask_editor.zoom = widget.get_scale()
                 self.mask_editor.pos = [0, 0]
                 widget.ids["preview_widget"].add_widget(self.mask_editor)
+
+            if self.crop_editor is None:
+                self.crop_editor = crop_editor.CropEditor(input_width=param['img_size'][1], input_height=param['img_size'][0], scale=widget.get_scale())
+                widget.ids["preview_widget"].add_widget(self.crop_editor)
             
         if param['inpaint'] <= 0:
             if self.mask_editor is not None:
                 widget.ids["preview_widget"].remove_widget(self.mask_editor)
                 self.mask_editor = None
 
+            if self.crop_editor is not None:
+                widget.ids["preview_widget"].remove_widget(self.crop_editor)
+                self.crop_editor = None
+
     def make_diff(self, img, param):
         ip = param.get('inpaint', 0)
         ipp = param.get('inpaint_predict', 0)
         if (ip > 0 and ipp > 0) is True:
-            self.diff = lama.predict(img, self.mask_editor.get_mask(), InpaintEffect.__net)
+            cx, cy, cw, ch, sc = self.crop_editor.get_crop_info()
+            img2 = lama.predict(img[cy:cy+ch, cx:cx+cw], self.mask_editor.get_mask()[cy:cy+ch, cx:cx+cw], InpaintEffect.__net)
+            self.crop_info_list.append(InpaintDiff(crop_info=(cx, cy, cw, ch), image=img2))
+            self.diff = self.crop_info_list
             self.mask_editor.clear_mask()
             self.mask_editor.update_canvas()
         
         return self.diff
+    
+    def apply_diff(self, img):
+        for i in range(len(self.crop.info_list)):
+            cx, cy, cw, ch = self.crop_info_list[i].crop_info
+            img[cy:cy+ch, cx:cx+cw] = self.crop_info_list[i].image
+        
+        return img
+
 
 class DefocusEffect(Effect):
     __net = None
@@ -518,9 +627,12 @@ class LevelEffect(Effect):
         widget.ids["slider_mid_level"].set_slider_value(param.get('mid_level',127))
 
     def set2param(self, param, widget):
-        param['black_level'] = widget.ids["slider_black_level"].value
-        param['white_level'] = widget.ids["slider_white_level"].value
-        param['mid_level'] = widget.ids["slider_mid_level"].value
+        bl = widget.ids["slider_black_level"].value
+        wl = widget.ids["slider_white_level"].value
+        ml = widget.ids["slider_mid_level"].value
+        param['black_level'] = bl
+        param['white_level'] = wl
+        param['mid_level'] = ml
 
     def make_diff(self, hls_l, param):
         bl = param.get('black_level', 0)
@@ -1076,7 +1188,8 @@ class GlowEffect(Effect):
                 rgb2 = cv2.cvtColor(hls, cv2.COLOR_HLS2RGB_FULL)
                 if gg > 0:
                     rgb2 = core.lowpass_filter(rgb2, gg*2-1)
-                self.diff = core.blend_screen(rgb, rgb2)
+                go = go/100.0
+                self.diff = cv2.addWeighted(rgb, 1.0-go, core.blend_screen(rgb, rgb2), go, 0)
                 self.hash = param_hash
 
         return self.diff
@@ -1085,7 +1198,8 @@ def create_effects():
     effects = [{}, {}, {}]
 
     lv0 = effects[0]
-    lv0['inpaint'] = InpaintEffect()    
+    lv0['inpaint'] = InpaintEffect()
+    lv0['rotation'] = RotationEffect()  
 
     lv1 = effects[1]
     lv1['ai_noise_reduction'] = AINoiseReductonEffect()
@@ -1141,15 +1255,18 @@ def pipeline_lv0(img, effects, param):
     lv0 = effects[0]
     lv1reset = False
 
-    l = lv0['inpaint']
-    pre_diff = l.diff
-    diff = l.make_diff(img, param)
-    if diff is not None:
-        rgb = diff
-    else:
-        rgb = img.copy()
-    if pre_diff is not diff:
-        lv1reset = True
+    rgb = img.copy()
+    for i, n in enumerate(lv0):
+        if lv1reset == True:
+            lv0[n].reeffect()
+            
+        pre_diff = lv0[n].diff
+        diff = lv0[n].make_diff(rgb, param)
+        if diff is not None:
+            rgb = lv0[n].apply_diff(rgb)
+
+        if pre_diff is not diff:
+            lv1reset = True
 
     if lv1reset == True:
         for v in effects[1].values():
@@ -1176,103 +1293,6 @@ def pipeline_lv1(img, effects, param):
         if pre_diff is not diff:
             lv2reset = True
             
-
-    """
-    l = lv1['ai_noise_reduction']
-    pre_diff = l.diff
-    diff = l.make_diff(img, param)
-    if diff is not None:
-        rgb = diff
-    else:
-        rgb = img.copy()
-    if pre_diff is not diff:
-        lv1['nlm_noise_reduction'].reeffect()
-        lv1['deblur_filter'].reeffect()
-        lv1['lut'].reeffect()
-        lv1['defocus'].reeffect()
-        lv1['lowpass_filter'].reeffect()
-        lv1['perlin_noise'].reeffect()
-        lv1['glow'].reeffect()
-        lv1reset = True
-
-    l = lv1['nlm_noise_reduction']
-    pre_diff = l.diff
-    diff = l.make_diff(rgb, param)
-    if diff is not None:
-        rgb = diff
-    if pre_diff is not diff:
-        lv1['deblur_filter'].reeffect()
-        lv1['lut'].reeffect()
-        lv1['defocus'].reeffect()
-        lv1['lowpass_filter'].reeffect()
-        lv1['perlin_noise'].reeffect()
-        lv1['glow'].reeffect()
-        lv1reset = True
-
-    l = lv1['deblur_filter']
-    pre_diff = l.diff
-    diff = l.make_diff(rgb, param)
-    if diff is not None:
-        rgb = diff
-    if pre_diff is not diff:
-        lv1['lut'].reeffect()
-        lv1['defocus'].reeffect()
-        lv1['lowpass_filter'].reeffect()
-        lv1['perlin_noise'].reeffect()
-        lv1['glow'].reeffect()
-        lv1reset = True
-
-    l = lv1['lut']
-    pre_diff = l.diff
-    diff = l.make_diff(rgb, param)
-    if diff is not None:
-        rgb = diff
-    if pre_diff is not diff:
-        lv1['defocus'].reeffect()
-        lv1['lowpass_filter'].reeffect()
-        lv1['perlin_noise'].reeffect()
-        lv1['glow'].reeffect()
-        lv1reset = True
-
-    l = lv1['defocus']
-    pre_diff = l.diff
-    diff = l.make_diff(rgb, param)
-    if diff is not None:
-        rgb = diff
-    if pre_diff is not diff:
-        lv1['lowpass_filter'].reeffect()
-        lv1['perlin_noise'].reeffect()
-        lv1['glow'].reeffect()
-        lv1reset = True
-
-    l = lv1['lowpass_filter']
-    pre_diff = l.diff
-    diff = l.make_diff(rgb, param)
-    if diff is not None:
-        rgb = diff
-    if pre_diff is not diff:
-        lv1['perlin_noise'].reeffect()
-        lv1['glow'].reeffect()
-        lv1reset = True
-
-    l = lv1['perlin_noise']
-    pre_diff = l.diff
-    diff = l.make_diff(rgb, param)
-    if diff is not None:
-        rgb = diff
-    if pre_diff is not diff:
-        lv1['glow'].reeffect()
-        lv1reset = True
-
-    l = lv1['glow']
-    pre_diff = l.diff
-    diff = l.make_diff(rgb, param)
-    if diff is not None:
-        rgb = diff
-    if pre_diff is not diff:
-        lv1reset = True
-    """
-
     if lv2reset == True:
         for l in effects[2].values():
             l.reeffect()

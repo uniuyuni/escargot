@@ -11,15 +11,12 @@ class ImageSet:
 
         self.src = None     # 元画像 BGR uint16
         self.tmb = None     # 縮小画像 float32
-        self.tmb_msk = None # 縮小画像用マスク float32
         self.img = None     # 加工元画像 float32
-        self.img_msk = None # 加工元画像用マスク float32
-        self.img_afn = None # アフィン変換後画像 float32
+        self.img_inpaint = None
         self.prv = None     # 加工画像 float32
-        self.prv_msk = None # 加工画像用マスク float32
         self.prv_crop_info = None
     
-    def load(self, file_path, param):        
+    def load(self, file_path, exif_data, param):        
         try:
             # RAWで読み込んでみる
             raw = rawpy.imread(file_path)
@@ -41,7 +38,14 @@ class ImageSet:
             #self.img = raw.tone_curve[self.src]
             #self.img = self.img.astype(np.float32)/65535.0
 
-            self.img = self.src.astype(np.float32)/65535.0
+            # クロップ
+            top, left = exif_data.get("RawImageCropTopLeft", "0 0").split()
+            top, left = int(top), int(left)
+            width, height = exif_data.get("RawImageCroppedSize", "0x0").split('x')
+            width, height = int(width), int(height)
+            self.img = self.src[top:top+height, left:left+width]
+
+            self.img = self.img.astype(np.float32)/65535.0
 
             wb = raw.camera_whitebalance
             wb = np.array([wb[0], wb[1], wb[2]])/1024.0
@@ -80,7 +84,7 @@ class ImageSet:
 
         self.tmb = cv2.resize(self.img, dsize=core.calc_resize_image((self.img.shape[0], self.img.shape[1]), 256))
 
-        self.prv = self.img
+        #self.crop_image(0, 0, self.img.shape[0], self.img.shape[1], False)
 
         return True
 
@@ -90,8 +94,11 @@ class ImageSet:
 
         return img2
     
-    def crop_image2(self, offset):
-        img2, self.prv_crop_info = core.crop_image2(self.img, self.prv_crop_info, offset)
+    def crop_image2(self, offset=(0, 0)):
+        img2, self.prv_crop_info = core.crop_image_info(self.img, self.prv_crop_info, offset)
         self.prv = img2
 
         return img2
+    
+    def get_scale(self):
+        return self.prv_crop_info[4]

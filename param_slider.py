@@ -1,8 +1,8 @@
 from kivymd.app import MDApp
-from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.boxlayout import BoxLayout as KVBoxLayout
 from kivy.properties import NumericProperty, StringProperty, BooleanProperty
 
-class ParamSlider(BoxLayout):
+class ParamSlider(KVBoxLayout):
     text = StringProperty()
     min = NumericProperty(-100)
     max = NumericProperty(100)

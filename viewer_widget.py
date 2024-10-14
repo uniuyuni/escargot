@@ -135,7 +135,7 @@ class ViewerWidget(MDBoxLayout):
         for i in range(0, len(file_path_list), chunk_size):
             chunk = file_path_list[i:i + chunk_size]
             
-            with exiftool.ExifToolHelper(common_args=['-b']) as et:
+            with exiftool.ExifToolHelper(common_args=['-b', '-s']) as et:
                 exif_data_list = et.get_metadata(chunk)
         
             # ここで exif_data_list を処理する

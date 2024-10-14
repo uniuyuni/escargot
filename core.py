@@ -8,7 +8,7 @@ from scipy.interpolate import splprep, splev
 import dehazing.dehaze
 import sigmoid
 import dehazing
-import dng_temperature
+import dng_sdk
 
 # 画像の読み込み
 def imgread(filename):
@@ -45,40 +45,20 @@ def apply_gamma(img, gamma):
 
     return apply_img
 
-def convert_RGB2Kelvin(rgb):
-
-    xyz = colour.RGB_to_XYZ(rgb, 'sRGB')
-
-    xy = colour.XYZ_to_xy(xyz)
-
-    CCT = colour.xy_to_CCT(xy, 'hernandez1999')
-    print(CCT)
-
-    return CCT, 0
-
-def convert_Kelvin2RGB(CCT, tint):
-    xy = colour.CCT_to_xy(CCT, 'hernandez1999')
-
-    xyz = colour.xy_to_XYZ(xy)
-
-    rgb = colour.XYZ_to_RGB(xyz, 'sRGB')
-
-    return rgb
-
 def convert_RGB2TempTint(rgb):
 
     xyz = colour.RGB_to_XYZ(rgb, 'sRGB')
 
     xy = colour.XYZ_to_xy(xyz)
 
-    dng = dng_temperature.DngTemperature()
+    dng = dng_sdk.dng_temperature.DngTemperature()
     dng.set_xy_coord(xy)
 
     return dng.fTemperature, dng.fTint, xyz[1]
 
 def convert_TempTint2RGB(temp, tint, Y):
 
-    dng = dng_temperature.DngTemperature()
+    dng = dng_sdk.dng_temperature.DngTemperature()
     dng.fTemperature = temp
     dng.fTint = tint
 
@@ -106,6 +86,23 @@ def calc_resize_image(original_size, max_length):
 
     return (new_width, new_height)
 
+def rotation(img, angle):
+    
+    # 変換後の画像高さを定義
+    height = img.shape[0]
+    # 変換後の画像幅を定義
+    width = img.shape[1]
+    # 回転の軸を指定:今回は中心
+    center = (int(width/2), int(height/2))
+    # scaleを指定
+    scale = 1
+    
+    trans = cv2.getRotationMatrix2D(center, angle,scale)
+    img_rotate_affine = cv2.warpAffine(img, trans, (width, height), flags=cv2.INTER_CUBIC)
+
+    return img_rotate_affine
+
+
 def lucy_richardson_gauss(srcf, iteration):
 
     # 出力用の画像を初期化
@@ -113,13 +110,13 @@ def lucy_richardson_gauss(srcf, iteration):
 
     for i in range(iteration):
         # ガウスぼかしを適用してぼけをシミュレーション
-        bdest = cv2.GaussianBlur(destf, ksize=(3, 3), sigmaX=0)
+        bdest = cv2.GaussianBlur(destf, ksize=(9, 9), sigmaX=0)
 
         # 元画像とぼけた画像の比を計算
         ratio = cv2.divide(srcf, bdest)
 
         # 誤差の分配のために再びガウスぼかしを適用
-        ratio_blur = cv2.GaussianBlur(ratio, ksize=(3, 3), sigmaX=0)
+        ratio_blur = cv2.GaussianBlur(ratio, ksize=(9, 9), sigmaX=0)
 
         # 元の出力画像に誤差を乗算
         destf = cv2.multiply(destf, ratio_blur)
@@ -533,7 +530,7 @@ def apply_mask(img1, img2, msk=None):
 
     return img
 
-def crop_image(image, texture_width, texture_height, click_x, click_y, is_zoomed):
+def crop_image(image, texture_width, texture_height, click_x, click_y, offset, is_zoomed):
     # 画像のサイズを取得
     image_height, image_width = image.shape[:2]
 
@@ -554,6 +551,12 @@ def crop_image(image, texture_width, texture_height, click_x, click_y, is_zoomed
     offset_x = (texture_width - new_width) // 2
     offset_y = (texture_height - new_height) // 2
 
+    # スケールを求める
+    if image_width >= image_height:
+        scale = texture_width/image_width
+    else:
+        scale = texture_height/image_height
+
     if not is_zoomed:
 
         # リサイズ
@@ -564,14 +567,9 @@ def crop_image(image, texture_width, texture_height, click_x, click_y, is_zoomed
 
         # リサイズした画像を中央に配置
         result[offset_y:offset_y+new_height, offset_x:offset_x+new_width] = resized_img
-        crop_info = [0, 0, 0, 0]
+        crop_info = [0, 0, image_width, image_height, scale]
 
     else:
-        # スケールを求める
-        if image_width >= image_height:
-            scale = texture_width/image_width
-        else:
-            scale = texture_height/image_height
 
         # クリック位置を元の画像の座標系に変換
         click_x = click_x - offset_x
@@ -588,15 +586,15 @@ def crop_image(image, texture_width, texture_height, click_x, click_y, is_zoomed
         crop_y = click_image_y - crop_height // 2
 
         # クロップ
-        result, crop_info = crop_image2(image, [crop_x, crop_y, crop_width, crop_height], (0, 0))
+        result, crop_info = crop_image_info(image, [crop_x, crop_y, crop_width, crop_height, 1.0], offset)
     
     return result, crop_info
 
-def crop_image2(image, crop_info, offset):
+def crop_image_info(image, crop_info, offset=(0, 0)):
     
     # 情報取得
     image_height, image_width = image.shape[:2]
-    crop_x, crop_y, crop_width, crop_height = crop_info
+    crop_x, crop_y, crop_width, crop_height, scale = crop_info
 
     # オフセット適用
     crop_x += int(offset[0])
@@ -609,15 +607,4 @@ def crop_image2(image, crop_info, offset):
     # 画像を切り抜く
     cropped_img = image[crop_y:crop_y+crop_height, crop_x:crop_x+crop_width]
 
-    return cropped_img, [crop_x, crop_y, crop_width, crop_height]
-
-def to_texture(pos, widget):
-    # ウィンドウ座標からローカルイメージ座標に変換
-    local_x, local_y = widget.to_widget(*widget.to_window(*pos))
-
-    # ローカル座標をテクスチャ座標に変換
-    tex_y = widget.height-local_y
-    tex_x = local_x - (widget.width - widget.texture_size[0])/2
-    tex_y = tex_y - (widget.height - widget.texture_size[1])/2
-
-    return (tex_x, tex_y)
+    return cropped_img, [crop_x, crop_y, crop_width, crop_height, scale]
