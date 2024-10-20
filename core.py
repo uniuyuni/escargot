@@ -9,24 +9,7 @@ import dehazing.dehaze
 import sigmoid
 import dehazing
 import dng_sdk
-
-# 画像の読み込み
-def imgread(filename):
-    # filename: ファイル名
-    img = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
-    img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
-    img = img.astype(np.float32)
-
-    return img
-
-
-# マスクイメージの読み込み
-def mskread(filename):
-    # ファイル名
-    msk = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
-    msk = msk.astype(np.float32)/255.0
-
-    return msk
+import dcp_dehaze
 
 # RGBからグレイスケールへの変換
 def cvtToGrayColor(rgb):
@@ -38,12 +21,8 @@ def cvtToGrayColor(rgb):
 
 # ガンマ補正
 def apply_gamma(img, gamma):
-    # img: 変換元画像 RGB
-    # gamma: ガンマ値
-    #apply_img = 65535.0*(img/65535.0)**gamma
-    apply_img = img**gamma
 
-    return apply_img
+    return img**gamma
 
 def convert_RGB2TempTint(rgb):
 
@@ -97,7 +76,7 @@ def rotation(img, angle):
     # scaleを指定
     scale = 1
     
-    trans = cv2.getRotationMatrix2D(center, angle,scale)
+    trans = cv2.getRotationMatrix2D(center, angle, scale)
     img_rotate_affine = cv2.warpAffine(img, trans, (width, height), flags=cv2.INTER_CUBIC)
 
     return img_rotate_affine
@@ -113,7 +92,7 @@ def lucy_richardson_gauss(srcf, iteration):
         bdest = cv2.GaussianBlur(destf, ksize=(9, 9), sigmaX=0)
 
         # 元画像とぼけた画像の比を計算
-        ratio = cv2.divide(srcf, bdest)
+        ratio = np.divide(srcf, bdest, where=(bdest!=0))
 
         # 誤差の分配のために再びガウスぼかしを適用
         ratio_blur = cv2.GaussianBlur(ratio, ksize=(9, 9), sigmaX=0)
@@ -131,28 +110,6 @@ def lowpass_filter(img, r):
 
 # ハイパスフィルタ
 def highpass_filter(img, r):
-    """
-    gry = cvtToGrayColor(img)
-    fft_img = np.fft.fft2(gry)
-    shift_fft_img = np.fft.fftshift(fft_img)
-
-    h,w = shift_fft_img.shape
-    cy = int(h/2)
-    cx = int(w/2)
-    filter = np.ones(shift_fft_img.shape, dtype=np.float32)
-    #cv2.circle(filter,(cx,cy),r,0.0,thickness=-1)
-    cv2.rectangle(filter, (cx-r, cy-r), (cx+r, cy+r), 0.5, thickness=-1, lineType=cv2.LINE_AA)
-    filter = cv2.GaussianBlur(filter, ksize=(31, 31), sigmaX=0.0)
-    shift_fft_img *= filter
-    
-    fds = np.fft.ifftshift(shift_fft_img)
-    ds = np.fft.ifft2(fds).astype(np.float32)
-    #ds = shift_fft_img.astype(np.float32)
-    dss = np.stack([ds, ds, ds], axis=2)
-
-    return dss
-    """
-
     hpf = img - cv2.GaussianBlur(img, ksize=(r, r), sigmaX=0.0)+0.5
 
     return hpf
@@ -171,7 +128,6 @@ def blend_overlay(base, over):
 
 # スクリーン合成
 def blend_screen(base, over):
-    #result = np.zeros(base.shape, dtype=np.float32)
     result = 1 - (1.0-base)*(1-over)
 
     return result
@@ -307,7 +263,7 @@ def apply_level_adjustment(image, black_level, midtone_level, white_level):
     
     # 画像全体にルックアップテーブルを適用
     adjusted_image = lut[np.clip(image*max_val, 0, max_val).astype(np.uint16)]
-    adjusted_image = adjusted_image.astype(np.float32)/max_val
+    adjusted_image = adjusted_image/max_val
 
     return adjusted_image
 
@@ -340,6 +296,7 @@ def adjust_saturation(s, sat, vib):
     return final_s
 
 def apply_dehaze(img, dehaze):
+    #img2, _ = dcp_dehaze.dehaze(img)
     img2 = dehazing.dehaze.dehaze(img)
     
     img2 = dehaze * img2 + (1.0 - dehaze) * img
@@ -370,19 +327,19 @@ def apply_spline(img, spline):
     x, y = spline
 
     # Generate the tone curve mapping
-    lut = np.interp(np.arange(65536), x*65535, y*65535).astype(np.float32)
+    lut = np.interp(np.arange(65536*2), x*65535, y*65535).astype(np.float32) #0.~2.
 
     # Apply the tone curve mapping to the image
     img2 = lut[(img*65535).astype(np.uint16)]
-    img2 = img2/65535.0
+    img2 = img2/65535
 
     return img2
 
 def __adjust_hls(hls_img, mask, adjust):
     hls = hls_img.copy()
     hls[mask, 0] = hls_img[mask, 0] + adjust[0]*1.8
-    hls[mask, 1] = np.clip(hls_img[mask, 1] * (2.0**adjust[1]), 0, 1.0)
-    hls[mask, 2] = np.clip(hls_img[mask, 2] * (2.0**adjust[2]), 0, 1.0)
+    hls[mask, 1] = hls_img[mask, 1] * (2.0**adjust[1])
+    hls[mask, 2] = hls_img[mask, 2] * (2.0**adjust[2])
     return hls
 
 def adjust_hls_red(hls_img, red_adjust):
@@ -465,7 +422,7 @@ def adjust_density(hls_img, intensity):
     hls[:, :, 0] = hls_img[:, :, 0]
     hls[:, :, 1] = adjust_shadow(hls_img[:, :, 1], intensity/2)
     hls[:, :, 1] = adjust_hilight(hls[:, :, 1], intensity/2)
-    hls[:, :, 2] = np.clip(hls_img[:, :, 2] * (1.0 - intensity / 100.0), 0.0, 1.0)
+    hls[:, :, 2] = hls_img[:, :, 2] * (1.0 - intensity / 100.0)
 
     return hls
 
@@ -482,43 +439,7 @@ def adjust_clear_color(rgb_img, intensity):
         rgb = np.clip(rgb, 0.0, 1.0)
 
     return rgb
-
-def adjust_histogram(img, center, direction, intensity):
-    """
-    Adjust the histogram of a float64 image with 65536 levels.
-    
-    Parameters:
-    img (numpy.ndarray): Input image as a float64 numpy array with values in the range [0, 65535].
-    center (float): Desired histogram center (0-65535).
-    direction (int): Shift direction (-1 for left, 1 for right).
-    intensity (float): Shift intensity.
-    
-    Returns:
-    numpy.ndarray: Adjusted image.
-    """
-    # Normalize the input image to the range [0, 1]
-    img_normalized = img / 65535.0
-    
-    # Compute the histogram
-    hist, bin_edges = np.histogram(img_normalized, bins=65536, range=(0, 1))
-    
-    # Compute the cumulative distribution function (CDF)
-    cdf = hist.cumsum()
-    cdf_normalized = cdf / cdf.max()
-    
-    # Create a lookup table (LUT) based on the CDF and desired center shift
-    lut = np.arange(65536, dtype=np.float32)
-    adjustment = direction * intensity * (center / 65535.0 - lut / 65535.0)
-    lut = np.clip(lut + adjustment * 65535, 0, 65535)
-
-    # Apply the LUT to the normalized image
-    adjusted_img_normalized = lut[(img_normalized * 65535).astype(np.uint16)] / 65535.0
-    
-    # Rescale the image back to the original range [0, 65535]
-    adjusted_img = (adjusted_img_normalized * 65535).astype(np.float32)
-    
-    return adjusted_img
-            
+           
 # マスクイメージの適用
 def apply_mask(img1, img2, msk=None):
     # img1: 元イメージ RGB

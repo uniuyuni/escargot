@@ -26,9 +26,7 @@ class HistogramWidget(KVImage):
         r_hist, g_hist, b_hist = [cv2.calcHist([pixels], [i], None, [256], [0, 1.0]) for i in range(3)]
         
         # 輝度の計算
-        #luminance = core.cvtToGrayColor(pixels)
-        luminance = cv2.cvtColor(pixels, cv2.COLOR_RGB2GRAY)
-        #luminance = 0.2989 * pixels[:, 0] + 0.587 * pixels[:, 1] + 0.114 * pixels[:, 2]
+        luminance = core.cvtToGrayColor(pixels)
         #l_hist, _ = np.histogram(luminance, bins=256, range=(0, 1.0))
         l_hist = cv2.calcHist([luminance], [0], None, [256], [0, 1.0])
 
@@ -57,7 +55,7 @@ class HistogramWidget(KVImage):
 class Histogram_WidgetApp(KVApp):
     def build(self):
         histogram = HistogramWidget()
-        histogram.load_image("/Users/uniuyuni/PythonProjects/escargot/picture/DSCF0025.JPG")
+        histogram.load_image("/Users/uniuyuni/PythonProjects/escargot/picture/DSCF0007.JPG")
         return histogram
 
 if __name__ == '__main__':

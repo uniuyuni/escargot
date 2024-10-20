@@ -1,0 +1,30 @@
+
+<MetaKey@MDLabel>:
+    size: 200, 0
+    size_hint_x: None
+    halign: 'right'
+    font_size: '9pt'
+    color: 'b0b0b0'
+
+<MetaValue@MDLabel>:
+    size: 300, 0
+    size_hint_x: None
+    halign: 'left'
+    font_size: '9pt'
+    color: 'e0e0e0'
+
+<MetaInfo>:
+    orientation: 'horizontal'
+    size: 500, 40
+    size_hint: None, None
+
+    MetaKey:
+        id: key
+        text: root.key
+    
+    VSpacer:
+        width: dp(10)
+
+    MetaValue:
+        id: value
+        text: root.value

@@ -328,7 +328,7 @@ class DensityEffect(Effect):
             hls2 = core.adjust_density(hls, den)
             self.diff = np.zeros_like(hls)
             self.diff[:,:,1] = hls2[:,:,1]-hls[:,:,1]
-            self.diff[:,:,2] = np.divide(hls2[:,:,2], hls[:,:,2], out=self.diff[:,:,2], where=hls[:,:,2]!=0.0)
+            self.diff[:,:,2] = np.divide(hls2[:,:,2], hls[:,:,2], where=hls[:,:,2]!=0.0)
             self.hash = param_hash
 
         return self.diff
@@ -591,7 +591,7 @@ class SaturationEffect(Effect):
 
         elif self.hash != param_hash:
             hls2_s = core.adjust_saturation(hls_s, sat, vib)
-            self.diff = np.divide(hls2_s, hls_s, out=np.zeros_like(hls_s), where=hls_s!=0.0)    # Sのみ保存
+            self.diff = np.divide(hls2_s, hls_s, where=hls_s!=0.0)    # Sのみ保存
             self.hash = param_hash
         
         return self.diff

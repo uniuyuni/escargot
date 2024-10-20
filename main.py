@@ -68,7 +68,7 @@ class MainWidget(MDWidget):
 
             img = effects.pipeline_lv1(img, self.effects, self.current_param)
             img = effects.pipeline_lv2(img, self.effects, self.current_param)
-            #self.draw_histogram(img)
+            self.draw_histogram(img)
             img = core.apply_gamma(img, 1.0/2.222)
             self.blit_image(img)
 
@@ -100,7 +100,7 @@ class MainWidget(MDWidget):
     def on_select(self, file_path, exif_data):
         self.reset_param(self.current_param)
         self.load_image(file_path, exif_data)
-        self.imgset.img = core.modify_lens(self.imgset.img, exif_data)
+        #self.imgset.img = core.modify_lens(self.imgset.img, exif_data)
         self.set2widget_all(self.effects, self.current_param)
         self.set_exif_data(exif_data)
 
