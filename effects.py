@@ -9,7 +9,7 @@ import DRBNet
 import colorcorrect.algorithm as cca
 import perlin
 import lama
-import deepfillv2
+import dehazing.dehaze
 
 import core
 import cubelut
@@ -598,6 +598,11 @@ class SaturationEffect(Effect):
 
 class DehazeEffect(Effect):
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        self.dehaze = None
+
     def set2widget(self, widget, param):
         widget.ids["slider_dehaze"].set_slider_value(param.get('dehaze', 0))
 
@@ -613,8 +618,10 @@ class DehazeEffect(Effect):
         else:
             param_hash = hash((de))
             if self.hash != param_hash:
-                rgb2 = core.apply_dehaze(rgb, de)
-                self.diff = rgb2-rgb     # RGBのみ保存
+                if self.diff is None:
+                    self.dehaze = dehazing.dehaze.dehaze(rgb)
+                rgb2 = de * self.dehaze + (1.0 - de) * rgb
+                self.diff = rgb2-rgb
                 self.hash = param_hash
 
         return self.diff
@@ -1379,8 +1386,8 @@ def pipeline_lv2(img, effects, param):
     hls[:, :, 2] = hls2_s
 
     # 合成
-    hls[:,:,1] = np.clip(hls[:,:,1], 0, 1.0)
-    hls[:,:,2] = np.clip(hls[:,:,2], 0, 1.0)
+    #hls[:,:,1] = np.clip(hls[:,:,1], 0, 1.0)
+    #hls[:,:,2] = np.clip(hls[:,:,2], 0, 1.0)
     rgb = cv2.cvtColor(hls, cv2.COLOR_HLS2RGB_FULL)
 
     # RGB

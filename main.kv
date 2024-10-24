@@ -81,15 +81,25 @@ MainWidget:
                             id: exif_software
                             key: "Software"
                             
-            RelativeLayout:
+            FloatLayout:
                 id: preview_widget
                 size_hint_x: 7
                 Image:
-                    pos: [0, 0]
+                    pos_hint: {'x':0, 'top': 1}
                     id: preview
                     on_touch_down: root.on_image_touch_down(args[1])
                     on_touch_move: root.on_image_touch_move(args[1])
                     on_touch_up: root.on_image_touch_up(args[1])
+
+                MaskEditor2:
+                    pos_hint: {'x':0, 'top': 1}
+                    id: mask_editor2
+                    canvas:
+                        Color:
+                            rgba: 0, 0, 0, 0
+                        Rectangle:
+                            size: self.size
+                            pos: self.pos
 
             TabbedPanel:
                 id: effects
@@ -1162,7 +1172,7 @@ MainWidget:
                             ParamSlider:
                                 id: slider_rotation
                                 text: "Angle"
-                                min: -450.0
+                                min: -45.0
                                 max: 45.0
                                 value: 0
                                 step: 0.1

@@ -5,11 +5,8 @@ import lensfunpy
 from scipy.interpolate import PchipInterpolator
 from scipy.interpolate import splprep, splev
 
-import dehazing.dehaze
 import sigmoid
-import dehazing
 import dng_sdk
-import dcp_dehaze
 
 # RGBからグレイスケールへの変換
 def cvtToGrayColor(rgb):
@@ -295,13 +292,6 @@ def adjust_saturation(s, sat, vib):
 
     return final_s
 
-def apply_dehaze(img, dehaze):
-    #img2, _ = dcp_dehaze.dehaze(img)
-    img2 = dehazing.dehaze.dehaze(img)
-    
-    img2 = dehaze * img2 + (1.0 - dehaze) * img
-    return img2
-
 # スプラインカーブの適用
 def apply_point_list(img, point_list):
     # ソートとリスト内包表記をtogetherly処理
@@ -441,13 +431,10 @@ def adjust_clear_color(rgb_img, intensity):
     return rgb
            
 # マスクイメージの適用
-def apply_mask(img1, img2, msk=None):
-    # img1: 元イメージ RGB
-    # img2: 変更後イメージ RGB
-    # msk: マスク
+def apply_mask(img1, msk, img2):
 
     if msk is not None:
-        img = msk[:, :, np.newaxis] * img2 + (1.0 - msk[:, :, np.newaxis]) * img1
+        img = msk[:, :, np.newaxis] * img1 + (1.0 - msk[:, :, np.newaxis]) * img2
 
     return img
 

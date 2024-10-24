@@ -9,12 +9,10 @@ class ImageSet:
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self.src = None     # 元画像 BGR uint16
-        self.tmb = None     # 縮小画像 float32
+        self.src = None     # 元画像 uint16
         self.img = None     # 加工元画像 float32
-        self.img_inpaint = None
+        self.tmb = None     # 縮小画像 float32
         self.prv = None     # 加工画像 float32
-        self.prv_crop_info = None
     
     def load(self, file_path, exif_data, param):        
         try:
@@ -26,7 +24,7 @@ class ImageSet:
             self.src = raw.postprocess( output_color=rawpy.ColorSpace.sRGB,
                                         demosaic_algorithm=rawpy.DemosaicAlgorithm.LINEAR,
                                         output_bps=16,
-                                        no_auto_scale = False,
+                                        no_auto_scale=False,
                                         use_camera_wb=False,
                                         user_wb = [1.0, 1.0, 1.0, 0.0],
                                         gamma=(1.0, 0.0),
@@ -45,8 +43,10 @@ class ImageSet:
             width, height = int(width), int(height)
             self.img = self.src[top:top+height, left:left+width]
 
+            # float32へ
             self.img = self.img.astype(np.float32)/65535.0
 
+            # ホワイトバランス定義
             wb = raw.camera_whitebalance
             wb = np.array([wb[0], wb[1], wb[2]])/1024.0
             wb[1] = np.sqrt(wb[1])
@@ -60,12 +60,10 @@ class ImageSet:
             param['color_tint_reset'] = float(-tint)
             param['color_Y'] = float(Y)
 
-            #self.img /= np.min(wb)
-
-            #self.img = maxim_util.predict(self.img)
-    
-            #processor = dcp.DCPProcessor(os.getcwd() + "/escargot/Fujifilm X-T5 Adobe Standard.dcp")
-            #self.img = processor.process_raw(self.img)
+            # 明るさ補正
+            #bv = exif_data.get("BrightnessValue", "0")
+            #self.img = self.img * core.adjust_exposure(self.img, -bv)
+            self.img = self.img / (1-(raw.white_level/65535))
 
         except (rawpy.LibRawFileUnsupportedError, rawpy.LibRawIOError):
             # RGB画像で読み込んでみる
@@ -87,18 +85,3 @@ class ImageSet:
         #self.crop_image(0, 0, self.img.shape[0], self.img.shape[1], False)
 
         return True
-
-    def crop_image(self, x, y, w, h, is_zoomed):
-        img2, self.prv_crop_info = core.crop_image(self.img, w, h, x, y, is_zoomed)
-        self.prv = img2
-
-        return img2
-    
-    def crop_image2(self, offset=(0, 0)):
-        img2, self.prv_crop_info = core.crop_image_info(self.img, self.prv_crop_info, offset)
-        self.prv = img2
-
-        return img2
-    
-    def get_scale(self):
-        return self.prv_crop_info[4]
