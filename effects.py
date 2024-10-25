@@ -1,15 +1,17 @@
 
 import cv2
 import numpy as np
-import colorsys
-import skimage
+import importlib
 
-import noise2void
-import DRBNet
-import colorcorrect.algorithm as cca
-import perlin
-import lama
-import dehazing.dehaze
+#import colorsys
+#import skimage
+
+#import noise2void
+#import DRBNet
+#import colorcorrect.algorithm as cca
+#import perlin
+#import lama
+#import dehazing.dehaze
 
 import core
 import cubelut
@@ -65,12 +67,11 @@ class RotationEffect(Effect):
 
 class AINoiseReductonEffect(Effect):
     __net = None
+    __noise2void = None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        if AINoiseReductonEffect.__net is None:
-            AINoiseReductonEffect.__net = noise2void.setup_predict()
 
     def set2widget(self, widget, param):
         widget.ids["switch_ai_noise_reduction"].active = False if param.get('ai_noise_reduction', 0) == 0 else True
@@ -86,12 +87,18 @@ class AINoiseReductonEffect(Effect):
         else:
             param_hash = hash((nr))
             if self.hash != param_hash:
-                self.diff = noise2void.predict(img, AINoiseReductonEffect.__net, 'mps')
+                if AINoiseReductonEffect.__noise2void is None:
+                    AINoiseReductonEffect.__noise2void = importlib.import_module('noise2void')
+                if AINoiseReductonEffect.__net is None:
+                    AINoiseReductonEffect.__net = AINoiseReductonEffect.__noise2void.setup_predict()
+
+                self.diff = AINoiseReductonEffect.__noise2void.predict(img, AINoiseReductonEffect.__net, 'mps')
                 self.hash = param_hash
         
         return self.diff
 
 class NLMNoiseReductionEffect(Effect):
+    __skimage = None
 
     def set2widget(self, widget, param):
         widget.ids["slider_nlm_noise_reduction"].set_slider_value(param.get('nlm_noise_reduction', 0))
@@ -107,8 +114,11 @@ class NLMNoiseReductionEffect(Effect):
         else:
             param_hash = hash((nlm))
             if self.hash != param_hash:
-                sigma_est = np.mean(skimage.restoration.estimate_sigma(img, channel_axis=2))
-                self.diff = skimage.restoration.denoise_nl_means(img, h=nlm/100.0*sigma_est, sigma=sigma_est, fast_mode=True, channel_axis=2)
+                if NLMNoiseReductionEffect.__skimage is None:
+                    NLMNoiseReductionEffect.__skimage = importlib.import_module('skimage')
+
+                sigma_est = np.mean(NLMNoiseReductionEffect.__skimage.restoration.estimate_sigma(img, channel_axis=2))
+                self.diff = NLMNoiseReductionEffect.__skimage.restoration.denoise_nl_means(img, h=nlm/100.0*sigma_est, sigma=sigma_est, fast_mode=True, channel_axis=2)
                 self.hash = param_hash
 
         return self.diff
@@ -197,14 +207,11 @@ class InpaintDiff:
         self.image = kwargs.get('image', None)
 
 class InpaintEffect(Effect):
-
+    __lama = None
     __net = None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-        if InpaintEffect.__net is None:
-            InpaintEffect.__net = lama.setup_predict()
         
         self.crop_info_list = []
         self.mask_editor = None
@@ -242,8 +249,14 @@ class InpaintEffect(Effect):
         ip = param.get('inpaint', 0)
         ipp = param.get('inpaint_predict', 0)
         if (ip > 0 and ipp > 0) is True:
+            if InpaintEffect.__lama is None:
+                InpaintEffect.__lama = importlib.import_module('lama')
+
+            if InpaintEffect.__net is None:
+                InpaintEffect.__net = InpaintEffect.__lama.setup_predict()
+
             cx, cy, cw, ch, sc = self.crop_editor.get_crop_info()
-            img2 = lama.predict(img[cy:cy+ch, cx:cx+cw], self.mask_editor.get_mask()[cy:cy+ch, cx:cx+cw], InpaintEffect.__net)
+            img2 = InpaintEffect.__lama.predict(img[cy:cy+ch, cx:cx+cw], self.mask_editor.get_mask()[cy:cy+ch, cx:cx+cw], InpaintEffect.__net)
             self.crop_info_list.append(InpaintDiff(crop_info=(cx, cy, cw, ch), image=img2))
             self.diff = self.crop_info_list
             self.mask_editor.clear_mask()
@@ -261,12 +274,10 @@ class InpaintEffect(Effect):
 
 class DefocusEffect(Effect):
     __net = None
+    __DRBNet = None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-        if DefocusEffect.__net is None:
-            DefocusEffect.__net = DRBNet.setup_predict()
 
     def set2widget(self, widget, param):
         widget.ids["switch_defocus"].active = False if param.get('defocus', 0) == 0 else True
@@ -282,12 +293,19 @@ class DefocusEffect(Effect):
         else:
             param_hash = hash((df))
             if self.hash != param_hash:
-                self.diff = DRBNet.predict(img, DefocusEffect.__net, 'mps')
+                if DefocusEffect.__DRBNet is None:
+                    DefocusEffect.__DRBNet = importlib.import_module('DRBNet')
+
+                if DefocusEffect.__net is None:
+                    DefocusEffect.__net = DefocusEffect.__DRBNet.setup_predict()
+
+                self.diff = DefocusEffect.__DRBNet.predict(img, DefocusEffect.__net, 'mps')
                 self.hash = param_hash
 
         return self.diff
 
 class ColorCorrectEffect(Effect):
+    __cca = None
 
     def set2widget(self, widget, param):
         widget.ids["switch_color_correct"].active = False if param.get('defcolor_correctocus', 0) == 0 else True
@@ -304,7 +322,10 @@ class ColorCorrectEffect(Effect):
         else:
             param_hash = hash((cc))
             if self.hash != param_hash:
-                self.diff = cca.automatic_color_equalization(rgb)-rgb
+                if ColorCorrectEffect.__cca is None:
+                    ColorCorrectEffect.__cca = importlib.import_module('colorcorrect.algorithm')
+
+                self.diff = ColorCorrectEffect.__cca.automatic_color_equalization(rgb)-rgb
                 self.hash = param_hash
 
         return self.diff
@@ -413,6 +434,7 @@ class LowpassFilterEffect(Effect):
         return self.diff
 
 class PerlinNoiseEffect(Effect):
+    __perlin = None
 
     def set2widget(self, widget, param):
         widget.ids["slider_perlin_noise"].set_slider_value(param.get('perlin_noise', 0))
@@ -432,7 +454,10 @@ class PerlinNoiseEffect(Effect):
         else:
             param_hash = hash((pn, pno))
             if self.hash != param_hash:
-                img2 = perlin.make_perlin_noise(img.shape[1], img.shape[0], pn)
+                if PerlinNoiseEffect.__perlin is None:
+                    PerlinNoiseEffect.__perlin = importlib.import_module('perlin')
+
+                img2 = PerlinNoiseEffect.__perlin.make_perlin_noise(img.shape[1], img.shape[0], pn)
                 img2 = ((img2*(pno/100.0))+1.0)/2.0
                 img2 = np.stack( [img2, img2, img2], axis=2)
                 img2 = core.blend_overlay(img, img2)
@@ -597,6 +622,7 @@ class SaturationEffect(Effect):
         return self.diff
 
 class DehazeEffect(Effect):
+    __dehaze = None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -619,7 +645,10 @@ class DehazeEffect(Effect):
             param_hash = hash((de))
             if self.hash != param_hash:
                 if self.diff is None:
-                    self.dehaze = dehazing.dehaze.dehaze(rgb)
+                    if DehazeEffect.__dehaze is None:
+                        DehazeEffect.__dehaze = importlib.import_module('dehazing.dehaze')
+
+                    self.dehaze = DehazeEffect.__dehaze.dehaze(rgb)
                 rgb2 = de * self.dehaze + (1.0 - de) * rgb
                 self.diff = rgb2-rgb
                 self.hash = param_hash
@@ -911,6 +940,7 @@ class SatvsLumEffect(Effect):
         return self.diff
 
 class GradingEffect(Effect):
+    __colorsys = None
 
     def set2widget(self, widget, param):
         widget.ids["grading"].set_point_list(param.get('grading', None))
@@ -935,8 +965,11 @@ class GradingEffect(Effect):
         else:
             param_hash = hash((np.sum(pl), gh, gl, gs))
             if self.hash != param_hash:
+                if GradingEffect.__colorsys is None:
+                    GradingEffect.__colorsys = importlib.import_module('colorsys')
+
                 blend = core.apply_point_list(hls[:,:,1], pl)
-                rgb = np.array(colorsys.hls_to_rgb(gh/360.0, gl/100.0, gs/100.0), dtype=np.float32)
+                rgb = np.array(GradingEffect.__colorsys.hls_to_rgb(gh/360.0, gl/100.0, gs/100.0), dtype=np.float32)
                 blend_inv = 1-blend
                 self.diff = (hls*blend_inv[:, :, np.newaxis] + rgb*blend[:, :, np.newaxis]) - hls
                 self.hash = param_hash

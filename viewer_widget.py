@@ -19,8 +19,8 @@ from kivy.graphics.texture import Texture
 from kivy.properties import Property, StringProperty, NumericProperty, DictProperty, ObjectProperty, BooleanProperty
 from kivy.clock import mainthread
 
-import AppKit
-from Cocoa import NSDragOperationCopy
+#import AppKit
+#from Cocoa import NSDragOperationCopy
 
 import core
 from spacer import HSpacer, VSpacer
@@ -81,11 +81,12 @@ class ThumbnailCard(MDCard):
             self.start_dragging()
 
     def start_dragging(self):
+        """
         # macOSのNSPasteboardを使って、ドラッグ&ドロップ用の情報をペーストボードに配置
         pasteboard = AppKit.NSPasteboard.generalPasteboard()
         pasteboard.declareTypes_owner_([AppKit.NSFilenamesPboardType], None)
         pasteboard.setPropertyList_forType_([self.file_path], AppKit.NSFilenamesPboardType)
-
+        """
         # ドラッグ操作を開始
         print(f"Dragging: {self.file_path}")
 

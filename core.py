@@ -15,12 +15,18 @@ import dng_sdk
 
 # RGBからグレイスケールへの変換
 @jit
-def cvtToGrayColor(rgb):
+def __cvtToGrayColor(rgb):
     # 変換元画像 RGB
     #gry = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
     gry = jnp.dot(rgb, jnp.array([0.2989, 0.5870, 0.1140]))
 
     return gry
+
+def cvtToGrayColor(rgb):
+    array = __cvtToGrayColor(rgb)
+    array.block_until_ready()
+
+    return np.array(array)
 
 # ガンマ補正
 def apply_gamma(img, gamma):
@@ -122,11 +128,14 @@ def __gaussian_blur(src, ksize=(3, 3), sigma=0.0):
     return dest
 
 def gaussian_blur(src, ksize=(3, 3), sigma=0.0):
-    return __gaussian_blur(src, ksize, sigma).block_until_ready()
+    array = __gaussian_blur(src, ksize, sigma)
+    array.block_until_ready()
+
+    return np.array(array)
 
 
 @partial(jit, static_argnums=1)
-def lucy_richardson_gauss(srcf, iteration):
+def __lucy_richardson_gauss(srcf, iteration):
 
     # 出力用の画像を初期化
     destf = srcf.copy()
@@ -147,17 +156,23 @@ def lucy_richardson_gauss(srcf, iteration):
     
     return destf
 
+def lucy_richardson_gauss(srcf, iteration):
+    array = __lucy_richardson_gauss(srcf, iteration)
+    array.block_until_ready()
+
+    return np.array(array)
+
 # ローパスフィルタ
 def lowpass_filter(img, r):
     lpf = gaussian_blur(img, ksize=(r, r), sigma=0.0)
 
-    return lpf
+    return np.array(lpf)
 
 # ハイパスフィルタ
 def highpass_filter(img, r):
     hpf = img - gaussian_blur(img, ksize=(r, r), sigma=0.0)+0.5
 
-    return hpf
+    return np.array(hpf)
 
 # オーバーレイ合成
 def blend_overlay(base, over):
@@ -342,7 +357,10 @@ def __adjust_saturation(s, sat, vib):
     return final_s
 
 def adjust_saturation(s, sat, vib):
-    return __adjust_saturation(s, sat, vib).block_until_ready()
+    array = __adjust_saturation(s, sat, vib)
+    array.block_until_ready()
+
+    return np.array(array)
 
 
 # スプラインカーブの適用
@@ -476,14 +494,21 @@ def adjust_clear_color(rgb_img, intensity):
     if intensity >= 0:
         rgb = jnp.clip(rgb_img * (1 + intensity / 100.0), 0.0, 1.0)
     else:
-        gray = cvtToGrayColor(rgb_img)
+        gray = __cvtToGrayColor(rgb_img)
         factor = -intensity / 200.0
         rgb = rgb_img * (1 - factor) + gray[..., jnp.newaxis] * factor
         rgb = rgb * (1 - factor * 0.3)
         rgb = jnp.clip(rgb, 0.0, 1.0)
 
     return rgb
-           
+
+def adjust_clear_color(rgb_img, intensity):
+    array = adjust_clear_color(rgb_img, intensity)
+    array.block_until_ready()
+
+    return np.array(array)
+
+
 # マスクイメージの適用
 @jit
 def __apply_mask(img1, msk, img2):
@@ -494,7 +519,11 @@ def __apply_mask(img1, msk, img2):
     return img
 
 def apply_mask(img1, msk, img2):
-    return __apply_mask(img1, msk, img2).block_until_ready()
+    array = __apply_mask(img1, msk, img2)
+    array.block_until_ready()
+
+    return np.array(array)
+
 
 #@partial(jit, static_argnums=(1,2,3,4,5,6))
 def crop_image(image, texture_width, texture_height, click_x, click_y, offset, is_zoomed):
