@@ -1343,17 +1343,13 @@ class MaskEditor2(FloatLayout):
         cx, cy = cx + self.margin2[0], cy + self.margin2[1]
         cx, cy = cx / self.crop_info[4], cy / self.crop_info[4]
         cx, cy = cx + self.crop_info[0], (self.texture_size[1] / self.crop_info[4] - cy) + self.crop_info[1]
-        #cx, cy = cx - self.image_size[0]/2, cy - self.image_size[1]/2
-        max_image_size = max(self.image_size[0]/2, self.image_size[1]/2)
-        cx, cy = cx - max_image_size, cy - max_image_size
+        cx, cy = cx - self.image_size[0]/2, cy - self.image_size[1]/2
         cx, cy = self.center_rotate_invert(cx, cy, self.center_rotate_rad)
         return (cx, cy)
 
     def tcg_to_world(self, cx, cy):
         cx, cy = self.center_rotate(cx, cy, self.center_rotate_rad)
-        #cx, cy = cx + self.image_size[0]/2, cy + self.image_size[1]/2
-        max_image_size = max(self.image_size[0]/2, self.image_size[1]/2)
-        cx, cy = cx + max_image_size, cy + max_image_size
+        cx, cy = cx + self.image_size[0]/2, cy + self.image_size[1]/2
         cx, cy = cx - self.crop_info[0], (self.texture_size[1] / self.crop_info[4] + self.crop_info[1]) - cy
         cx, cy = cx * self.crop_info[4], cy * self.crop_info[4]        
         cx, cy = cx + self.margin[0], cy + self.margin[1]
@@ -1364,9 +1360,7 @@ class MaskEditor2(FloatLayout):
 
     def tcg_to_texture(self, cx, cy):
         cx, cy = self.center_rotate(cx, cy, self.center_rotate_rad)
-        #cx, cy = cx + self.image_size[0]/2, cy + self.image_size[1]/2
-        max_image_size = max(self.image_size[0]/2, self.image_size[1]/2)
-        cx, cy = cx + max_image_size, cy + max_image_size
+        cx, cy = cx + self.image_size[0]/2, cy + self.image_size[1]/2
         cx, cy = cx - self.crop_info[0], (self.texture_size[1] / self.crop_info[4] + self.crop_info[1]) - cy
         cx, cy = cx * self.crop_info[4], cy * self.crop_info[4]        
         #cx, cy = cx + self.margin[0], cy + self.margin[1]

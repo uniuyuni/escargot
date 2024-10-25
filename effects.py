@@ -407,7 +407,7 @@ class LowpassFilterEffect(Effect):
                 else:
                     lowpass = core.lowpass_filter(img, lpfr-1)
                     highpass = core.highpass_filter(img, hpfr-1)
-                    self.diff = core.blend_overlay(lowpass, highpass)
+                    self.diff = core.blend_overlay(np.array(lowpass), np.array(highpass))
                 self.hash = param_hash
 
         return self.diff
@@ -1310,11 +1310,8 @@ def pipeline_lv1(img, effects, param):
 def pipeline_lv2(img, effects, param):
     lv2 = effects[2]
 
-    rgb = img.copy()
-
-
     # 以降HLS
-    hls = cv2.cvtColor(rgb, cv2.COLOR_RGB2HLS_FULL)
+    hls = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2HLS_FULL)
 
     # Lのみ
     hls_l = hls[:, :, 1]

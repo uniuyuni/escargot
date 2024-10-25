@@ -1,5 +1,10 @@
 import cv2
 import numpy as np
+import jax
+import jax.numpy as jnp
+import jax.scipy as jscipy
+from jax import jit
+from functools import partial
 import colour
 import lensfunpy
 from scipy.interpolate import PchipInterpolator
@@ -9,10 +14,11 @@ import sigmoid
 import dng_sdk
 
 # RGBからグレイスケールへの変換
+@jit
 def cvtToGrayColor(rgb):
     # 変換元画像 RGB
-    gry = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-    # gry = np.dot(rgb[...,:3], [0.2989, 0.5870, 0.1140]).astype(np.float32)
+    #gry = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    gry = jnp.dot(rgb, jnp.array([0.2989, 0.5870, 0.1140]))
 
     return gry
 
@@ -78,7 +84,48 @@ def rotation(img, angle):
 
     return img_rotate_affine
 
+@partial(jit, static_argnums=(0, 1, 2))
+def __create_gaussian_kernel(width: int, height: int, sigma: float):
+    # kernelの中心と1個横のセルの値の比
+    if sigma == 0.0:
+        sigma = 0.3*(max(width, height)/2 - 1) + 0.8
 
+    r = jnp.exp(-1 / (2 * sigma**2))
+
+    # kernelの中心index
+    mw = width // 2
+    mh = height // 2
+
+    # kernelの中心を原点とした座標が入った配列
+    xs = jnp.arange(-mw, mw + 1)
+    ys = jnp.arange(-mh, mh + 1)
+    x, y = jnp.meshgrid(xs, ys)
+
+    # rを絶対値の2乗分累乗すると、ベースとなる配列が求まる
+    g = r**(x**2 + y**2)
+
+    # 正規化
+    return g / np.sum(g)
+
+@partial(jit, static_argnums=(1, 2))
+def __gaussian_blur(src, ksize=(3, 3), sigma=0.0):
+    kw, kh = ksize
+    kernel = __create_gaussian_kernel(kw, kh, sigma)
+    print(kernel)
+
+    dest = []
+    for i in range(src.shape[2]):
+        dest.append(jscipy.signal.convolve2d(src[:, :, i], kernel, mode='same'))
+
+    dest = jnp.stack(dest, -1)
+
+    return dest
+
+def gaussian_blur(src, ksize=(3, 3), sigma=0.0):
+    return __gaussian_blur(src, ksize, sigma).block_until_ready()
+
+
+@partial(jit, static_argnums=1)
 def lucy_richardson_gauss(srcf, iteration):
 
     # 出力用の画像を初期化
@@ -86,28 +133,29 @@ def lucy_richardson_gauss(srcf, iteration):
 
     for i in range(iteration):
         # ガウスぼかしを適用してぼけをシミュレーション
-        bdest = cv2.GaussianBlur(destf, ksize=(9, 9), sigmaX=0)
+        bdest = __gaussian_blur(destf, ksize=(9, 9), sigma=0)
 
         # 元画像とぼけた画像の比を計算
-        ratio = np.divide(srcf, bdest, where=(bdest!=0))
+        bdest = bdest + jnp.finfo(jnp.float32).eps
+        ratio = jnp.divide(srcf, bdest)
 
         # 誤差の分配のために再びガウスぼかしを適用
-        ratio_blur = cv2.GaussianBlur(ratio, ksize=(9, 9), sigmaX=0)
+        ratio_blur = __gaussian_blur(ratio, ksize=(9, 9), sigma=0)
 
         # 元の出力画像に誤差を乗算
-        destf = cv2.multiply(destf, ratio_blur)
+        destf = jnp.multiply(destf, ratio_blur)
     
     return destf
 
 # ローパスフィルタ
 def lowpass_filter(img, r):
-    lpf = cv2.GaussianBlur(img, ksize=(r, r), sigmaX=0.0)
+    lpf = gaussian_blur(img, ksize=(r, r), sigma=0.0)
 
     return lpf
 
 # ハイパスフィルタ
 def highpass_filter(img, r):
-    hpf = img - cv2.GaussianBlur(img, ksize=(r, r), sigmaX=0.0)+0.5
+    hpf = img - gaussian_blur(img, ksize=(r, r), sigma=0.0)+0.5
 
     return hpf
 
@@ -117,9 +165,9 @@ def blend_overlay(base, over):
     darker = base < 0.5
     base_inv = 1.0-base
     over_inv = 1.0-over
-    result[darker] = base[darker]*over[darker] *2
+    result[darker] = base[darker] * over[darker] * 2
     #result[~darker] = (base[~darker]+over[~darker] - base[~darker]*over[~darker])*2-1
-    result[~darker] = 1 - base_inv[~darker]*over_inv[~darker] *2
+    result[~darker] = 1 - base_inv[~darker] * over_inv[~darker] * 2
     
     return result
 
@@ -265,7 +313,8 @@ def apply_level_adjustment(image, black_level, midtone_level, white_level):
     return adjusted_image
 
 # 彩度補正と自然な彩度補正
-def adjust_saturation(s, sat, vib):
+@partial(jit, static_argnums=(1, 2))
+def __adjust_saturation(s, sat, vib):
 
     # 彩度変更値と自然な彩度変更値を計算
     if sat >= 0:
@@ -281,16 +330,20 @@ def adjust_saturation(s, sat, vib):
     elif vib > 0.0:
         # 通常の計算
         vib = vib**2
-        final_s = np.log(1.0 + vib * s) / np.log(1.0 + vib)
+        final_s = jnp.log(1.0 + vib * s) / jnp.log(1.0 + vib)
     else:
         # 逆関数を使用
         vib = vib**2
-        final_s = (np.exp(s * np.log(1.0 + vib)) - 1.0) / vib
+        final_s = (jnp.exp(s * jnp.log(1.0 + vib)) - 1.0) / vib
 
     # 彩度を適用
     final_s = final_s * sat
 
     return final_s
+
+def adjust_saturation(s, sat, vib):
+    return __adjust_saturation(s, sat, vib).block_until_ready()
+
 
 # スプラインカーブの適用
 def apply_point_list(img, point_list):
@@ -405,7 +458,7 @@ def adjust_hls_magenta(hls_img, magenta_adjust):
     return hls_img
 
 def adjust_density(hls_img, intensity):
-    hls = np.zeros_like(hls_img)
+    hls = jnp.zeros_like(hls_img)
 
     # 濃さ
     intensity = -intensity
@@ -416,28 +469,34 @@ def adjust_density(hls_img, intensity):
 
     return hls
 
+@partial(jit, static_argnums=1)
 def adjust_clear_color(rgb_img, intensity):
 
     # 清書色、濁色
     if intensity >= 0:
-        rgb = np.clip(rgb_img * (1 + intensity / 100.0), 0.0, 1.0)
+        rgb = jnp.clip(rgb_img * (1 + intensity / 100.0), 0.0, 1.0)
     else:
         gray = cvtToGrayColor(rgb_img)
         factor = -intensity / 200.0
-        rgb = rgb_img * (1 - factor) + gray[..., np.newaxis] * factor
+        rgb = rgb_img * (1 - factor) + gray[..., jnp.newaxis] * factor
         rgb = rgb * (1 - factor * 0.3)
-        rgb = np.clip(rgb, 0.0, 1.0)
+        rgb = jnp.clip(rgb, 0.0, 1.0)
 
     return rgb
            
 # マスクイメージの適用
-def apply_mask(img1, msk, img2):
+@jit
+def __apply_mask(img1, msk, img2):
 
     if msk is not None:
-        img = msk[:, :, np.newaxis] * img1 + (1.0 - msk[:, :, np.newaxis]) * img2
+        img = msk[:, :, jnp.newaxis] * img1 + (1.0 - msk[:, :, jnp.newaxis]) * img2
 
     return img
 
+def apply_mask(img1, msk, img2):
+    return __apply_mask(img1, msk, img2).block_until_ready()
+
+#@partial(jit, static_argnums=(1,2,3,4,5,6))
 def crop_image(image, texture_width, texture_height, click_x, click_y, offset, is_zoomed):
     # 画像のサイズを取得
     image_height, image_width = image.shape[:2]
@@ -469,12 +528,15 @@ def crop_image(image, texture_width, texture_height, click_x, click_y, offset, i
 
         # リサイズ
         resized_img = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_LANCZOS4)
+        #resized_img = jax.image.resize(image, (new_height, new_width, 3), method="lanczos3")
 
         # 背景を作成（透明な黒）
-        result = np.zeros((texture_height, texture_width, 3), dtype=np.float32)
+        #result = jnp.zeros((texture_height, texture_width, 3), dtype=np.float32)
 
         # リサイズした画像を中央に配置
-        result[offset_y:offset_y+new_height, offset_x:offset_x+new_width] = resized_img
+        #result[offset_y:offset_y+new_height, offset_x:offset_x+new_width] = resized_img
+        result = np.pad(resized_img, ((offset_y, texture_height-(offset_y+new_height)), (offset_x, texture_width-(offset_x+new_width)), (0, 0)))
+
         crop_info = [0, 0, image_width, image_height, scale]
 
     else:

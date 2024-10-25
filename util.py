@@ -1,7 +1,9 @@
 
 def to_texture(pos, widget):
     # ウィンドウ座標からローカルイメージ座標に変換
-    local_x, local_y = widget.to_widget(*widget.to_window(*pos))
+    local_x, local_y = widget.to_widget(*pos)
+    local_x = local_x - widget.pos[0]
+    local_y = local_y - widget.pos[1]
 
     # ローカル座標をテクスチャ座標に変換
     tex_y = widget.height-local_y
