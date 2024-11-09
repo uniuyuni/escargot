@@ -1,4 +1,4 @@
-import kivy
+
 import numpy as np
 from scipy.interpolate import splprep, splev
 from kivy.app import App
@@ -9,6 +9,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.properties import NumericProperty
 from kivy.metrics import dp
+import logging
 
 from kivy.config import Config
 Config.set('input', 'mouse', 'mouse,disable_multitouch')  # 右クリック赤丸消去
@@ -52,7 +53,7 @@ class CurveWidget(Widget):
         self.end_point.x = self.end_x
         self.end_point.y = self.end_y
 
-    def update_points(self, *args):
+    def __update_points(self, *args):
         #self.start_point.x = 0.0
         #self.start_point.y = 0.0
         #self.end_point.x = 1.0
@@ -70,7 +71,7 @@ class CurveWidget(Widget):
             for point in self.points:
                 if point not in [self.start_point, self.end_point] and point.collide_point(local_x, local_y, self.width, self.height):
                     self.points.remove(point)
-                    self.update_curve()
+                    self.__update_curve()
                     self.curve += 1
                     return
         else:
@@ -83,7 +84,7 @@ class CurveWidget(Widget):
             point.x, point.y = local_x, local_y
             self.points.append(point)
             self.selected_point = point
-            self.update_curve()
+            self.__update_curve()
             self.curve += 1
 
     def on_touch_move(self, touch):
@@ -101,17 +102,17 @@ class CurveWidget(Widget):
             new_x = min(max(local_x, min_x), max_x)  # Clamp x within appropriate boundaries
             new_y = min(max(local_y, min_y), max_y)  # Clamp y within appropriate boundaries
             self.selected_point.x, self.selected_point.y = new_x, new_y
-            self.update_curve()
+            self.__update_curve()
             self.curve += 1
 
     def on_touch_up(self, touch):
         self.selected_point = None
 
     def update_grid(self, *args):
-        self.update_points()
-        self.update_curve()
+        self.__update_points()
+        self.__update_curve()
 
-    def update_curve(self):
+    def __update_curve(self):
         self.canvas.clear()  # Clear the canvas before redrawing
         with self.canvas:
             # ローカル座標系で描画するために変換行列をプッシュ
@@ -148,7 +149,7 @@ class CurveWidget(Widget):
                     Line(points=points_flat, width=1.5)
 
             except ValueError as e:
-                print(f"Error during spline math: {e}")
+                logging.error(f"Error during spline math: {e}")
 
             for point in self.points:
                 Ellipse(pos=(point.x*self.width - point.width/2, point.y*self.height - point.height/2), size=(point.width, point.height))
@@ -176,9 +177,10 @@ class CurveWidget(Widget):
             self.end_point = DraggablePoint(x=self.end_x, y=self.end_y)
             self.points.append(self.start_point)
             self.points.append(self.end_point)
-        self.update_curve()
+        self.__update_curve()
 
 class ToneCurveApp(App):
+
     def build(self):
         root = BoxLayout()
         label = Label()

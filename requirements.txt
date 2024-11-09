@@ -1,0 +1,15 @@
+numpy==1.26.4
+pyautogui
+kivymd
+Opencv-python
+jax-metal
+colour-science
+lensfunpy
+skimage
+rawpy
+pyexiftool
+setuptools
+wheel
+torch
+torchvision
+

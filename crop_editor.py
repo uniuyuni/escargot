@@ -2,7 +2,6 @@
 from kivy.app import App as KVApp
 from kivy.graphics import Color as KVColor, Line as KVLine, PushMatrix as KVPushMatrix, PopMatrix as KVPopMatrix, Translate as KVTranslate
 from kivy.properties import NumericProperty as KVNumericProperty, ListProperty as KVListProperty, BooleanProperty as KVBooleanProperty
-from kivy.uix.relativelayout import RelativeLayout as KVRelativeLayout
 from kivy.uix.floatlayout import FloatLayout as KVFloatLayout
 from kivy.uix.label import Label as KVLabel
 from kivy.metrics import dp
@@ -68,7 +67,7 @@ class CropEditor(KVFloatLayout):
         self.update_rect()
 
     def on_touch_down(self, touch):
-        self.corner_dragging = self.get_dragging_corner(touch)
+        self.corner_dragging = self.__get_dragging_corner(touch)
         if self.corner_dragging is not None:
             return True
             
@@ -77,7 +76,7 @@ class CropEditor(KVFloatLayout):
     def on_touch_move(self, touch):
         if self.corner_dragging is not None:
             # 矩形のサイズを四隅のドラッグで変更
-            self.resize_crop(touch)
+            self.__resize_crop(touch)
 
         return super(CropEditor, self).on_touch_move(touch)
 
@@ -86,7 +85,7 @@ class CropEditor(KVFloatLayout):
 
         return super(CropEditor, self).on_touch_up(touch)
 
-    def get_dragging_corner(self, touch):
+    def __get_dragging_corner(self, touch):
         x, y = touch.pos
         cx = self.crop_pos[0] + self.translate.x
         cy = self.crop_pos[1] + self.translate.y
@@ -101,7 +100,7 @@ class CropEditor(KVFloatLayout):
             return 'top_right'
         return None
 
-    def resize_crop(self, touch):
+    def __resize_crop(self, touch):
         cx, cy = self.crop_pos
         cw, ch = self.crop_size
         if self.corner_dragging == 'bottom_left':
@@ -141,8 +140,9 @@ class CropEditor(KVFloatLayout):
         return [crop_x, crop_y, crop_width, crop_height, self.scale]
 
 class CropApp(KVApp):
+
     def build(self):
-        root = KVRelativeLayout()
+        root = KVFloatLayout()
         # ここで縦横サイズとスケールを指定
         crop_editor = CropEditor(input_width=dp(800), input_height=dp(600), scale=1.0)
         crop_editor.pos = (dp(100), dp(100))

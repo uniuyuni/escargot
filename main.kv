@@ -7,8 +7,11 @@
 
 MainWidget:   
 
+<MainSpinnerOption@SpinnerOption>:
+    height: dp(20)
+
 <MainWidget>:
-    
+
     BoxLayout:
         orientation: 'vertical'
         size: root.size
@@ -20,8 +23,8 @@ MainWidget:
             BoxLayout:
                 orientation: 'vertical'
                 size_hint_x: 3
-                padding: dp(4)
-                spacing: dp(4)
+                margin: dp(8)
+                spacing: dp(8)
 
                 HistogramWidget:
                     id: histogram
@@ -81,31 +84,61 @@ MainWidget:
                             id: exif_software
                             key: "Software"
                             
-            FloatLayout:
-                id: preview_widget
+            BoxLayout:
+                orientation: 'vertical'
                 size_hint_x: 7
-                Image:
-                    pos_hint: {'x':0, 'top': 1}
-                    id: preview
-                    on_touch_down: root.on_image_touch_down(args[1])
-                    on_touch_move: root.on_image_touch_move(args[1])
-                    on_touch_up: root.on_image_touch_up(args[1])
 
-                MaskEditor2:
+                FloatLayout:
+                    id: preview_widget
+                    size_hint_y: 9.5
                     pos_hint: {'x':0, 'top': 1}
-                    id: mask_editor2
-                    canvas:
-                        Color:
-                            rgba: 0, 0, 0, 0
-                        Rectangle:
-                            size: self.size
-                            pos: self.pos
+               
+                    Image:
+                        pos_hint: {'x':0, 'top': 1}
+                        id: preview
+                        on_touch_down: root.on_image_touch_down(args[1])
+                        on_touch_move: root.on_image_touch_move(args[1])
+                        on_touch_up: root.on_image_touch_up(args[1])
+ 
+                    MaskEditor2:
+                        root: root
+                        pos_hint: {'x':0, 'top': 1}
+                        id: mask_editor2
+                        canvas.before:
+                            Color:
+                                rgba: 0, 0, 0, 0
+                            Rectangle:
+                                size: self.size
+                                pos: self.pos
+
+                BoxLayout:
+                    orientation: 'horizontal'
+                    size_hint_y: 0.5
+
+                    Button:
+                        size_hint_x: 1
+                        text: "select"
+                        on_press: root.on_select_press()
+                    VSpacer:
+                        size_hint_x: 7
+                    ToggleButton:
+                        size_hint_x: 1
+                        text: "mask2"
+                        on_state: root.on_mask2_press(self.state)
+                    Button:
+                        size_hint_x: 1
+                        text: "export"
+
 
             TabbedPanel:
                 id: effects
-                size: 700, 0
+                size: dp(350+16), 0
                 size_hint_x: None
                 do_default_tab: False
+                tab_width: dp(80)
+                tab_height: dp(30)
+                padding: dp(8)
+                spacing: dp(8)
 
                 TabbedPanelItem:
                     text: 'Basic'
@@ -119,7 +152,7 @@ MainWidget:
 
                             Label:
                                 text_size: self.size
-                                size: 0, 40
+                                size: 0, dp(20)
                                 size_hint_y: None
                                 text: ' White Balance'
                                 font_size: '10pt'
@@ -129,9 +162,9 @@ MainWidget:
                             ParamSlider:
                                 id: slider_color_temperature
                                 text: "Temperature"
-                                min: 1000
-                                max: 14000
-                                value: 6400
+                                min: 2000
+                                max: 12000
+                                value: 5000
                                 step: 100
                                 on_slider: root.apply_effects_lv(2, 'color_temperature')
 
@@ -149,7 +182,7 @@ MainWidget:
  
                             Label:
                                 text_size: self.size
-                                size: 0, 40
+                                size: 0, dp(20)
                                 size_hint_y: None
                                 text: ' Tone'
                                 font_size: '10pt'
@@ -189,7 +222,7 @@ MainWidget:
                                 height: 20
 
                             ParamSlider:
-                                id: slider_hilight
+                                id: slider_highlight
                                 text: "Hilights"
                                 min: -100
                                 max: 100
@@ -225,11 +258,11 @@ MainWidget:
                                 on_slider: root.apply_effects_lv(2, 'tone')
 
                             HSeparator:
-                                height: 30
+                                height: dp(15)
                             
                             Label:
                                 text_size: self.size
-                                size: 0, 40
+                                size: 0, dp(20)
                                 size_hint_y: None
                                 text: ' Precence'
                                 font_size: '10pt'
@@ -247,7 +280,7 @@ MainWidget:
                                 on_slider: root.apply_effects_lv(2, 'dehaze')
 
                             HSeparator:
-                                height: 20
+                                height: dp(20)
                             
                             ParamSlider:
                                 text: "Saturation"
@@ -268,11 +301,11 @@ MainWidget:
                                 on_slider: root.apply_effects_lv(2, 'saturation')
 
                             HSeparator:
-                                height: 30
+                                height: dp(15)
                                                         
                             Label:
                                 text_size: self.size
-                                size: 0, 40
+                                size: 0, dp(20)
                                 size_hint_y: None
                                 text: ' Color Mixer'
                                 font_size: '10pt'
@@ -280,10 +313,10 @@ MainWidget:
                                 valign: 'center'
 
                             TabbedPanel:
-                                size: 700, 160
+                                size: dp(350), dp(160)
                                 size_hint: None, None
-                                tab_width: 120
-                                tab_height: 40
+                                tab_width: dp(60)
+                                tab_height: dp(20)
                                 do_default_tab: False
 
                                 TabbedPanelItem:
@@ -296,7 +329,7 @@ MainWidget:
 
                                         Label:
                                             text_size: self.size
-                                            size: 0, 40
+                                            size: 0, dp(20)
                                             size_hint_y: None
                                             text: ' Red'
                                             font_size: '10pt'
@@ -336,7 +369,7 @@ MainWidget:
                                         height: self.minimum_height
                                         Label:
                                             text_size: self.size
-                                            size: 0, 40
+                                            size: 0, dp(20)
                                             size_hint_y: None
                                             text: ' Orange'
                                             font_size: '10pt'
@@ -376,7 +409,7 @@ MainWidget:
                                         height: self.minimum_height
                                         Label:
                                             text_size: self.size
-                                            size: 0, 40
+                                            size: 0, dp(20)
                                             size_hint_y: None
                                             text: ' Yellow'
                                             font_size: '10pt'
@@ -416,7 +449,7 @@ MainWidget:
                                         height: self.minimum_height
                                         Label:
                                             text_size: self.size
-                                            size: 0, 40
+                                            size: 0, dp(20)
                                             size_hint_y: None
                                             text: ' Green'
                                             font_size: '10pt'
@@ -456,7 +489,7 @@ MainWidget:
                                         height: self.minimum_height
                                         Label:
                                             text_size: self.size
-                                            size: 0, 40
+                                            size: 0, dp(20)
                                             size_hint_y: None
                                             text: ' Cyan'
                                             font_size: '10pt'
@@ -496,7 +529,7 @@ MainWidget:
                                         height: self.minimum_height
                                         Label:
                                             text_size: self.size
-                                            size: 0, 40
+                                            size: 0, dp(20)
                                             size_hint_y: None
                                             text: ' Blue'
                                             font_size: '10pt'
@@ -536,7 +569,7 @@ MainWidget:
                                         height: self.minimum_height
                                         Label:
                                             text_size: self.size
-                                            size: 0, 40
+                                            size: 0, dp(20)
                                             size_hint_y: None
                                             text: ' Purple'
                                             font_size: '10pt'
@@ -576,7 +609,7 @@ MainWidget:
                                         height: self.minimum_height
                                         Label:
                                             text_size: self.size
-                                            size: 0, 40
+                                            size: 0, dp(20)
                                             size_hint_y: None
                                             text: ' Magenta'
                                             font_size: '10pt'
@@ -619,7 +652,7 @@ MainWidget:
 
                             Label:
                                 text_size: self.size
-                                size: 0, 40
+                                size: 0, dp(20)
                                 size_hint_y: None
                                 text: ' Tone Curve'
                                 font_size: '10pt'
@@ -627,10 +660,10 @@ MainWidget:
                                 valign: 'center'
 
                             TabbedPanel:
-                                size: 700, 700
+                                size: dp(350), dp(350)
                                 size_hint: None, None
-                                tab_width: 80
-                                tab_height: 40
+                                tab_width: dp(80)
+                                tab_height: dp(20)
                                 do_default_tab: False
 
                                 TabbedPanelItem:
@@ -674,162 +707,248 @@ MainWidget:
                                 
                             Label:
                                 text_size: self.size
-                                size: 0, 40
+                                size: 0, dp(20)
                                 size_hint_y: None
                                 text: ' Color Grading'
                                 font_size: '10pt'
                                 halign: 'left'
                                 valign: 'center'
 
-                            CurveWidget:
-                                id: grading
-                                size: 700, 700-120
+                            TabbedPanel:
+                                size: dp(350), dp(400)
                                 size_hint: None, None
-                                start_y: 0.0
-                                end_y: 0.0
-                                on_curve: root.apply_effects_lv(2, 'grading')
+                                tab_width: dp(80)
+                                tab_height: dp(20)
+                                do_default_tab: False
 
-                            ParamSlider:
-                                id: slider_grading_hue
-                                text: "Hue"
-                                min: 0.0
-                                max: 360.0
-                                value: 0.0
-                                step: 1.0
-                                on_slider: root.apply_effects_lv(2, 'grading')
+                                TabbedPanelItem:
+                                    text: 'Grading 1'
 
-                            ParamSlider:
-                                id: slider_grading_sat
-                                text: "Saturation"
-                                min: 0.0
-                                max: 100.0
-                                value: 0.0
-                                step: 1.0
-                                on_slider: root.apply_effects_lv(2, 'grading')
+                                    BoxLayout:
+                                        size_hint_y: None
+                                        orientation: "vertical"
+                                        height: self.minimum_height
+                                        
+                                        CurveWidget:
+                                            id: grading1
+                                            size: dp(350), dp(350-60)
+                                            size_hint: None, None
+                                            start_y: 1.0
+                                            end_y: 0.0
+                                            on_curve: root.apply_effects_lv(2, 'grading1')
 
-                            ParamSlider:
-                                id: slider_grading_lum
-                                text: "Luminance"
-                                min: 0.0
-                                max: 100.0
-                                value: 0.0
-                                step: 1.0
-                                on_slider: root.apply_effects_lv(2, 'grading')
+                                        ParamSlider:
+                                            id: slider_grading1_hue
+                                            text: "Hue"
+                                            min: 0.0
+                                            max: 360.0
+                                            value: 0.0
+                                            step: 1.0
+                                            on_slider: root.apply_effects_lv(2, 'grading1')
+
+                                        ParamSlider:
+                                            id: slider_grading1_sat
+                                            text: "Saturation"
+                                            min: 0.0
+                                            max: 100.0
+                                            value: 0.0
+                                            step: 1.0
+                                            on_slider: root.apply_effects_lv(2, 'grading1')
+
+                                        ParamSlider:
+                                            id: slider_grading1_lum
+                                            text: "Luminance"
+                                            min: 0.0
+                                            max: 100.0
+                                            value: 0.0
+                                            step: 1.0
+                                            on_slider: root.apply_effects_lv(2, 'grading1')
+
+                                TabbedPanelItem:
+                                    text: 'Grading 2'
+
+                                    BoxLayout:
+                                        size_hint_y: None
+                                        orientation: "vertical"
+                                        height: self.minimum_height
+
+                                        CurveWidget:
+                                            id: grading2
+                                            size: dp(350), dp(350-60)
+                                            size_hint: None, None
+                                            start_y: 0.0
+                                            end_y: 1.0
+                                            on_curve: root.apply_effects_lv(2, 'grading2')
+
+                                        ParamSlider:
+                                            id: slider_grading2_hue
+                                            text: "Hue"
+                                            min: 0.0
+                                            max: 360.0
+                                            value: 0.0
+                                            step: 1.0
+                                            on_slider: root.apply_effects_lv(2, 'grading2')
+
+                                        ParamSlider:
+                                            id: slider_grading2_sat
+                                            text: "Saturation"
+                                            min: 0.0
+                                            max: 100.0
+                                            value: 0.0
+                                            step: 1.0
+                                            on_slider: root.apply_effects_lv(2, 'grading2')
+
+                                        ParamSlider:
+                                            id: slider_grading2_lum
+                                            text: "Luminance"
+                                            min: 0.0
+                                            max: 100.0
+                                            value: 0.0
+                                            step: 1.0
+                                            on_slider: root.apply_effects_lv(2, 'grading2')
 
                             HSeparator:
-                                height: 30
+                                height: dp(15)
                             
-                            Label:
-                                text_size: self.size
-                                size: 0, 40
-                                size_hint_y: None
-                                text: "Lum vs Lum"
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
-                            CurveWidget:
-                                id: LumvsLum
-                                size: 700, 700-120
+                            TabbedPanel:
+                                size: dp(350), dp(350)
                                 size_hint: None, None
-                                start_y: 0.5
-                                end_y: 0.5
-                                on_curve: root.apply_effects_lv(2, 'LumvsLum')
+                                tab_width: dp(90)
+                                tab_height: dp(20)
+                                do_default_tab: False
 
-                            Label:
-                                text_size: self.size
-                                size: 0, 40
-                                size_hint_y: None
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
-                                text: "Hue vs Hue"
-                            CurveWidget:
-                                id: HuevsHue
-                                size: 700, 700-120
-                                size_hint: None, None
-                                start_y: 0.5
-                                end_y: 0.5
-                                on_curve: root.apply_effects_lv(2, 'HuevsHue')
+                                TabbedPanelItem:
+                                    text: 'Lum vs Lum'
 
-                            Label:
-                                text_size: self.size
-                                size: 0, 40
-                                size_hint_y: None
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
-                                text: "Hue vs Sat"
-                            CurveWidget:
-                                id: HuevsSat
-                                size: 700, 700-120
-                                size_hint: None, None
-                                start_y: 0.5
-                                end_y: 0.5
-                                on_curve: root.apply_effects_lv(2, 'HuevsSat')
+                                    Label:
+                                        text_size: self.size
+                                        size: 0, dp(20)
+                                        size_hint_y: None
+                                        text: "Lum vs Lum"
+                                        font_size: '10pt'
+                                        halign: 'left'
+                                        valign: 'center'
+                                    CurveWidget:
+                                        id: LumvsLum
+                                        size: dp(350), dp(350-60)
+                                        size_hint: None, None
+                                        start_y: 0.5
+                                        end_y: 0.5
+                                        on_curve: root.apply_effects_lv(2, 'LumvsLum')
 
-                            Label:
-                                text_size: self.size
-                                size: 0, 40
-                                size_hint_y: None
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
-                                text: "Hue vs Lum"
-                            CurveWidget:
-                                id: HuevsLum
-                                size: 700, 700-120
-                                size_hint: None, None
-                                start_y: 0.5
-                                end_y: 0.5
-                                on_curve: root.apply_effects_lv(2, 'HuevsLum')
+                                TabbedPanelItem:
+                                    text: 'Hue vs Hue'
 
-                            Label:
-                                text_size: self.size
-                                size: 0, 40
-                                size_hint_y: None
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
-                                text: "Lum vs Sat"
-                            CurveWidget:
-                                id: LumvsSat
-                                size: 700, 700-120
-                                size_hint: None, None
-                                start_y: 0.5
-                                end_y: 0.5
-                                on_curve: root.apply_effects_lv(2, 'LumvsSat')
+                                    Label:
+                                        text_size: self.size
+                                        size: 0, dp(20)
+                                        size_hint_y: None
+                                        font_size: '10pt'
+                                        halign: 'left'
+                                        valign: 'center'
+                                        text: "Hue vs Hue"
+                                    CurveWidget:
+                                        id: HuevsHue
+                                        size: dp(350), dp(350-60)
+                                        size_hint: None, None
+                                        start_y: 0.5
+                                        end_y: 0.5
+                                        on_curve: root.apply_effects_lv(2, 'HuevsHue')
 
-                            Label:
-                                text_size: self.size
-                                size: 0, 40
-                                size_hint_y: None
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
-                                text: "Sat vs Sat"
-                            CurveWidget:
-                                id: SatvsSat
-                                size: 700, 700-120
-                                size_hint: None, None
-                                start_y: 0.5
-                                end_y: 0.5
-                                on_curve: root.apply_effects_lv(2, 'SatvsSat')
+                                TabbedPanelItem:
+                                    text: 'Hue vs Sat'
 
-                            Label:
-                                text_size: self.size
-                                size: 0, 40
-                                size_hint_y: None
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
-                                text: "Sat vs Lum"
-                            CurveWidget:
-                                id: SatvsLum
-                                size: 700, 700-120
-                                size_hint: None, None
-                                start_y: 0.5
-                                end_y: 0.5
-                                on_curve: root.apply_effects_lv(2, 'SatvsLum')                            
+                                    Label:
+                                        text_size: self.size
+                                        size: 0, dp(20)
+                                        size_hint_y: None
+                                        font_size: '10pt'
+                                        halign: 'left'
+                                        valign: 'center'
+                                        text: "Hue vs Sat"
+                                    CurveWidget:
+                                        id: HuevsSat
+                                        size: dp(350), dp(350-60)
+                                        size_hint: None, None
+                                        start_y: 0.5
+                                        end_y: 0.5
+                                        on_curve: root.apply_effects_lv(2, 'HuevsSat')
+
+                                TabbedPanelItem:
+                                    text: 'Hue vs Lum'
+
+                                    Label:
+                                        text_size: self.size
+                                        size: 0, dp(20)
+                                        size_hint_y: None
+                                        font_size: '10pt'
+                                        halign: 'left'
+                                        valign: 'center'
+                                        text: "Hue vs Lum"
+                                    CurveWidget:
+                                        id: HuevsLum
+                                        size: dp(350), dp(350-60)
+                                        size_hint: None, None
+                                        start_y: 0.5
+                                        end_y: 0.5
+                                        on_curve: root.apply_effects_lv(2, 'HuevsLum')
+
+                                TabbedPanelItem:
+                                    text: 'Lum vs Sat'
+
+                                    Label:
+                                        text_size: self.size
+                                        size: 0, dp(20)
+                                        size_hint_y: None
+                                        font_size: '10pt'
+                                        halign: 'left'
+                                        valign: 'center'
+                                        text: "Lum vs Sat"
+                                    CurveWidget:
+                                        id: LumvsSat
+                                        size: dp(350), dp(350-60)
+                                        size_hint: None, None
+                                        start_y: 0.5
+                                        end_y: 0.5
+                                        on_curve: root.apply_effects_lv(2, 'LumvsSat')
+
+                                TabbedPanelItem:
+                                    text: 'Sat vs Sat'
+
+                                    Label:
+                                        text_size: self.size
+                                        size: 0, dp(20)
+                                        size_hint_y: None
+                                        font_size: '10pt'
+                                        halign: 'left'
+                                        valign: 'center'
+                                        text: "Sat vs Sat"
+                                    CurveWidget:
+                                        id: SatvsSat
+                                        size: dp(350), dp(350-60)
+                                        size_hint: None, None
+                                        start_y: 0.5
+                                        end_y: 0.5
+                                        on_curve: root.apply_effects_lv(2, 'SatvsSat')
+
+                                TabbedPanelItem:
+                                    text: 'Sat vs Lum'
+
+                                    Label:
+                                        text_size: self.size
+                                        size: 0, dp(20)
+                                        size_hint_y: None
+                                        font_size: '10pt'
+                                        halign: 'left'
+                                        valign: 'center'
+                                        text: "Sat vs Lum"
+                                    CurveWidget:
+                                        id: SatvsLum
+                                        size: dp(350), dp(350-60)
+                                        size_hint: None, None
+                                        start_y: 0.5
+                                        end_y: 0.5
+                                        on_curve: root.apply_effects_lv(2, 'SatvsLum')                            
 
                 TabbedPanelItem:
                     text: 'Extra'
@@ -843,7 +962,7 @@ MainWidget:
 
                             Label:
                                 text_size: self.size
-                                size: 0, 40
+                                size: 0, dp(20)
                                 size_hint_y: None
                                 text: ' Noise Reduction'
                                 font_size: '10pt'
@@ -851,7 +970,7 @@ MainWidget:
                                 valign: 'center'
 
                             BoxLayout:
-                                size: 0, 60
+                                size: 0, dp(30)
                                 size_hint_y: None
                                 orientation: 'horizontal'
                                 ParamLabel:
@@ -861,10 +980,10 @@ MainWidget:
                                 MDChip:
                                     type: 'filter'
                                     pos_hint: {"center_x": .5, "center_y": .5}
-                                    size: 100, 40
+                                    size: dp(100), dp(20)
                                     size_hint: None, None
                                     id: switch_ai_noise_reduction
-                                    radius: 40
+                                    radius: dp(20)
                                     line_color: 'grey'
                                     on_active: root.apply_effects_lv(1, 'ai_noise_reduction')
 
@@ -888,7 +1007,7 @@ MainWidget:
 
                             Label:
                                 text_size: self.size
-                                size: 0, 40
+                                size: 0, dp(20)
                                 size_hint_y: None
                                 text: ' Details'
                                 font_size: '10pt'
@@ -896,7 +1015,7 @@ MainWidget:
                                 valign: 'center'
 
                             BoxLayout:
-                                size: 0, 60
+                                size: 0, dp(30)
                                 size_hint_y: None
                                 orientation: 'horizontal'
                                 ParamLabel:
@@ -906,7 +1025,7 @@ MainWidget:
                                 MDChip:
                                     type: 'filter'
                                     pos_hint: {"center_x": .5, "center_y": .5}
-                                    size: 100, 40
+                                    size: dp(100), dp(20)
                                     size_hint: None, None
                                     id: switch_inpaint
                                     radius: 40
@@ -920,14 +1039,14 @@ MainWidget:
 
                                 MDRoundFlatButton:
                                     pos_hint: {"center_x": .5, "center_y": .5}
-                                    size: 100, 40
+                                    size: dp(100), dp(20)
                                     size_hint: None, None
                                     id: button_inpaint_predict
                                     text: "Predict"
                                     on_press: root.apply_effects_lv(0, 'inpaint')
 
                             BoxLayout:
-                                size: 0, 60
+                                size: 0, dp(30)
                                 size_hint_y: None
                                 orientation: 'horizontal'
                                 ParamLabel:
@@ -937,7 +1056,7 @@ MainWidget:
                                 MDChip:
                                     type: 'filter'
                                     pos_hint: {"center_x": .5, "center_y": .5}
-                                    size: 100, 40
+                                    size: dp(100), dp(20)
                                     size_hint: None, None
                                     id: switch_defocus
                                     radius: 40
@@ -959,11 +1078,11 @@ MainWidget:
                                 on_slider: root.apply_effects_lv(1, 'deblur_filter')
                                 
                             HSeparator:
-                                height: 30
+                                height: dp(15)
 
                             Label:
                                 text_size: self.size
-                                size: 0, 40
+                                size: 0, dp(20)
                                 size_hint_y: None
                                 text: ' Color'
                                 font_size: '10pt'
@@ -971,7 +1090,7 @@ MainWidget:
                                 valign: 'center'
 
                             BoxLayout:
-                                size: 0, 60
+                                size: 0, dp(30)
                                 size_hint_y: None
                                 orientation: 'horizontal'
                                 ParamLabel:
@@ -981,10 +1100,10 @@ MainWidget:
                                 MDChip:
                                     type: 'filter'
                                     pos_hint: {"center_x": .5, "center_y": .5}
-                                    size: 100, 40
+                                    size: dp(100), dp(20)
                                     size_hint: None, None
                                     id: switch_color_correct
-                                    radius: 40
+                                    radius: dp(20)
                                     line_color: 'grey'
                                     on_active: root.apply_effects_lv(2, 'color_correct')
 
@@ -993,30 +1112,33 @@ MainWidget:
                                         font_size: '9pt'
                                         color: 'b0b0b0' 
 
-                            ParamSlider:
-                                id: slider_density
-                                text: "Density"
-                                min: -100
-                                max: 100
-                                value: 0
-                                step: 1
-                                on_slider: root.apply_effects_lv(2, 'density')
-
-                            ParamSlider:
-                                id: slider_clear_color
-                                text: "Clear Color"
-                                min: -100
-                                max: 100
-                                value: 0
-                                step: 1
-                                on_slider: root.apply_effects_lv(2, 'clear_color')
+                            BoxLayout:
+                                size: 0, dp(30)
+                                size_hint_y: None
+                                orientation: 'horizontal'
+                                ParamLabel:
+                                    text: "LUT"
+                                Spinner:
+                                    id: lut_spinner
+                                    pos_hint: {'center_x': .5, 'center_y': .5}
+                                    size: 0, dp(20)
+                                    size_hint: 9, None
+                                    font_size: '9pt'
+                                    option_cls: "MainSpinnerOption"
+                                    values: [ 'None', ]
+                                    on_text: root.apply_effects_lv(2, 'lut')
+                                Button:
+                                    pos_hint: {'center_x': .5, 'center_y': .5}
+                                    size: 0, dp(20)
+                                    size_hint: 1, None
+                                    on_press: root.on_lut_select_folder()
 
                             HSeparator:
-                                height: 30
+                                height: dp(15)
 
                             Label:
                                 text_size: self.size
-                                size: 0, 40
+                                size: 0, dp(20)
                                 size_hint_y: None
                                 text: ' Filter'
                                 font_size: '10pt'
@@ -1060,24 +1182,11 @@ MainWidget:
                                 on_slider: root.apply_effects_lv(1, 'perlin_noise')
 
                             HSeparator:
-                                height: 30
-
-                            BoxLayout:
-                                size_hint_y: None
-                                orientation: 'horizontal'
-                                ParamLabel:
-                                    text: "LUT"
-                                ToggleButton:
-                                    size_hint_x: 7
-                                    id: toggle_lut
-                                    on_state: root.apply_effects_lv(1, 'lut')
-
-                            HSeparator:
-                                height: 30
+                                height: dp(15)
 
                             Label:
                                 text_size: self.size
-                                size: 0, 40
+                                size: 0, dp(20)
                                 size_hint_y: None
                                 text: ' Level'
                                 font_size: '10pt'
@@ -1112,11 +1221,11 @@ MainWidget:
                                 on_slider: root.apply_effects_lv(2, 'level')
 
                             HSeparator:
-                                height: 30
+                                height: dp(15)
 
                             Label:
                                 text_size: self.size
-                                size: 0, 40
+                                size: 0, dp(20)
                                 size_hint_y: None
                                 text: ' Glow Effect'
                                 font_size: '10pt'
@@ -1162,7 +1271,7 @@ MainWidget:
 
                             Label:
                                 text_size: self.size
-                                size: 0, 40
+                                size: 0, dp(20)
                                 size_hint_y: None
                                 text: ' Rotation'
                                 font_size: '10pt'
@@ -1179,13 +1288,13 @@ MainWidget:
                                 on_slider: root.apply_effects_lv(0, 'rotation')
 
                             HSeparator:
-                                height: 30
+                                height: dp(15)
 
         ViewerWidget:
             id: viewer
             size_hint_y: None
             size: (0, dp(160))
             grid_width: dp(120)
-            on_last_selected: root.on_select(self.last_selected.file_path, self.last_selected.exif_data)
+            on_last_selected: root.on_select(self.last_selected)
 
 <CurveWidget>:

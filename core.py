@@ -1,3 +1,4 @@
+import sys
 import cv2
 import numpy as np
 import jax
@@ -12,6 +13,56 @@ from scipy.interpolate import splprep, splev
 
 import sigmoid
 import dng_sdk
+
+jax.config.update("jax_platform_name", "METAL")
+
+def normalize_image(image_data):
+    min_val = np.min(image_data)
+    max_val = np.max(image_data)
+    normalized_image = (image_data - min_val) / (max_val - min_val)
+    return normalized_image
+
+def calculate_ev_from_image(image_data):
+    if image_data.size == 0:
+        raise ValueError("画像データが空です。")
+
+    average_value = np.mean(image_data)
+
+    # ここで基準を明確に設定
+    # 例えば、EV0が0.5に相当する場合
+    ev = np.log2(0.5 / average_value)  # 0.5を基準
+
+    return ev, average_value
+
+def calculate_correction_value(ev_histogram, ev_setting):
+    correction_value = ev_setting - ev_histogram
+    
+    # 補正値を適切にクリッピング
+    if correction_value > 4:  # 過剰補正を避ける
+        correction_value = 4
+    elif correction_value < -4:  # 過剰補正を避ける
+        correction_value = -4
+
+    return correction_value
+
+# 色飽和の復元
+def restore_saturated_colors(image):
+    # Detect saturated channels
+    threshold = 0.98  # threshold to detect saturation in 8-bit images
+    mask_r = (image[:, :, 2] >= threshold)
+    mask_g = (image[:, :, 1] >= threshold)
+    mask_b = (image[:, :, 0] >= threshold)
+    
+    # Create a combined mask for pixels with one or two channels saturated
+    saturation_mask = (mask_r + mask_g + mask_b) >= 1
+
+    # Restore values using neighboring pixel information
+    restored_image = image.copy()
+    for channel in range(3):
+        mask = (image[:, :, channel] >= threshold)
+        restored_image[:, :, channel][mask] = np.median(image[:, :, channel][~saturation_mask])
+    
+    return restored_image
 
 # RGBからグレイスケールへの変換
 @jit
@@ -42,7 +93,27 @@ def convert_RGB2TempTint(rgb):
     dng = dng_sdk.dng_temperature.DngTemperature()
     dng.set_xy_coord(xy)
 
-    return dng.fTemperature, dng.fTint, xyz[1]
+    return float(dng.fTemperature), float(dng.fTint), float(xyz[1])
+
+def __invert_temp_tint(temp, tint, ref_temp=6500.0):
+
+    # 色温度の反転
+    mired_temp = 1e6 / temp
+    mired_ref = 1e6 / ref_temp
+    inverted_temp = 1e6 / (mired_ref - (mired_temp - mired_ref) + sys.float_info.min)
+
+    # ティントの反転
+    inverted_tint = -tint
+
+    return inverted_temp, inverted_tint
+
+def invert_RGB2TempTint(rgb, ref_temp=6500.0):
+    temp, tint, Y = convert_RGB2TempTint(rgb)
+
+    invert_temp, invert_tint = __invert_temp_tint(temp, tint, ref_temp)
+
+    return invert_temp, invert_tint, Y
+
 
 def convert_TempTint2RGB(temp, tint, Y):
 
@@ -57,7 +128,16 @@ def convert_TempTint2RGB(temp, tint, Y):
 
     rgb = colour.XYZ_to_RGB(xyz, 'sRGB')
 
-    return rgb
+    return rgb.astype(np.float32)
+
+def invert_TempTint2RGB(temp, tint, Y, reference_temp):
+
+    inverted_temp, inverted_tint = __invert_temp_tint(temp, tint, reference_temp)
+    
+    # DNG SDKの関数を使用して元のRGB値を取得
+    r, g, b = convert_TempTint2RGB(inverted_temp, inverted_tint, Y)
+
+    return [r, g, b]
 
 def calc_resize_image(original_size, max_length):
     width, height = original_size
@@ -166,13 +246,13 @@ def lucy_richardson_gauss(srcf, iteration):
 def lowpass_filter(img, r):
     lpf = gaussian_blur(img, ksize=(r, r), sigma=0.0)
 
-    return np.array(lpf)
+    return lpf
 
 # ハイパスフィルタ
 def highpass_filter(img, r):
     hpf = img - gaussian_blur(img, ksize=(r, r), sigma=0.0)+0.5
 
-    return np.array(hpf)
+    return hpf
 
 # オーバーレイ合成
 def blend_overlay(base, over):
@@ -232,11 +312,11 @@ def adjust_exposure(img, ev):
 
 
 # コントラスト補正
-def adjust_contrast(img, cf):
+def adjust_contrast(img, cf, c):
     # img: 変換元画像
     # cf: コントラストファクター -100.0〜100.0
 
-    c = 0.5   # 中心値
+    #c = 0.5   # 中心値
     f = cf/100.0*10.0  #-10.0〜10.0に変換
 
     if f == 0.0:
@@ -276,21 +356,21 @@ def adjust_shadow(img, black):
     if f == 0.0:
         adjust_img = img.copy()
     elif f > 0.0:
-        adjust_img = sigmoid.scaled_sigmoid(img, f, 0.90)
+        adjust_img = sigmoid.scaled_sigmoid(img, f, 0.80)
     else:
-        adjust_img = sigmoid.scaled_inverse_sigmoid(img, f, 0.90)
+        adjust_img = sigmoid.scaled_inverse_sigmoid(img, f, 0.80)
 
     return adjust_img
 
-def adjust_hilight(img, white):
+def adjust_highlight(img, white):
     f = white/100.0*5.0
 
     if f == 0.0:
         adjust_img = img.copy()
     elif f > 0.0:
-        adjust_img = sigmoid.scaled_sigmoid(img, f, 0.1)
+        adjust_img = sigmoid.scaled_sigmoid(img, f, 0.2)
     else:
-        adjust_img = sigmoid.scaled_inverse_sigmoid(img, f, 0.1)
+        adjust_img = sigmoid.scaled_inverse_sigmoid(img, f, 0.2)
 
     return adjust_img
 
@@ -476,34 +556,64 @@ def adjust_hls_magenta(hls_img, magenta_adjust):
     return hls_img
 
 def adjust_density(hls_img, intensity):
-    hls = jnp.zeros_like(hls_img)
+    hls = np.zeros_like(hls_img)
 
     # 濃さ
     intensity = -intensity
     hls[:, :, 0] = hls_img[:, :, 0]
     hls[:, :, 1] = adjust_shadow(hls_img[:, :, 1], intensity/2)
-    hls[:, :, 1] = adjust_hilight(hls[:, :, 1], intensity/2)
+    hls[:, :, 1] = adjust_highlight(hls[:, :, 1], intensity/2)
     hls[:, :, 2] = hls_img[:, :, 2] * (1.0 - intensity / 100.0)
 
     return hls
 
+
+def adjust_shadow_highlight(image, highlight_adjustment=0, shadow_adjustment=0):
+    # 調整パラメータを [-1, 1] の範囲にスケーリング
+    highlight_adjustment = np.clip(highlight_adjustment / 300, -1, 1)
+    shadow_adjustment = np.clip(shadow_adjustment / 300, -1, 1)
+    
+    # ハイライト補正：山を押しつぶすようにトーンを変化
+    def highlight_function(x):
+        center, spread = 0.65, 0.22  # ハイライトの中心と広がり
+        compression_effect = 1 - highlight_adjustment * np.exp(-((x - center) / spread) ** 2)
+        adjusted_x = x * compression_effect + highlight_adjustment * np.exp(-((x - center) / (spread * 2)) ** 2)
+        return np.where((x == 2.0) | (x == 0.0), x, adjusted_x)  # 完全な黒と白には影響を与えない
+
+    # シャドウ補正：山を押しつぶすようにトーンを変化
+    def shadow_function(x):
+        center, spread = 0.35, 0.22  # シャドウの中心と広がり
+        compression_effect = 1 + shadow_adjustment * np.exp(-((x - center) / spread) ** 2)
+        adjusted_x = x * compression_effect + shadow_adjustment * np.exp(-((x - center) / (spread * 2)) ** 2)
+        return np.where((x == 2.0) | (x == 0.0), x, adjusted_x)  # 完全な黒と白には影響を与えない
+    
+    # ハイライトとシャドウの範囲ごとに補正を適用
+    highlights_adjusted = highlight_function(image)
+    shadows_adjusted = shadow_function(image)
+    
+    # 両方の補正を平均して自然なトーンに調整
+    adjusted_image = (highlights_adjusted + shadows_adjusted) / 2
+    
+    # 補正範囲を [0, 2] に制限
+    return np.clip(adjusted_image, 0, 2)
+
 @partial(jit, static_argnums=1)
-def adjust_clear_color(rgb_img, intensity):
+def __adjust_clear_color(rgb_img, intensity):
 
     # 清書色、濁色
     if intensity >= 0:
-        rgb = jnp.clip(rgb_img * (1 + intensity / 100.0), 0.0, 1.0)
+        rgb = jnp.clip(rgb_img * (1 + intensity / 100.0), 0.0, 2.0)
     else:
         gray = __cvtToGrayColor(rgb_img)
         factor = -intensity / 200.0
         rgb = rgb_img * (1 - factor) + gray[..., jnp.newaxis] * factor
         rgb = rgb * (1 - factor * 0.3)
-        rgb = jnp.clip(rgb, 0.0, 1.0)
+        rgb = jnp.clip(rgb, 0.0, 2.0)
 
     return rgb
 
 def adjust_clear_color(rgb_img, intensity):
-    array = adjust_clear_color(rgb_img, intensity)
+    array = __adjust_clear_color(rgb_img, intensity)
     array.block_until_ready()
 
     return np.array(array)
@@ -555,9 +665,15 @@ def crop_image(image, texture_width, texture_height, click_x, click_y, offset, i
 
     if not is_zoomed:
 
+        if np.any(image < 0.0) or np.any(image > 2.0):
+            print("outofrange", image)
+            image = np.clip(image, 0, 2)
         # リサイズ
-        resized_img = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_LANCZOS4)
+        resized_img = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
         #resized_img = jax.image.resize(image, (new_height, new_width, 3), method="lanczos3")
+        if np.any(resized_img < 0.0) or np.any(resized_img > 2.0):
+            print("outofrange", resized_img)
+            resized_img = np.clip(resized_img, 0, 2)
 
         # 背景を作成（透明な黒）
         #result = jnp.zeros((texture_height, texture_width, 3), dtype=np.float32)

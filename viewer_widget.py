@@ -1,3 +1,4 @@
+
 import os
 import threading
 import base64
@@ -7,17 +8,16 @@ import numpy as np
 import cv2
 
 from kivymd.app import MDApp
-from kivy.metrics import dp
-from kivy.core.image import Image as CoreImage
-from kivy.core.window import Window
+from kivy.core.window import Window as KVWindow
 from kivymd.uix.boxlayout import MDBoxLayout
-from kivy.uix.image import Image
-from kivy.uix.label import Label
+from kivy.uix.image import Image as KVImage
+from kivy.uix.label import Label as KVLabel
 from kivymd.uix.card import MDCard
 from kivymd.uix.gridlayout import MDGridLayout
-from kivy.graphics.texture import Texture
-from kivy.properties import Property, StringProperty, NumericProperty, DictProperty, ObjectProperty, BooleanProperty
+from kivy.graphics.texture import Texture as KVTexture
+from kivy.properties import Property as KVProperty, StringProperty as KVStringProperty, NumericProperty as KVNumericProperty, ObjectProperty as KVObjectProperty, BooleanProperty as KVBooleanProperty
 from kivy.clock import mainthread
+from kivy.metrics import dp
 
 #import AppKit
 #from Cocoa import NSDragOperationCopy
@@ -25,12 +25,15 @@ from kivy.clock import mainthread
 import core
 from spacer import HSpacer, VSpacer
 
+supported_formats_rgb = ('.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp', '.gif')
+supported_formats_raw = ('.cr2', '.nef', '.arw', '.dng', '.orf', '.raf', '.rw2', '.sr2', '.pef', '.raw')
+
 class ThumbnailCard(MDCard):
-    file_path = StringProperty()
-    thumb_source = Property(None, force_dispatch=True)
-    rating = NumericProperty(0)
-    exif_data = DictProperty()
-    grid_width = NumericProperty(dp(180))
+    file_path = KVStringProperty()
+    thumb_source = KVProperty(None, force_dispatch=True)
+    rating = KVNumericProperty(0)
+    exif_data = None
+    grid_width = KVNumericProperty(dp(180))
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -50,7 +53,7 @@ class ThumbnailCard(MDCard):
         hbox = MDBoxLayout(size_hint_y=7)
         hbox.orientation = 'horizontal'
         hbox.add_widget(VSpacer(width=dp(4)))
-        self.image = Image(source='spinner.zip')
+        self.image = KVImage(source='spinner.zip')
         self.image.anim_delay = 0.01
         hbox.add_widget(self.image)
         hbox.add_widget(VSpacer(width=dp(4)))
@@ -59,7 +62,7 @@ class ThumbnailCard(MDCard):
 
         # ファイル名ラベル
         name = os.path.basename(self.file_path)
-        self.label = Label(text=name, bold=True, size_hint_y=3)
+        self.label = KVLabel(text=name, bold=True, size_hint_y=3)
         vbox.add_widget(self.label)
 
         self.bind(on_touch_down=self.on_card_touch_down)
@@ -68,7 +71,7 @@ class ThumbnailCard(MDCard):
     def set_image(self, exif, thumb):
         self.exif_data = exif
         self.thumb_source = thumb
-        self.texture = Texture.create(size=(thumb.shape[1], thumb.shape[0]), colorfmt='rgb', bufferfmt='ushort')
+        self.texture = KVTexture.create(size=(thumb.shape[1], thumb.shape[0]), colorfmt='rgb', bufferfmt='ushort')
         self.texture.flip_vertical()
         self.texture.blit_buffer(thumb.tobytes(), colorfmt='rgb', bufferfmt='float')
         self.image.source = ''
@@ -91,15 +94,12 @@ class ThumbnailCard(MDCard):
         print(f"Dragging: {self.file_path}")
 
 class ViewerWidget(MDBoxLayout):
-    last_selected = ObjectProperty()
-    cols = NumericProperty(4)
-    grid_width = NumericProperty(dp(180))
-    thumb_width = NumericProperty(dp(160))
-    do_scroll_x = BooleanProperty(True)
-    do_scroll_y = BooleanProperty(False)
-
-    supported_formats_rgb = ('.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp', '.gif')
-    supported_formats_raw = ('.cr2', '.nef', '.arw', '.dng', '.orf', '.raf', '.rw2', '.sr2', '.pef', '.raw')
+    last_selected = KVObjectProperty(None, allownone=True)
+    cols = KVNumericProperty(4)
+    grid_width = KVNumericProperty(dp(180))
+    thumb_width = KVNumericProperty(dp(160))
+    do_scroll_x = KVBooleanProperty(True)
+    do_scroll_y = KVBooleanProperty(False)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -107,11 +107,15 @@ class ViewerWidget(MDBoxLayout):
         self.cards = []
         self.selected_cards = set()
         
-        Window.bind(on_key_down=self.on_key_down)
+        KVWindow.bind(on_key_down=self.on_key_down)
 
     def set_path(self, directory):
         self.cards = []
         file_path_dict = {}
+        self.ids['grid_layout'].clear_widgets()
+        self.selected_cards.clear()
+        self.last_selected = None
+
         file_list = os.listdir(directory)
         file_list.sort()
         for file_name in file_list:
@@ -125,7 +129,8 @@ class ViewerWidget(MDBoxLayout):
         self.load_images(file_path_dict)
 
     def load_images(self, file_path_dict):
-        threading.Thread(target=self.load_images_thread, args=(file_path_dict, 16), daemon=True).start()
+        if len(file_path_dict) > 0:
+            threading.Thread(target=self.load_images_thread, args=(file_path_dict, 16), daemon=True).start()
 
     def load_images_thread(self, file_path_dict, chunk_size):
 
@@ -147,10 +152,16 @@ class ViewerWidget(MDBoxLayout):
                 thumb = thumb_data_list[i]
                 file_path_dict[file_path].set_image(exif_data_list[i], thumb)
 
-        return exif_data_list
+            """
+            if len(self.selected_cards) == 0 and len(file_path_dict) > 0:
+                card = list(file_path_dict.values())[0]
+                if card.exif_data is not None:
+                    self.active_card(card)
+                    self.last_selected = card
+            """
 
     def is_supported_image(self, file_name):
-        return file_name.lower().endswith(ViewerWidget.supported_formats_rgb) or file_name.lower().endswith(ViewerWidget.supported_formats_raw)
+        return file_name.lower().endswith(supported_formats_rgb) or file_name.lower().endswith(supported_formats_raw)
 
     # @mainthread
     def add_image_to_grid(self, file_path):
@@ -172,7 +183,7 @@ class ViewerWidget(MDBoxLayout):
                     thumb = cv2.imdecode(image, 1)
                     thumb = cv2.cvtColor(thumb, cv2.COLOR_BGR2RGB)
                 else:
-                    if file_path.lower().endswith(ViewerWidget.supported_formats_raw):
+                    if file_path.lower().endswith(supported_formats_raw):
                         with rawpy.imread(file_path) as raw:
                             thumb = raw.postprocess()
                     else:
@@ -228,12 +239,12 @@ class ViewerWidget(MDBoxLayout):
         self.selected_cards.clear()
 
     def on_select(self, instance, touch):
-        if instance.collide_point(*touch.pos):
+        if instance.exif_data is not None and instance.collide_point(*touch.pos):
             if touch.is_mouse_scrolling or (touch.button == 'left'):
-                if 'shift' in Window.modifiers and self.last_selected:
+                if 'shift' in KVWindow.modifiers and self.last_selected:
 
                     # 追加でないなら消去
-                    if not( 'ctrl' in Window.modifiers or 'meta' in Window.modifiers ):
+                    if not( 'ctrl' in KVWindow.modifiers or 'meta' in KVWindow.modifiers ):
                         self.clear_selection()
 
                     # シフトキーで範囲選択
@@ -246,7 +257,7 @@ class ViewerWidget(MDBoxLayout):
 
                 else:
                     # 単独選択またはCmd/Ctrlでのトグル
-                    if 'ctrl' in Window.modifiers or 'meta' in Window.modifiers:
+                    if 'ctrl' in KVWindow.modifiers or 'meta' in KVWindow.modifiers:
                         self.toggle_card(instance)
                     else:
                         # すべてのラベルを非選択にしてから選択

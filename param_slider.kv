@@ -1,6 +1,6 @@
 
 <ParamLabel@MDLabel>:
-    size: 200, 0
+    size: dp(100), 0
     size_hint_x: None
     halign: 'right'
     font_size: '9pt'
@@ -8,7 +8,7 @@
 
 <ParamSlider>:
     orientation: 'horizontal'
-    size: 700, 40
+    size: dp(350), dp(20)
     size_hint: None, None
     text: 'Label'
     on_text: root.on_label_text()
@@ -25,7 +25,7 @@
 
     TextInput:
         id: input
-        size: 70, 40
+        size: dp(35), dp(20)
         size_hint: None, None
         halign: 'right'
         font_size: '9pt'
@@ -33,7 +33,7 @@
         on_text_validate: root.on_input_text_validate()
 
     BoxLayout:
-        size: 50, 40
+        size: dp(25), dp(20)
         size_hint: None, None
         orientation: 'vertical'
         Button:

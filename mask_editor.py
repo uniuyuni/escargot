@@ -1,18 +1,18 @@
-import kivy
-from kivy.app import App
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.widget import Widget
-from kivy.uix.image import Image
-from kivy.graphics import Rectangle
-from kivy.properties import NumericProperty
-from kivy.graphics.texture import Texture
+
+from kivy.app import App as KVApp
+from kivy.uix.boxlayout import BoxLayout as KVBoxLayout
+from kivy.uix.widget import Widget as KVWidget
+from kivy.uix.image import Image as KVImage
+from kivy.graphics import Rectangle as KVRectangle
+from kivy.properties import NumericProperty as KVNumericProperty
+from kivy.graphics.texture import Texture as KVTexture
 
 import cv2
 import numpy as np
 
-class MaskEditor(Image):
-    brush_size = NumericProperty(300)
-    zoom = NumericProperty(1.0)
+class MaskEditor(KVImage):
+    brush_size = KVNumericProperty(300)
+    zoom = KVNumericProperty(1.0)
 
     def __init__(self, width=512*2, height=512*2, **kwargs):
         super(MaskEditor, self).__init__(**kwargs)
@@ -21,7 +21,7 @@ class MaskEditor(Image):
         self.drawing = False
         self.erasing = False
         self.clear_mask()
-        self.canvas_texture = Texture.create(size=(self.canvas_width, self.canvas_height), colorfmt='rgba')
+        self.canvas_texture = KVTexture.create(size=(self.canvas_width, self.canvas_height), colorfmt='rgba')
         self.canvas_texture.flip_vertical()
         self.update_canvas()
         self.bind(size=self.update_canvas, pos=self.update_canvas)
@@ -40,7 +40,7 @@ class MaskEditor(Image):
             self.canvas.clear()
             zw = self.canvas_width * self.zoom
             zh = self.canvas_height * self.zoom
-            Rectangle(texture=self.canvas_texture, pos=((self.size[0]-zw)/2, (self.size[1]-zh)/2), size=(zw, zh))
+            KVRectangle(texture=self.canvas_texture, pos=((self.size[0]-zw)/2, (self.size[1]-zh)/2), size=(zw, zh))
 
     def on_touch_down(self, touch):
         if self.collide_point(touch.x, touch.y):
@@ -125,19 +125,19 @@ class MaskEditor(Image):
         self.brush_size = max(1, self.brush_size + scroll)
 
     def load_mask(self, filepath):
-        image = Image.open(filepath).convert('L')
+        image = KVImage.open(filepath).convert('L')
         self.canvas_width, self.canvas_height = image.size
         self.mask = np.array(image, dtype=np.uint8)
-        self.canvas_texture = Texture.create(size=(self.canvas_width, self.canvas_height), colorfmt='rgba')
+        self.canvas_texture = KVTexture.create(size=(self.canvas_width, self.canvas_height), colorfmt='rgba')
         self.update_canvas()
 
     def save_mask(self, filepath):
-        image = Image.fromarray(self.mask)
+        image = KVImage.fromarray(self.mask)
         image.save(filepath, format='PNG')
 
-class MyApp(App):
+class MyApp(KVApp):
     def build(self):
-        layout = BoxLayout(orientation='vertical')
+        layout = KVBoxLayout(orientation='vertical')
         
         # MaskDrawingWidgetのインスタンスを作成
         mask_widget = MaskEditor(width=1024, height=1024)

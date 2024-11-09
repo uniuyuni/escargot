@@ -27,13 +27,14 @@ from kivy.logger import Logger
 from functools import partial
 
 import core
+import util
 import effects
 
 # コントロールポイントのクラス
 class ControlPoint(Widget):
     touching = BooleanProperty(False)
     is_center = BooleanProperty(False)  # 中心のコントロールポイントかどうか
-    color = ListProperty([1, 1, 1])  # デフォルトの色
+    color = ListProperty([0, 0, 0])  # デフォルトの色
     ctrl_center = ListProperty([0, 0])
     type = ListProperty(['c', 0])
 
@@ -92,7 +93,9 @@ class BaseMask(Widget):
 
         # エフェクトパラメータ保持
         self.effects = effects.create_effects()
-        self.effects_param = {'img_size': (editor.image_size[1], editor.image_size[0])}
+        self.effects_param = {'img_size': [editor.image_size[0], editor.image_size[1]]}
+
+        self.is_draw_mask = True
 
     def on_active_changed(self, instance, value):
         if value:
@@ -111,6 +114,7 @@ class BaseMask(Widget):
                     cp.color = [1, 1, 0]
                 else:
                     cp.color = [1, 1, 1]  # 他のコントロールポイントは白色
+        self.is_draw_mask = True
         self.update_mask()
 
     def show_center_control_point_only(self):
@@ -121,6 +125,7 @@ class BaseMask(Widget):
                 cp.color = [1, 0, 0]  # 非アクティブなマスクの中心点は赤色
             else:
                 cp.opacity = 0  # 非表示
+        self.is_draw_mask = False
         self.update_mask()
 
     def on_touch_down(self, touch):
@@ -130,9 +135,11 @@ class BaseMask(Widget):
                 if cp.is_center:
                     self.editor.set_active_mask(self)
                     cp.on_touch_down(touch)
+                    self.is_draw_mask = True
                     return True
                 elif self.active:
                     cp.on_touch_down(touch)
+                    self.is_draw_mask = True
                     return True
         return False
 
@@ -140,6 +147,7 @@ class BaseMask(Widget):
         for cp in self.control_points:
             if cp.touching:
                 cp.on_touch_move(touch)
+                self.is_draw_mask = True
                 return True
         return False
 
@@ -289,22 +297,26 @@ class CircularGradientMask(BaseMask):
         oy = self.outer_radius_y
 
         dict = {
-            'type': 'circular',
+            'type': 'circular_gradient',
             'name': self.name,
             'center': [cx, cy],
             'inner_radius': [ix, iy],
             'outer_radius': [ox, oy],
             'rotate_rad': self.rotate_rad,
-            'invert': self.invert
+            'invert': self.invert,
+            'effects_param': self.effects_param
         }
         return dict
 
     def deserialize(self, dict):
+        self.initializing = False
+        self.name = dict['name']
         cx, cy = dict['center']
         ix, iy = dict['inner_radius']
         ox, oy = dict['outer_radius']
         self.rotate_rad = dict['rotate_rad']
-        self.name = dict['name']
+        self.invert = dict['invert']
+        self.effects_param = dict['effects_param']
 
         self.center = (cx, cy)
         self.inner_radius_x = ix
@@ -312,16 +324,17 @@ class CircularGradientMask(BaseMask):
         self.outer_radius_x = ox
         self.outer_radius_y = oy
 
-        # 描き直し
-        self.update_control_points()
+        self.create_control_points()
+        #self.update_control_points()
         self.update_mask()
 
     def update(self):
         # 更新
         cp_center = self.control_points[0]
         center = cp_center.ctrl_center
-        cp_center.ctrl_center = [0, 0] # コールバックが２回呼ばれるが気にしない
-        cp_center.ctrl_center = center #
+        center[0] += float(np.finfo(np.float32).eps)
+        center[1] += float(np.finfo(np.float32).eps)
+        cp_center.ctrl_center = center
 
     def calculate_point(self, radius_x, radius_y, angle_deg):
         angle_rad = math.radians(angle_deg)
@@ -359,24 +372,27 @@ class CircularGradientMask(BaseMask):
                 cp.center_y += dy
         self.update_control_points()
         self.update_mask()
+        self.editor.root.start_draw_image()
 
     def on_outer_control_point_move(self, instance, value):
-        dx = instance.ctrl_center[0] - self.center_x
-        dy = instance.ctrl_center[1] - self.center_y
-        sx = self.inner_radius_x / self.outer_radius_x
-        sy = self.inner_radius_y / self.outer_radius_y
-        if instance.type[0] == 'x':
-            self.outer_radius_x, _ = self.update_ellipse(dx, dy)
-            self.inner_radius_x = self.outer_radius_x * sx
-            self.outer_radius_x = max(10, max(self.outer_radius_x, self.inner_radius_x))
-        elif instance.type[0] == 'y':
-            _, self.outer_radius_y = self.update_ellipse(dx, dy)
-            self.inner_radius_y = self.outer_radius_y * sy
-            self.outer_radius_y = max(10, max(self.outer_radius_y, self.inner_radius_y))
-        elif instance.type[0] == 'r':
-            self.rotate_rad = self.calculate_rotate(self.outer_radius_x, self.outer_radius_y, instance.type[1], dx, dy)
-        self.update_control_points()
-        self.update_mask()
+        if self.active:
+            dx = instance.ctrl_center[0] - self.center_x
+            dy = instance.ctrl_center[1] - self.center_y
+            sx = self.inner_radius_x / self.outer_radius_x
+            sy = self.inner_radius_y / self.outer_radius_y
+            if instance.type[0] == 'x':
+                self.outer_radius_x, _ = self.update_ellipse(dx, dy)
+                self.inner_radius_x = self.outer_radius_x * sx
+                self.outer_radius_x = max(10, max(self.outer_radius_x, self.inner_radius_x))
+            elif instance.type[0] == 'y':
+                _, self.outer_radius_y = self.update_ellipse(dx, dy)
+                self.inner_radius_y = self.outer_radius_y * sy
+                self.outer_radius_y = max(10, max(self.outer_radius_y, self.inner_radius_y))
+            elif instance.type[0] == 'r':
+                self.rotate_rad = self.calculate_rotate(self.outer_radius_x, self.outer_radius_y, instance.type[1], dx, dy)
+            self.update_control_points()
+            self.update_mask()
+            self.editor.root.start_draw_image()
 
     def on_inner_control_point_move(self, instance, value):
         if self.active:
@@ -396,6 +412,7 @@ class CircularGradientMask(BaseMask):
                 self.rotate_rad = self.calculate_rotate(self.inner_radius_x, self.inner_radius_y, instance.type[1], dx, dy)
             self.update_control_points()
             self.update_mask()
+            self.editor.root.start_draw_image()
 
     def update_control_points(self):
         # コントロールポイントの位置を更新
@@ -426,7 +443,8 @@ class CircularGradientMask(BaseMask):
             ox, oy = self.editor.tcg_to_world_scale(self.outer_radius_x, self.outer_radius_y)
             self.outer_line.ellipse = (-ox, -oy, ox*2, oy*2)
         
-        self.draw_mask_to_fbo()
+        if self.is_draw_mask == True:
+            self.draw_mask_to_fbo()
 
     def get_mask_image(self):
         # パラメータ設定
@@ -611,17 +629,20 @@ class GradientMask(BaseMask):
         ex, ey = self.end_point[0], self.end_point[1]
 
         dict = {
-            'type': 'line',
+            'type': 'gradient',
             'name': self.name,
             'start_point': [sx, sy],
             'end_point': [ex, ey],
+            'effects_param': self.effects_param
         }
         return dict
 
     def deserialize(self, dict):
-        ex, ey = dict['end_point']
-        sx, sy = dict['start_point']
+        self.initializing = False
         self.name = dict['name']
+        sx, sy = dict['start_point']
+        ex, ey = dict['end_point']
+        self.effects_param = dict['effects_param']
 
         self.end_point = [ex, ey]
         self.start_point = [sx, sy]
@@ -629,14 +650,14 @@ class GradientMask(BaseMask):
         self.center = [(self.start_point[0] + self.end_point[0]) / 2,
                        (self.start_point[1] + self.end_point[1]) / 2]
         
-        # 描き直し
-        self.update_control_points()
+        self.create_control_points()
         self.update_mask()
 
     def update(self):
         cp_center = self.control_points[0]
         center = cp_center.ctrl_center
-        cp_center.ctrl_center = [0, 0] # コールバックが２回呼ばれるが気にしない
+        center[0] += float(np.finfo(np.float32).eps)
+        center[1] += float(np.finfo(np.float32).eps)
         cp_center.ctrl_center = center #
 
     def create_control_points(self):
@@ -690,26 +711,29 @@ class GradientMask(BaseMask):
                 cp.center_y += dy
         self.update_control_points()
         self.update_mask()
+        self.editor.root.start_draw_image()        
     
     def on_control_point_move(self, instance, value):
-        if instance == self.control_points[1]:
-            self.start_point = [instance.ctrl_center[0], instance.ctrl_center[1]]
-            dx = self.center_x - self.start_point[0]
-            dy = self.center_y - self.start_point[1]
-            self.end_point[0] = self.center_x + dx
-            self.end_point[1] = self.center_y + dy
-        elif instance == self.control_points[2]:
-            self.end_point = [instance.ctrl_center[0], instance.ctrl_center[1]]
-            dx = self.center_x - self.end_point[0]
-            dy = self.center_y - self.end_point[1]
-            self.start_point[0] = self.center_x + dx
-            self.start_point[1] = self.center_y + dy
-        # 再計算
-        dx = self.end_point[0] - self.start_point[0]
-        dy = self.end_point[1] - self.start_point[1]
-        self.rotate_rad = math.atan2(dy, dx)
-        self.update_control_points()
-        self.update_mask()
+        if self.active:
+            if instance == self.control_points[1]:
+                self.start_point = [instance.ctrl_center[0], instance.ctrl_center[1]]
+                dx = self.center_x - self.start_point[0]
+                dy = self.center_y - self.start_point[1]
+                self.end_point[0] = self.center_x + dx
+                self.end_point[1] = self.center_y + dy
+            elif instance == self.control_points[2]:
+                self.end_point = [instance.ctrl_center[0], instance.ctrl_center[1]]
+                dx = self.center_x - self.end_point[0]
+                dy = self.center_y - self.end_point[1]
+                self.start_point[0] = self.center_x + dx
+                self.start_point[1] = self.center_y + dy
+            # 再計算
+            dx = self.end_point[0] - self.start_point[0]
+            dy = self.end_point[1] - self.start_point[1]
+            self.rotate_rad = math.atan2(dy, dx)
+            self.update_control_points()
+            self.update_mask()
+            self.editor.root.start_draw_image()        
 
     def update_control_points(self):
         # コントロールポイントの位置を更新
@@ -758,7 +782,8 @@ class GradientMask(BaseMask):
             
             self.rotate.angle = math.degrees(rad)
 
-        self.draw_mask_to_fbo()
+        if self.is_draw_mask == True:
+            self.draw_mask_to_fbo()
     
     def get_mask_image(self):
         # パラメータ設定
@@ -768,7 +793,7 @@ class GradientMask(BaseMask):
         end_point = self.editor.tcg_to_texture(*self.end_point)
 
         # グラデーションを描画
-        gradient_image = self.draw_gradient(image_size, center, start_point, end_point, self.rotate_rad + self.editor.center_rotate_rad)
+        gradient_image = self.draw_gradient(image_size, center, start_point, end_point, self.editor.get_rotate_rad(self.rotate_rad))
 
         return gradient_image
     
@@ -877,13 +902,16 @@ class FullMask(BaseMask):
         dict = {
             'type': 'circular',
             'name': self.name,
-            'center': [cx, cy]
+            'center': [cx, cy],
+            'effects_param': self.effects_param
         }
         return dict
 
     def deserialize(self, dict):
+        self.initializing = False
         cx, cy = dict['center']
         self.name = dict['name']
+        self.effects_param = dict['effects_param']
 
         self.center = (cx, cy)
 
@@ -894,7 +922,8 @@ class FullMask(BaseMask):
     def update(self):
         cp_center = self.control_points[0]
         center = cp_center.ctrl_center
-        cp_center.ctrl_center = [0, 0] # コールバックが２回呼ばれるが気にしない
+        center[0] += float(np.finfo(np.float32).eps)
+        center[1] += float(np.finfo(np.float32).eps)
         cp_center.ctrl_center = center #
 
     def on_center_control_point_move(self, instance, value):
@@ -908,6 +937,7 @@ class FullMask(BaseMask):
                 cp.center_y += dy
         self.update_control_points()
         self.update_mask()
+        self.editor.root.start_draw_image()        
 
     def update_control_points(self):
         cp_center = self.control_points[0]
@@ -923,7 +953,8 @@ class FullMask(BaseMask):
             cx, cy = self.editor.tcg_to_world(*self.center)
             self.translate.x, self.translate.y = cx, cy
         
-        self.draw_mask_to_fbo()
+        if self.is_draw_mask == True:
+            self.draw_mask_to_fbo()
 
     def get_mask_image(self):
 
@@ -1119,6 +1150,7 @@ class MaskEditor2(FloatLayout):
         self.create_ui()
         self.current_mask_type = None
 
+        self.current_mask_type = None
         self.center_rotate_rad = 0
         self.orientation = 1
         self.margin = (0, 0)
@@ -1165,6 +1197,28 @@ class MaskEditor2(FloatLayout):
         
         # 既存のマスクに対する更新を処理
         for mask in reversed(self.mask_layers):
+            #pass    # 無限ループ対策
+            mask.update()
+
+    def serialize(self):
+        list = []
+        for mask in reversed(self.mask_layers):
+            list.append(mask.serialize())
+        if len(list) <= 0:
+            return None
+
+        dict = {
+            'mask2': list,
+        }
+        return dict
+
+    def deserialize(self, dict):
+        list = dict['mask2']
+
+        for dict in list:
+            type = dict.get('type', None)
+            mask = self.create_mask(type)
+            mask.deserialize(dict)
             mask.update()
 
     def get_active_mask(self):
@@ -1176,11 +1230,6 @@ class MaskEditor2(FloatLayout):
     def get_layers_list(self):
         return self.mask_layers
     
-    def clear_layers(self):
-        #self.disabled = True
-        self.mask_container.clear_widgets()
-        self.mask_layers.clear()
-
     def create_ui(self):
         # マスクタイプ選択ボタン
         btn_circular = Button(text='Circle', size_hint=(1, 0.1))
@@ -1203,6 +1252,15 @@ class MaskEditor2(FloatLayout):
         self.layer_list = BoxLayout(orientation='vertical', size_hint=(1, 0.7))
         self.ui_layout.add_widget(self.layer_list)
 
+    def set_draw_mask(self, is_draw_mask):
+        if is_draw_mask == False:
+            if self.rectangle is not None:
+                self.mask_container.canvas.before.remove(self.rectangle)
+                self.rectangle = None
+        mask = self.get_active_mask()
+        if mask is not None:
+            mask.is_draw_mask = is_draw_mask
+
     def draw_mask_image(self, glayimg):
         if self.rectangle is not None:
             self.mask_container.canvas.before.remove(self.rectangle)
@@ -1215,7 +1273,7 @@ class MaskEditor2(FloatLayout):
                 texture.flip_vertical()
                 px, py = self.to_window(*self.pos)
                 px, py = px+self.margin[0], py+self.margin[1]
-                Color(1, 0, 0, 0.5)
+                Color(1, 0, 0, 0.3)
                 self.rectangle = Rectangle(texture=texture, pos=(px, py), size=self.texture_size)
 
         # cv2.imwrite('combined_mask.png', (glayimg*255).astype(np.uint8))
@@ -1239,25 +1297,7 @@ class MaskEditor2(FloatLayout):
                 Logger.warning("MaskEditor: 画像がまだロードされていません。マスクを追加できません。")
                 return False
             
-            # マスク作成
-            if self.current_mask_type == 'circular_gradient':
-                mask = CircularGradientMask(editor=self)
-            elif self.current_mask_type == 'gradient':
-                mask = GradientMask(editor=self)
-            elif self.current_mask_type == 'full':
-                mask = FullMask(editor=self)
-            elif self.current_mask_type == 'free_draw':
-                mask = FreeDrawMask(editor=self)
-            else:
-                Logger.error(f"MaskEditor: 不明なマスクタイプ: {self.current_mask_type}")
-                return False
-            
-            self.mask_container.add_widget(mask)
-            self.mask_layers.append(mask)
-
-            # レイヤーUIに追加
-            layer = MaskLayer(mask=mask)
-            self.layer_list.add_widget(layer)
+            mask = self.create_mask(self.current_mask_type)
             mask.on_touch_down(touch)
             self.current_mask_type = None
 
@@ -1271,6 +1311,30 @@ class MaskEditor2(FloatLayout):
                     return True
             return super().on_touch_down(touch)
 
+    def create_mask(self, mask_type):
+        # マスク作成
+        if mask_type == 'circular_gradient':
+            mask = CircularGradientMask(editor=self)
+        elif mask_type == 'gradient':
+            mask = GradientMask(editor=self)
+        elif mask_type == 'full':
+            mask = FullMask(editor=self)
+        elif mask_type == 'free_draw':
+            mask = FreeDrawMask(editor=self)
+        else:
+            Logger.error(f"MaskEditor: 不明なマスクタイプ: {self.current_mask_type}")
+            return False
+        
+        self.mask_container.add_widget(mask)
+        self.mask_layers.append(mask)
+
+        # レイヤーUIに追加
+        layer = MaskLayer(mask=mask)
+        self.layer_list.add_widget(layer)
+        self.root.set2widget_all(mask.effects, mask.effects_param)
+
+        return mask
+
     def delete_mask(self, mask):
         if len(self.mask_layers) <= 1:
             self.draw_mask_image(None)
@@ -1283,44 +1347,28 @@ class MaskEditor2(FloatLayout):
         self.mask_container.remove_widget(mask)
         self.mask_layers.remove(mask)
 
+    def clear_mask(self):
+        self.set_active_mask(None)
+        self.draw_mask_image(None)
+        self.mask_container.clear_widgets()
+        self.mask_layers.clear()
+        self.layer_list.clear_widgets()
+        self.current_mask_type = None
+
     def set_active_mask(self, mask):
         if self.active_mask and self.active_mask != mask:
             self.active_mask.active = False
         self.active_mask = mask
         if mask is not None:
             mask.active = True
-
-    def get_orientation(self):
-        rad, flip = 0, 0
-        if self.orientation == 1:
-            rad, flip = 0, 0
-            print("Horizontal (normal)")
-        elif self.orientation == 2:
-            rad, flip = 0, 1
-            print("Mirror horizontal")
-        elif self.orientation == 3:
-            rad, flip = math.radians(180), 0
-            print("Rotate 180")
-        elif self.orientation == 4:
-            rad, flip = 0, 2
-            print("Mirror vertical")
-        elif self.orientation == 5:
-            rad, flip = math.radians(-90), 1
-            print("Mirror horizontal and rotate 90 CW")
-        elif self.orientation == 6:
-            rad, flip = math.radians(-90), 0
-            print("Rotate 90 CW")
-        elif self.orientation == 7:
-            rad, flip = math.radians(-270), 1
-            print("Mirror horizontal and rotate 270 CW")
-        elif self.orientation == 8:
-            rad, flip = math.radians(-270), 0
-            print("Rotate 270 CW")
-
-        return rad, flip
+            self.root.set2widget_all(mask.effects, mask.effects_param)
+        else:
+            self.draw_mask_image(None)
+            self.root.set2widget_all(None, None)
+        self.root.start_draw_image()
 
     def get_rotate_rad(self, rotate_rad):
-        rad, flip = self.get_orientation()
+        rad, flip = util.split_orientation(self.orientation)
         if flip == 0:
             rad = rotate_rad + rad
         if flip == 1:
@@ -1344,11 +1392,11 @@ class MaskEditor2(FloatLayout):
         cx, cy = cx / self.crop_info[4], cy / self.crop_info[4]
         cx, cy = cx + self.crop_info[0], (self.texture_size[1] / self.crop_info[4] - cy) + self.crop_info[1]
         cx, cy = cx - self.image_size[0]/2, cy - self.image_size[1]/2
-        cx, cy = self.center_rotate_invert(cx, cy, self.center_rotate_rad)
+        cx, cy = self.center_rotate(cx, cy, self.center_rotate_rad)
         return (cx, cy)
 
     def tcg_to_world(self, cx, cy):
-        cx, cy = self.center_rotate(cx, cy, self.center_rotate_rad)
+        cx, cy = self.center_rotate_invert(cx, cy, self.center_rotate_rad)
         cx, cy = cx + self.image_size[0]/2, cy + self.image_size[1]/2
         cx, cy = cx - self.crop_info[0], (self.texture_size[1] / self.crop_info[4] + self.crop_info[1]) - cy
         cx, cy = cx * self.crop_info[4], cy * self.crop_info[4]        
@@ -1359,7 +1407,7 @@ class MaskEditor2(FloatLayout):
         return (cx, cy)
 
     def tcg_to_texture(self, cx, cy):
-        cx, cy = self.center_rotate(cx, cy, self.center_rotate_rad)
+        cx, cy = self.center_rotate_invert(cx, cy, self.center_rotate_rad)
         cx, cy = cx + self.image_size[0]/2, cy + self.image_size[1]/2
         cx, cy = cx - self.crop_info[0], (self.texture_size[1] / self.crop_info[4] + self.crop_info[1]) - cy
         cx, cy = cx * self.crop_info[4], cy * self.crop_info[4]        
@@ -1368,7 +1416,7 @@ class MaskEditor2(FloatLayout):
         return (cx, cy)
 
     def apply_orientation(self, cx, cy):
-        rad, flip = self.get_orientation()
+        rad, flip = util.split_orientation(self.orientation)
 
         if (flip & 1) == 1:
             cx = -cx
@@ -1386,7 +1434,7 @@ class MaskEditor2(FloatLayout):
         return (new_cx, new_cy)
 
     def center_rotate_invert(self, cx, cy, rotation_rad):
-        rad, _ = self.get_orientation()
+        rad, _ = util.split_orientation(self.orientation)
 
         new_cx = cx * math.cos(rotation_rad + rad) + cy * math.sin(rotation_rad + rad)
         new_cy = -cx * math.sin(rotation_rad + rad) + cy * math.cos(rotation_rad + rad)
@@ -1437,6 +1485,10 @@ class MaskEditor2(FloatLayout):
                 self.orientation = 1
             for mask in reversed(self.mask_layers):
                 mask.update()
+            return True
+        
+        elif keycode[1] == 's':
+            self.root.save_json()
             return True
         
         # 既存のマスクに対するタッチイベントを処理

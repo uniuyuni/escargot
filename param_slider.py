@@ -1,15 +1,16 @@
+
 from kivymd.app import MDApp
 from kivy.uix.boxlayout import BoxLayout as KVBoxLayout
-from kivy.properties import NumericProperty, StringProperty, BooleanProperty
+from kivy.properties import NumericProperty as KVNumericProperty, StringProperty as KVStringProperty, BooleanProperty as KVBooleanProperty
 
 class ParamSlider(KVBoxLayout):
-    text = StringProperty()
-    min = NumericProperty(-100)
-    max = NumericProperty(100)
-    value = NumericProperty(0)
-    step = NumericProperty(1)
-    for_float = BooleanProperty(False)
-    slider = NumericProperty(0)
+    text = KVStringProperty()
+    min = KVNumericProperty(-100)
+    max = KVNumericProperty(100)
+    value = KVNumericProperty(0)
+    step = KVNumericProperty(1)
+    for_float = KVBooleanProperty(False)
+    slider = KVNumericProperty(0)
     
     def __init__(self, **kwargs):
         super(ParamSlider, self).__init__(**kwargs)
