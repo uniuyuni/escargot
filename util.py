@@ -1,5 +1,6 @@
 
 import math
+import numpy as np
 
 def to_texture(pos, widget):
     # ウィンドウ座標からローカルイメージ座標に変換
@@ -64,3 +65,9 @@ def split_orientation(orientation):
         print("Rotate 270 CW")
 
     return rad, flip
+
+def tone_map(x, threshold=1.0):
+    return np.where(x > threshold, np.log1p(x - threshold) + threshold, x)
+
+def soft_clip(x, threshold=1.0):
+    return threshold * np.tanh(x / threshold)

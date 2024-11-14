@@ -213,6 +213,18 @@ def gaussian_blur(src, ksize=(3, 3), sigma=0.0):
 
     return np.array(array)
 
+def lensblur_filter(image, radius):
+    # カーネルを生成
+    kernel_size = 2 * radius + 1
+    kernel = np.zeros((kernel_size, kernel_size), np.float32)
+    
+    # カーネルに円を描く
+    cv2.circle(kernel, (radius, radius), radius, 1, -1)
+    kernel /= np.sum(kernel)
+
+    # レンズブラーを適用
+    blurred_image = cv2.filter2D(image, -1, kernel)
+    return blurred_image
 
 @partial(jit, static_argnums=1)
 def __lucy_richardson_gauss(srcf, iteration):
@@ -252,7 +264,7 @@ def lowpass_filter(img, r):
 def highpass_filter(img, r):
     hpf = img - gaussian_blur(img, ksize=(r, r), sigma=0.0)+0.5
 
-    return hpf
+    return hpf    
 
 # オーバーレイ合成
 def blend_overlay(base, over):
@@ -321,7 +333,7 @@ def adjust_contrast(img, cf, c):
 
     if f == 0.0:
         adjust_img = img.copy()
-    elif f > 0.0:
+    elif f >= 0.0:
         adjust_img = sigmoid.scaled_sigmoid(img, f, c)
     else:
         adjust_img = sigmoid.scaled_inverse_sigmoid(img, f, c)
@@ -444,40 +456,44 @@ def adjust_saturation(s, sat, vib):
 
 
 # スプラインカーブの適用
-def apply_point_list(img, point_list):
+def calc_point_list_to_lut(img, point_list):
     # ソートとリスト内包表記をtogetherly処理
     point_list = sorted((pl[0], pl[1]) for pl in point_list)
     
     # unzip and convert to numpy arrays
     x, y = map(np.array, zip(*point_list))
     
+    # スプライン補間の計算
     tck, u = splprep([x, y], k=min(3, len(x)-1), s=0)
-    unew = np.linspace(0, 1.0, 1000, dtype=np.float32)
+    unew = np.linspace(0, 1.0, 1024, dtype=np.float32)
     out = splev(unew, tck)
-    #out[1] = np.clip(out[1], 0, self.height)
     
-    return apply_spline(img, out)
-
-def apply_spline(img, spline):
-    # img: 適用イメージ RGB
-    # spline: スプライン
-
-    if spline is None:
-        return img
-
-    x, y = spline
-
     # Generate the tone curve mapping
-    lut = np.interp(np.arange(65536*2), x*65535, y*65535).astype(np.float32) #0.~2.
+    x, y = out
+    
+    # 拡張されたレンジでLUTを生成（0〜2の範囲をカバー）
+    extended_range = np.linspace(0, 2.0, 131072)  # 2倍のレンジ
+    lut = np.interp(extended_range, x, y, left=y[0], right=y[-1]).astype(np.float32)
+    
+    return lut
 
-    # Apply the tone curve mapping to the image
-    img2 = lut[(img*65535).astype(np.uint16)]
-    img2 = img2/65535
-
-    return img2
+def apply_lut(img, lut):
+    if lut is None:
+        return img
+    
+    # 入力画像の値を適切にクリップ
+    img_clipped = np.clip(img, 0, 2.0)
+    
+    # スケーリングしてLUTのインデックスに変換
+    lut_indices = (img_clipped * 65535).astype(np.uint16)
+    
+    # LUTを適用
+    result = lut[lut_indices]
+    
+    return result
 
 def __adjust_hls(hls_img, mask, adjust):
-    hls = hls_img.copy()
+    hls = np.copy(hls_img)
     hls[mask, 0] = hls_img[mask, 0] + adjust[0]*1.8
     hls[mask, 1] = hls_img[mask, 1] * (2.0**adjust[1])
     hls[mask, 2] = hls_img[mask, 2] * (2.0**adjust[2])
@@ -555,19 +571,6 @@ def adjust_hls_magenta(hls_img, magenta_adjust):
 
     return hls_img
 
-def adjust_density(hls_img, intensity):
-    hls = np.zeros_like(hls_img)
-
-    # 濃さ
-    intensity = -intensity
-    hls[:, :, 0] = hls_img[:, :, 0]
-    hls[:, :, 1] = adjust_shadow(hls_img[:, :, 1], intensity/2)
-    hls[:, :, 1] = adjust_highlight(hls[:, :, 1], intensity/2)
-    hls[:, :, 2] = hls_img[:, :, 2] * (1.0 - intensity / 100.0)
-
-    return hls
-
-
 def adjust_shadow_highlight(image, highlight_adjustment=0, shadow_adjustment=0):
     # 調整パラメータを [-1, 1] の範囲にスケーリング
     highlight_adjustment = np.clip(highlight_adjustment / 300, -1, 1)
@@ -596,27 +599,6 @@ def adjust_shadow_highlight(image, highlight_adjustment=0, shadow_adjustment=0):
     
     # 補正範囲を [0, 2] に制限
     return np.clip(adjusted_image, 0, 2)
-
-@partial(jit, static_argnums=1)
-def __adjust_clear_color(rgb_img, intensity):
-
-    # 清書色、濁色
-    if intensity >= 0:
-        rgb = jnp.clip(rgb_img * (1 + intensity / 100.0), 0.0, 2.0)
-    else:
-        gray = __cvtToGrayColor(rgb_img)
-        factor = -intensity / 200.0
-        rgb = rgb_img * (1 - factor) + gray[..., jnp.newaxis] * factor
-        rgb = rgb * (1 - factor * 0.3)
-        rgb = jnp.clip(rgb, 0.0, 2.0)
-
-    return rgb
-
-def adjust_clear_color(rgb_img, intensity):
-    array = __adjust_clear_color(rgb_img, intensity)
-    array.block_until_ready()
-
-    return np.array(array)
 
 
 # マスクイメージの適用
@@ -664,16 +646,9 @@ def crop_image(image, texture_width, texture_height, click_x, click_y, offset, i
         scale = texture_height/image_height
 
     if not is_zoomed:
-
-        if np.any(image < 0.0) or np.any(image > 2.0):
-            print("outofrange", image)
-            image = np.clip(image, 0, 2)
         # リサイズ
         resized_img = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
         #resized_img = jax.image.resize(image, (new_height, new_width, 3), method="lanczos3")
-        if np.any(resized_img < 0.0) or np.any(resized_img > 2.0):
-            print("outofrange", resized_img)
-            resized_img = np.clip(resized_img, 0, 2)
 
         # 背景を作成（透明な黒）
         #result = jnp.zeros((texture_height, texture_width, 3), dtype=np.float32)
@@ -685,7 +660,6 @@ def crop_image(image, texture_width, texture_height, click_x, click_y, offset, i
         crop_info = [0, 0, image_width, image_height, scale]
 
     else:
-
         # クリック位置を元の画像の座標系に変換
         click_x = click_x - offset_x
         click_y = click_y - offset_y

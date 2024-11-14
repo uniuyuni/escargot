@@ -6,11 +6,13 @@ from kivymd.uix.widget import MDWidget
 from kivy.core.window import Window as KVWindow
 from kivy.graphics.texture import Texture as KVTexture
 from kivy.clock import Clock, mainthread
-from kivy.metrics import dp
+from kivy.metrics import Metrics, dp
 from functools import partial
 import math
 from datetime import datetime as dt
 import json
+import joblib
+import threading
 
 import core
 import imageset
@@ -92,7 +94,7 @@ class MainWidget(MDWidget):
  
     def load_image(self, file_path, exif_data):
         self.imgset = imageset.ImageSet()
-        self.imgset.load(file_path, exif_data, self.primary_param)
+        self.imgset.load(file_path, exif_data, self.primary_param, self.start_draw_image)
 
         self.texture = KVTexture.create(size=(self.texture_width, self.texture_height), colorfmt='rgb', bufferfmt='float')
         self.texture.flip_vertical()
@@ -130,25 +132,27 @@ class MainWidget(MDWidget):
 
     def process_pipeline(self, img, crop_info, offset, is_zoomed, texture_width, texture_height, click_x, click_y, primary_effects, primary_param, mask_editor):
 
-        if np.any(img < 0.0) or np.any(img > 2.0):
-            print("outofrange", img)
-            img = np.clip(img, 0, 2)
-
         # 背景レイヤー
         img0, reset = effects.pipeline_lv0(img, primary_effects, primary_param)
-        if np.any(img0 < 0.0) or np.any(img0 > 2.0):
-            print("outofrange", img0)
-            imgc = np.clip(img0, 0, 2)
         if is_zoomed:
             imgc, crop_info2 = core.crop_image_info(img0, crop_info, offset)
         else:
             imgc, crop_info2 = core.crop_image(img0, texture_width, texture_height, click_x, click_y, offset, is_zoomed)
         mask_editor.set_image(img0, texture_width, texture_height, crop_info2, math.radians(primary_param.get('rotation', 0)), -1)
 
-        if np.any(imgc < 0.0) or np.any(imgc > 2.0):
-            print("outofrange", imgc)
-            imgc = np.clip(imgc, 0, 2)
+        # 並列処理
+        #split_img = []
+        #split_img.extend(np.vsplit(imgc, 8))
+        #for i, img in enumerate(split_img):
+        #    split_img[i] = MainWidget._process_pipeline2(img, primary_effects, primary_param, mask_editor)
+        #result_img = joblib.Parallel(n_jobs=-1, require='sharedmem')(joblib.delayed(MainWidget._process_pipeline2)(img, primary_effects, primary_param, mask_editor) for img in split_img)
+        #img2 = np.vstack(result_img)        
+        img2 = MainWidget._process_pipeline2(imgc, primary_effects, primary_param, mask_editor)
 
+        return img2, crop_info2
+
+    @staticmethod
+    def _process_pipeline2(imgc, primary_effects, primary_param, mask_editor):
         img1 = effects.pipeline_lv1(imgc, primary_effects, primary_param)
         img2 = effects.pipeline_lv2(img1, primary_effects, primary_param)
         img3 = effects.pipeline_lv3(img2, primary_effects, primary_param)
@@ -162,8 +166,7 @@ class MainWidget(MDWidget):
 
             img2 = core.apply_mask(img2, mask.get_mask_image(), img3)
 
-        return img2, crop_info2
-
+        return img2
 
     def start_draw_image(self, offset=(0, 0)):
         if self.is_draw_image == False: #２重コール防止

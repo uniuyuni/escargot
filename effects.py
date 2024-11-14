@@ -307,35 +307,24 @@ class LUTEffect(Effect):
 
         return self.diff
 
-class LowpassFilterEffect(Effect):
+class LensblurFilterEffect(Effect):
 
     def set2widget(self, widget, param):
-        widget.ids["slider_lowpass_filter"].set_slider_value(param.get('lowpass_filter', 0))
-        widget.ids["slider_highpass_filter"].set_slider_value(param.get('highpass_filter', 0))
+        widget.ids["slider_lensblur_filter"].set_slider_value(param.get('lensblur_filter', 0))
 
     def set2param(self, param, widget):
-        param['lowpass_filter'] = widget.ids["slider_lowpass_filter"].value
-        param['highpass_filter'] = widget.ids["slider_highpass_filter"].value
+        param['lensblur_filter'] = widget.ids["slider_lensblur_filter"].value
 
     def make_diff(self, img, param):
-        lpfr = int(param.get('lowpass_filter', 0))
-        hpfr = int(param.get('highpass_filter', 0))
-        if lpfr == 0 and hpfr == 0:
+        lpfr = int(param.get('lensblur_filter', 0))
+        if lpfr == 0:
             self.diff = None
             self.hash = None
 
         else:
-            param_hash = hash((lpfr, hpfr))
+            param_hash = hash((lpfr))
             if self.hash != param_hash:
-                if lpfr > 0 and hpfr == 0:
-                    self.diff = core.lowpass_filter(img, lpfr-1)
-                elif lpfr == 0 and hpfr > 0:
-                    self.diff = core.highpass_filter(img, hpfr-1)
-                    #self.diff = highpass
-                else:
-                    lowpass = core.lowpass_filter(img, lpfr-1)
-                    highpass = core.highpass_filter(img, hpfr-1)
-                    self.diff = core.blend_overlay(np.array(lowpass), np.array(highpass))
+                self.diff = core.lensblur_filter(img, lpfr-1)
                 self.hash = param_hash
 
         return self.diff
@@ -391,7 +380,6 @@ class ColorTemperatureEffect(Effect):
         Y = param.get('color_Y', 1.0)
         param_hash = hash((temp, tint))
         if self.hash != param_hash:
-            #self.diff = core.convert_TempTint2RGB(temp, tint, Y)
             self.diff = core.invert_TempTint2RGB(temp, tint, Y, 5000)
             self.hash = param_hash
 
@@ -420,6 +408,9 @@ class ExposureEffect(Effect):
             self.hash = param_hash
 
         return self.diff
+    
+    def apply_diff(self, rgb):
+        return rgb * self.diff
 
 class ContrastEffect(Effect):
 
@@ -437,11 +428,7 @@ class ContrastEffect(Effect):
             self.hash = None
 
         elif self.hash != param_hash:
-            #c = param.get('raw_white_level', 65535) / 65535.0 * 0.5
-            c = (65535-param.get('raw_white_level', 0)) / 65535.0 * 0.5
-            c = np.median(rgb)
-            c = 0.5
-            rgb2 = core.adjust_contrast(rgb, con, c)
+            rgb2 = core.adjust_contrast(rgb, con, 0.5)
             self.diff = rgb2-rgb
             self.hash = param_hash
 
@@ -463,8 +450,9 @@ class MidtoneEffect(Effect):
             self.hash = None
 
         elif self.hash != param_hash:
-            hls2_l = core.adjust_shadow(hls_l, mt)
-            hls2_l = core.adjust_highlight(hls2_l, mt)
+            hls2_l = core.adjust_shadow_highlight(hls_l, mt, mt)
+            #hls2_l = core.adjust_shadow(hls_l, mt)
+            #hls2_l = core.adjust_highlight(hls2_l, mt)
             self.diff = hls2_l-hls_l    # Lのみ保存
             self.hash = param_hash
 
@@ -503,13 +491,10 @@ class ToneEffect(Effect):
             points /= 65535.0
             values /= 65535.0
 
-            hls2_l = core.apply_curve(hls_l, points, values, False)
-            hls2_l = core.adjust_shadow_highlight(hls2_l, highlight, shadow)
-            #hls2_l = core.adjust_shadow(hls2_l, shadow)
-            #hls2_l = core.adjust_highlight(hls2_l, highlight)
+            hls2_l = core.adjust_shadow_highlight(hls_l, highlight, shadow)
+            hls2_l = core.apply_curve(hls2_l, points, values, False)
             self.diff = hls2_l-hls_l    # Lのみ保存
             self.hash = param_hash
-
         return self.diff
 
 class SaturationEffect(Effect):
@@ -536,6 +521,9 @@ class SaturationEffect(Effect):
             self.hash = param_hash
         
         return self.diff
+    
+    def apply_diff(self, hls_s):
+        return hls_s * self.diff
 
 class DehazeEffect(Effect):
     __dehaze = None
@@ -610,7 +598,7 @@ class TonecurveEffect(Effect):
     def set2param(self, param, widget):
         param['tonecurve'] = widget.ids["tonecurve"].get_point_list()
 
-    def make_diff(self, img, param):
+    def make_diff(self, rgb, param):
         pl = param.get('tonecurve', None)
         if pl is None:
             self.diff = None
@@ -619,11 +607,13 @@ class TonecurveEffect(Effect):
         else:
             param_hash = hash(np.sum(pl))
             if self.hash != param_hash:
-                img2 = core.apply_point_list(img, pl)
-                self.diff = img2-img        # RGB保存
+                self.diff = core.calc_point_list_to_lut(rgb, pl)
                 self.hash = param_hash
 
         return self.diff
+    
+    def apply_diff(self, rgb):
+        return core.apply_lut(rgb, self.diff)
 
 class TonecurveRedEffect(Effect):
 
@@ -633,7 +623,7 @@ class TonecurveRedEffect(Effect):
     def set2param(self, param, widget):
         param['tonecurve_red'] = widget.ids["tonecurve_red"].get_point_list()
 
-    def make_diff(self, img, param):
+    def make_diff(self, rgb_r, param):
         pl = param.get('tonecurve_red', None)
         if pl is None:
             self.diff = None
@@ -642,11 +632,13 @@ class TonecurveRedEffect(Effect):
         else:
             param_hash = hash(np.sum(pl))
             if self.hash != param_hash:
-                img2 = core.apply_point_list(img[:,:,0], pl)
-                self.diff = img2-img[:,:,0]            # R保存
+                self.diff = core.calc_point_list_to_lut(rgb_r, pl)
                 self.hash = param_hash
 
         return self.diff
+
+    def apply_diff(self, rgb_r):
+        return core.apply_lut(rgb_r, self.diff)
 
 class TonecurveGreenEffect(Effect):
 
@@ -656,7 +648,7 @@ class TonecurveGreenEffect(Effect):
     def set2param(self, param, widget):
         param['tonecurve_green'] = widget.ids["tonecurve_green"].get_point_list()
 
-    def make_diff(self, img, param):   
+    def make_diff(self, rgb_g, param):   
         pl = param.get('tonecurve_green', None)
         if pl is None:
             self.diff = None
@@ -665,11 +657,13 @@ class TonecurveGreenEffect(Effect):
         else:
             param_hash = hash(np.sum(pl))
             if self.hash != param_hash:
-                img2 = core.apply_point_list(img[:,:,1], pl)
-                self.diff = img2-img[:,:,1]            # G保存
+                self.diff = core.calc_point_list_to_lut(rgb_g, pl)
                 self.hash = param_hash
 
         return self.diff
+
+    def apply_diff(self, rgb_g):
+        return core.apply_lut(rgb_g, self.diff)
 
 class TonecurveBlueEffect(Effect):
 
@@ -679,7 +673,7 @@ class TonecurveBlueEffect(Effect):
     def set2param(self, param, widget):
         param['tonecurve_blue'] = widget.ids["tonecurve_blue"].get_point_list()
 
-    def make_diff(self, img, param):
+    def make_diff(self, rgb_b, param):
         pl = param.get('tonecurve_blue', None)
         if pl is None:
             self.diff = None
@@ -688,11 +682,13 @@ class TonecurveBlueEffect(Effect):
         else:
             param_hash = hash(np.sum(pl))
             if self.hash != param_hash:
-                img2 = core.apply_point_list(img[:,:,2], pl)
-                self.diff = img2-img[:,:,2]        # B保存
+                self.diff = core.calc_point_list_to_lut(rgb_b, pl)
                 self.hash = param_hash
 
         return self.diff
+
+    def apply_diff(self, rgb_g):
+        return core.apply_lut(rgb_g, self.diff)
 
 class GradingEffect(Effect):
     __colorsys = None
@@ -714,7 +710,7 @@ class GradingEffect(Effect):
         param["grading" + self.numstr + "_lum"] = widget.ids["slider_grading" + self.numstr + "_lum"].value
         param["grading" + self.numstr + "_sat"] = widget.ids["slider_grading" + self.numstr + "_sat"].value
 
-    def make_diff(self, hls, param):
+    def make_diff(self, rgb, param):
         pl = param.get("grading" + self.numstr, None)
         gh = param.get("grading" + self.numstr + "_hue", 0)
         gl = param.get("grading" + self.numstr + "_lum", 0)
@@ -728,13 +724,18 @@ class GradingEffect(Effect):
                 if GradingEffect.__colorsys is None:
                     GradingEffect.__colorsys = importlib.import_module('colorsys')
 
-                blend = core.apply_point_list(hls[:,:,1], pl)
-                rgb = np.array(GradingEffect.__colorsys.hls_to_rgb(gh/360.0, gl/100.0, gs/100.0), dtype=np.float32)
-                blend_inv = 1-blend
-                self.diff = (hls*blend_inv[:, :, np.newaxis] + rgb*blend[:, :, np.newaxis]) - hls
+                blend = core.calc_point_list_to_lut(rgb, pl)
+                rgbs = np.array(GradingEffect.__colorsys.hls_to_rgb(gh/360.0, gl/100.0, gs/100.0), dtype=np.float32)
+                self.diff = (blend, rgbs)
                 self.hash = param_hash
 
         return self.diff
+    
+    def apply_diff(self, rgb):
+        blend, rgbs = self.diff
+        blend = core.apply_lut(rgb, blend)
+        blend_inv = 1-blend
+        return (rgb*blend_inv + rgb*rgbs*blend)
 
 class LumvsLumEffect(Effect):
 
@@ -753,11 +754,14 @@ class LumvsLumEffect(Effect):
         else:
             param_hash = hash(np.sum(ll))
             if self.hash != param_hash:
-                hls2_l = core.apply_point_list(hls_l, ll)
+                hls2_l = core.calc_point_list_to_lut(hls_l, ll)
                 self.diff = 2.0**((hls2_l-0.5)*2.0)   # Lのみ保存
                 self.hash = param_hash
 
         return self.diff
+
+    def apply_diff(self, hls_l):
+        return hls_l * self.diff
 
 class HuevsHueEffect(Effect):
 
@@ -776,11 +780,14 @@ class HuevsHueEffect(Effect):
         else:
             param_hash = hash(np.sum(hh))
             if self.hash != param_hash:
-                hls2_h = core.apply_point_list(hls_h/360.0, hh)
+                hls2_h = core.calc_point_list_to_lut(hls_h/360.0, hh)
                 self.diff = (hls2_h-0.5)*360.0    # Hのみ保存
                 self.hash = param_hash
 
         return self.diff
+
+    def apply_diff(self, hls_h):
+        return hls_h + self.diff
 
 class HuevsSatEffect(Effect):
 
@@ -790,7 +797,7 @@ class HuevsSatEffect(Effect):
     def set2param(self, param, widget):
         param['HuevsSat'] = widget.ids["HuevsSat"].get_point_list()
 
-    def make_diff(self, hls_h, param):
+    def make_diff(self, hls_s, param):
         hs = param.get("HuevsSat", None)
         if hs is None:
             self.diff = None
@@ -799,11 +806,14 @@ class HuevsSatEffect(Effect):
         else:
             param_hash = hash(np.sum(hs))
             if self.hash != param_hash:
-                hls2_s = core.apply_point_list(hls_h, hs)
+                hls2_s = core.calc_point_list_to_lut(hls_s, hs)
                 self.diff = 2.0**((hls2_s-0.5)*2.0)     # Sのみ保存
                 self.hash = param_hash
 
         return self.diff
+
+    def apply_diff(self, hls_s):
+        return hls_s * self.diff
 
 class HuevsLumEffect(Effect):
 
@@ -813,7 +823,7 @@ class HuevsLumEffect(Effect):
     def set2param(self, param, widget):
         param['HuevsLum'] = widget.ids["HuevsLum"].get_point_list()
 
-    def make_diff(self, hls_h, param):
+    def make_diff(self, hls_l, param):
         hl = param.get("HuevsLum", None)
         if hl is None:
             self.diff = None
@@ -822,11 +832,14 @@ class HuevsLumEffect(Effect):
         else:
             param_hash = hash(np.sum(hl))
             if self.hash != param_hash:
-                hls2_l = core.apply_point_list(hls_h, hl)
+                hls2_l = core.calc_point_list_to_lut(hls_l, hl)
                 self.diff = 2.0**((hls2_l-0.5)*2.0)     # Lのみ保存
                 self.hash = param_hash
 
         return self.diff
+
+    def apply_diff(self, hls_l):
+        return hls_l * self.diff
 
 class LumvsSatEffect(Effect):
 
@@ -845,11 +858,14 @@ class LumvsSatEffect(Effect):
         else:
             param_hash = hash(np.sum(ls))
             if self.hash != param_hash:
-                hls2_s = core.apply_point_list(hls_l, ls)
+                hls2_s = core.calc_point_list_to_lut(hls_l, ls)
                 self.diff = 2.0**((hls2_s-0.5)*2.0)     # Sのみ保存
                 self.hash = param_hash
 
         return self.diff
+
+    def apply_diff(self, hls_l):
+        return hls_l * self.diff
 
 class SatvsSatEffect(Effect):
 
@@ -868,11 +884,14 @@ class SatvsSatEffect(Effect):
         else:
             param_hash = hash(np.sum(ss))
             if self.hash != param_hash:
-                hls2_s = core.apply_point_list(hls_s, ss)
+                hls2_s = core.calc_point_list_to_lut(hls_s, ss)
                 self.diff = 2.0**((hls2_s-0.5)*2.0)     # Sのみ保存
                 self.hash = param_hash
 
         return self.diff
+
+    def apply_diff(self, hls_s):
+        return hls_s * self.diff
 
 class SatvsLumEffect(Effect):
 
@@ -891,11 +910,14 @@ class SatvsLumEffect(Effect):
         else:
             param_hash = hash(np.sum(sl))
             if self.hash != param_hash:
-                hls2_l = core.apply_point_list(hls_s, sl)
+                hls2_l = core.calc_point_list_to_lut(hls_s, sl)
                 self.diff = 2.0**((hls2_l-0.5)*2.0)     # Lのみ保存
                 self.hash = param_hash
 
         return self.diff
+    
+    def apply_diff(self, hls_s):
+        return hls_s * self.diff
 
 
 class HLSRedEffect(Effect):
@@ -920,11 +942,13 @@ class HLSRedEffect(Effect):
             self.hash = None
 
         elif self.hash != param_hash:
-            hls2 = core.adjust_hls_red(hls, (hue, lum, sat))
-            self.diff = hls2-hls    # HLS差分
+            self.diff = core.adjust_hls_red(hls, (hue, lum, sat)) - hls
             self.hash = param_hash
 
         return self.diff
+    
+    def apply_diff(self, hls):
+        return hls + self.diff
 
 class HLSOrangeEffect(Effect):
 
@@ -948,11 +972,13 @@ class HLSOrangeEffect(Effect):
             self.hash = None
 
         elif self.hash != param_hash:
-            hls2 = core.adjust_hls_orange(hls, (hue, lum, sat))
-            self.diff = hls2-hls    # HLS差分
+            self.diff = core.adjust_hls_orange(hls, (hue, lum, sat)) - hls
             self.hash = param_hash
 
         return self.diff
+    
+    def apply_diff(self, hls):
+        return hls + self.diff
 
 class HLSYellowEffect(Effect):
 
@@ -976,11 +1002,13 @@ class HLSYellowEffect(Effect):
             self.hash = None
 
         elif self.hash != param_hash:
-            hls2 = core.adjust_hls_yellow(hls, (hue, lum, sat))
-            self.diff = hls2-hls    # HLS差分
+            self.diff = core.adjust_hls_yellow(hls, (hue, lum, sat)) - hls
             self.hash = param_hash
 
         return self.diff
+
+    def apply_diff(self, hls):
+        return hls + self.diff
 
 class HLSGreenEffect(Effect):
 
@@ -1004,11 +1032,13 @@ class HLSGreenEffect(Effect):
             self.hash = None
 
         elif self.hash != param_hash:
-            hls2 = core.adjust_hls_green(hls, (hue, lum, sat))
-            self.diff = hls2-hls    # HLS差分
+            self.diff = core.adjust_hls_green(hls, (hue, lum, sat)) - hls
             self.hash = param_hash
 
         return self.diff
+
+    def apply_diff(self, hls):
+        return hls + self.diff
 
 class HLSCyanEffect(Effect):
 
@@ -1032,11 +1062,13 @@ class HLSCyanEffect(Effect):
             self.hash = None
 
         elif self.hash != param_hash:
-            hls2 = core.adjust_hls_cyan(hls, (hue, lum, sat))
-            self.diff = hls2-hls    # HLS差分
+            self.diff = core.adjust_hls_cyan(hls, (hue, lum, sat)) - hls
             self.hash = param_hash
 
         return self.diff
+
+    def apply_diff(self, hls):
+        return hls + self.diff
 
 class HLSBlueEffect(Effect):
 
@@ -1060,11 +1092,13 @@ class HLSBlueEffect(Effect):
             self.hash = None
 
         elif self.hash != param_hash:
-            hls2 = core.adjust_hls_blue(hls, (hue, lum, sat))
-            self.diff = hls2-hls    # HLS差分
+            self.diff = core.adjust_hls_blue(hls, (hue, lum, sat)) - hls
             self.hash = param_hash
 
         return self.diff
+
+    def apply_diff(self, hls):
+        return hls + self.diff
 
 class HLSPurpleEffect(Effect):
 
@@ -1088,11 +1122,13 @@ class HLSPurpleEffect(Effect):
             self.hash = None
 
         elif self.hash != param_hash:
-            hls2 = core.adjust_hls_purple(hls, (hue, lum, sat))
-            self.diff = hls2-hls    # HLS差分
+            self.diff = core.adjust_hls_purple(hls, (hue, lum, sat)) - hls
             self.hash = param_hash
 
         return self.diff
+
+    def apply_diff(self, hls):
+        return hls + self.diff
 
 class HLSMagentaEffect(Effect):
 
@@ -1116,11 +1152,13 @@ class HLSMagentaEffect(Effect):
             self.hash = None
 
         elif self.hash != param_hash:
-            hls2 = core.adjust_hls_magenta(hls, (hue, lum, sat))
-            self.diff = hls2-hls    # HLS差分
+            self.diff = core.adjust_hls_magenta(hls, (hue, lum, sat)) - hls
             self.hash = param_hash
 
         return self.diff
+
+    def apply_diff(self, hls):
+        return hls + self.diff
 
 class GlowEffect(Effect):
 
@@ -1149,7 +1187,7 @@ class GlowEffect(Effect):
                 hls[:,:,1] = core.apply_level_adjustment(hls[:,:,1], gb, 127+gg/2, 255)
                 rgb2 = cv2.cvtColor(hls, cv2.COLOR_HLS2RGB_FULL)
                 if gg > 0:
-                    rgb2 = core.lowpass_filter(rgb2, gg*2-1)
+                    rgb2 = core.lensblur_filter(rgb2, gg*2-1)
                 go = go/100.0
                 self.diff = cv2.addWeighted(rgb, 1.0-go, core.blend_screen(rgb, rgb2), go, 0)
                 self.hash = param_hash
@@ -1187,7 +1225,7 @@ def create_effects():
     lv1['nlm_noise_reduction'] = NLMNoiseReductionEffect()
     lv1['deblur_filter'] = DeblurFilterEffect()
     lv1['defocus'] = DefocusEffect()
-    lv1['lowpass_filter'] = LowpassFilterEffect()
+    lv1['lensblur_filter'] = LensblurFilterEffect()
     lv1['perlin_noise'] = PerlinNoiseEffect()
     lv1['glow'] = GlowEffect()
     
@@ -1288,89 +1326,66 @@ def pipeline_lv2(img, effects, param):
 
     rgb = img.copy()
 
-    if np.any(rgb < 0.0) or np.any(rgb > 2.0):
-        print("outofrange", rgb)
-
     diff = lv2['color_temperature'].make_diff(rgb, param)
-    if diff is not None: rgb *= diff
-    
-    if np.any(rgb < 0.0) or np.any(rgb > 2.0):
-        print("outofrange", rgb)
-
-    diff = lv2['midtone'].make_diff(rgb, param)
-    if diff is not None: rgb += diff
-    diff = lv2['tone'].make_diff(rgb, param)
-    if diff is not None: rgb += diff
-    diff = lv2['level'].make_diff(rgb, param)
-    if diff is not None: rgb += diff
+    if diff is not None: rgb = lv2['color_temperature'].apply_diff(rgb)
 
     # 以降HLS
     hls = cv2.cvtColor(rgb, cv2.COLOR_RGB2HLS_FULL)
 
     # Lのみ
-    hls_l = hls[:, :, 1]
-    hls2_l = hls_l.copy()
-    """
-    diff = lv2['midtone'].make_diff(hls_l, param)
-    if diff is not None: hls2_l += diff
-    diff = lv2['tone'].make_diff(hls_l, param)
-    if diff is not None: hls2_l += diff
-    diff = lv2['level'].make_diff(hls_l, param)
-    if diff is not None: hls2_l += diff
-    hls[:, :, 1] = hls2_l
-    """
+    #hls_l = hls[:, :, 1]
+    #hls2_l = hls_l.copy()
 
     # HLS
     hls2 = hls.copy()
     diff = lv2['hls_red'].make_diff(hls, param)
-    if diff is not None: hls2 += diff
+    if diff is not None: hls2 = lv2['hls_red'].apply_diff(hls2)
     diff = lv2['hls_orange'].make_diff(hls, param)
-    if diff is not None: hls2 += diff
+    if diff is not None: hls2 = lv2['hls_orange'].apply_diff(hls2)
     diff = lv2['hls_yellow'].make_diff(hls, param)
-    if diff is not None: hls2 += diff
+    if diff is not None: hls2 = lv2['hls_yellow'].apply_diff(hls2)
     diff = lv2['hls_green'].make_diff(hls, param)
-    if diff is not None: hls2 += diff
+    if diff is not None: hls2 = lv2['hls_green'].apply_diff(hls2)
     diff = lv2['hls_cyan'].make_diff(hls, param)
-    if diff is not None: hls2 += diff
+    if diff is not None: hls2 = lv2['hls_cyan'].apply_diff(hls2)
     diff = lv2['hls_blue'].make_diff(hls, param)
-    if diff is not None: hls2 += diff
+    if diff is not None: hls2 = lv2['hls_blue'].apply_diff(hls2)
     diff = lv2['hls_purple'].make_diff(hls, param)
-    if diff is not None: hls2 += diff
+    if diff is not None: hls2 = lv2['hls_purple'].apply_diff(hls2)
     diff = lv2['hls_magenta'].make_diff(hls, param)
-    if diff is not None: hls2 += diff
+    if diff is not None: hls2 = lv2['hls_magenta'].apply_diff(hls2)
     hls = hls2
 
     # Hのみ
     hls_h = hls[:, :, 0]
     hls2_h = hls_h.copy()
     diff = lv2['HuevsHue'].make_diff(hls_h, param)
-    if diff is not None: hls2_h += diff
+    if diff is not None: hls2_h = lv2['HuevsHue'].apply_diff(hls2_h)
     hls[:, :, 0] = hls2_h
 
     #　Lのみ
     hls_l = hls[:, :, 1]
     hls2_l = hls_l.copy()
     diff = lv2['HuevsLum'].make_diff(hls_l, param)
-    if diff is not None: hls2_l *= diff
+    if diff is not None: hls2_l = lv2['HuevsLum'].apply_diff(hls2_l)
     diff = lv2['LumvsLum'].make_diff(hls_l, param)
-    if diff is not None: hls2_l *= diff
+    if diff is not None: hls2_l = lv2['LumvsLum'].apply_diff(hls2_l)
     diff = lv2['SatvsLum'].make_diff(hls_l, param)
-    if diff is not None: hls2_l *= diff
+    if diff is not None: hls2_l = lv2['SatvsLum'].apply_diff(hls2_l)
     hls[:, :, 1] = hls2_l
 
     # Sのみ
     hls_s = hls[:, :, 2]
     hls2_s = hls_s.copy()
     diff = lv2['HuevsSat'].make_diff(hls_s, param)
-    if diff is not None: hls2_s *= diff
+    if diff is not None: hls2_s = lv2['HuevsSat'].apply_diff(hls2_s)
     diff = lv2['LumvsSat'].make_diff(hls_s, param)
-    if diff is not None: hls2_s *= diff
+    if diff is not None: hls2_s = lv2['LumvsSat'].apply_diff(hls2_s)
     diff = lv2['SatvsSat'].make_diff(hls_s, param)
-    if diff is not None: hls2_s *= diff
-    hls[:, :, 2] = hls2_s
-
+    if diff is not None: hls2_s = lv2['SatvsSat'].apply_diff(hls2_s)
     diff = lv2['saturation'].make_diff(hls2_s, param)
-    if diff is not None: hls2_s *= diff
+
+    if diff is not None: hls2_s = lv2['saturation'].apply_diff(hls2_s)
     hls[:, :, 2] = hls2_s
 
     # 合成
@@ -1386,23 +1401,29 @@ def pipeline_lv2(img, effects, param):
 
     rgb2 = rgb.copy()
     diff = lv2['tonecurve'].make_diff(rgb, param)
-    if diff is not None: rgb2 += diff
+    if diff is not None: rgb2 = lv2['tonecurve'].apply_diff(rgb2)
     diff = lv2['tonecurve_red'].make_diff(rgb, param)
-    if diff is not None: rgb2[:,:,0] += diff
+    if diff is not None: rgb2[:,:,0] = lv2['tonecurve_red'].apply_diff(rgb2[:,:,0])
     diff = lv2['tonecurve_green'].make_diff(rgb, param)
-    if diff is not None: rgb2[:,:,1] += diff
+    if diff is not None: rgb2[:,:,1] = lv2['tonecurve_green'].apply_diff(rgb2[:,:,1])
     diff = lv2['tonecurve_blue'].make_diff(rgb, param)
-    if diff is not None: rgb2[:,:,2] += diff
+    if diff is not None: rgb2[:,:,2] = lv2['tonecurve_blue'].apply_diff(rgb2[:,:,2])
     diff = lv2['grading1'].make_diff(rgb, param)
-    if diff is not None: rgb2 += diff
+    if diff is not None: rgb2 = lv2['grading1'].apply_diff(rgb2)
     diff = lv2['grading2'].make_diff(rgb, param)
-    if diff is not None: rgb2 += diff
+    if diff is not None: rgb2 = lv2['grading2'].apply_diff(rgb2)
     rgb = rgb2
 
+    diff = lv2['exposure'].make_diff(rgb, param)
+    if diff is not None: rgb = lv2['exposure'].apply_diff(rgb)
     diff = lv2['contrast'].make_diff(rgb, param)
     if diff is not None: rgb += diff
-    diff = lv2['exposure'].make_diff(rgb, param)
-    if diff is not None: rgb *= diff
+    diff = lv2['midtone'].make_diff(rgb, param)
+    if diff is not None: rgb += diff
+    diff = lv2['tone'].make_diff(rgb, param)
+    if diff is not None: rgb += diff
+    diff = lv2['level'].make_diff(rgb, param)
+    if diff is not None: rgb += diff
 
     diff = lv2['lut'].make_diff(rgb, param)
     if diff is not None: rgb += diff

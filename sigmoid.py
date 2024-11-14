@@ -8,8 +8,7 @@ def __naive_sigmoid(x, gain, mid):
     return 1.0 / (1.0 + jnp.exp((mid - x) * gain))
 
 def naive_sigmoid(x, gain, mid):
-    mid = mid * 0.5
-    return np.array((__naive_sigmoid(x*0.5, gain, mid)*2.0).block_until_ready())
+    return np.array((__naive_sigmoid(x, gain, mid)).block_until_ready())
 
 @jit
 def __scaled_sigmoid(x, gain, mid):
@@ -19,8 +18,7 @@ def __scaled_sigmoid(x, gain, mid):
     return (s - min) / (max - min)
 
 def scaled_sigmoid(x, gain, mid):
-    mid = mid * 0.5
-    return np.array((__scaled_sigmoid(x*0.5, gain, mid)*2.0).block_until_ready())
+    return np.array((__scaled_sigmoid(x, gain, mid)).block_until_ready())
 
 @jit
 def __naive_inverse_sigmoid(x, gain, mid):
@@ -31,8 +29,7 @@ def __naive_inverse_sigmoid(x, gain, mid):
     return jnp.log(1.0 / a - 1.0)
 
 def naive_inverse_sigmoid(x, gain, mid):
-    mid = mid * 0.5
-    return np.array((__naive_inverse_sigmoid(x*0.5, gain, mid)*2.0).block_until_ready())
+    return np.array((__naive_inverse_sigmoid(x, gain, mid)).block_until_ready())
 
 @jit
 def __scaled_inverse_sigmoid(x, gain, mid):
@@ -42,5 +39,4 @@ def __scaled_inverse_sigmoid(x, gain, mid):
     return ((s - min) / (max - min))
 
 def scaled_inverse_sigmoid(x, gain, mid):
-    mid = mid * 0.5
-    return np.array((__scaled_inverse_sigmoid(x*0.5, gain, mid)*2.0).block_until_ready())
+    return np.array((__scaled_inverse_sigmoid(x, gain, mid)).block_until_ready())

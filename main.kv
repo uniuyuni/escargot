@@ -164,7 +164,7 @@ MainWidget:
                                 text: "Temperature"
                                 min: 2000
                                 max: 12000
-                                value: 5000
+                                value: 6500
                                 step: 100
                                 on_slider: root.apply_effects_lv(2, 'color_temperature')
 
@@ -223,7 +223,7 @@ MainWidget:
 
                             ParamSlider:
                                 id: slider_highlight
-                                text: "Hilights"
+                                text: "Highlights"
                                 min: -100
                                 max: 100
                                 value: 0
@@ -1146,22 +1146,13 @@ MainWidget:
                                 valign: 'center'
 
                             ParamSlider:
-                                id: slider_lowpass_filter
-                                text: "Lowpass Filter"
+                                id: slider_lensblur_filter
+                                text: "Lensblur Filter"
                                 min: 0
                                 max: 100
                                 value: 0
                                 step: 2
-                                on_slider: root.apply_effects_lv(1, 'lowpass_filter')
-
-                            ParamSlider:
-                                id: slider_highpass_filter
-                                text: "Highpass Filter"
-                                min: 0
-                                max: 100
-                                value: 0
-                                step: 2
-                                on_slider: root.apply_effects_lv(1, 'lowpass_filter')
+                                on_slider: root.apply_effects_lv(1, 'lensblur_filter')
 
                             ParamSlider:
                                 id: slider_perlin_noise
