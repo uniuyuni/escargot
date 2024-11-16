@@ -87,7 +87,7 @@ class ImageSet:
                 Ev = math.log2((Av**2)/Tv)
                 Sv = math.log2(exif_data.get('ISO', 100)/100.0)
                 Ev = Ev + Sv
-                self.img = self.img * core.adjust_exposure(self.img, core.calculate_correction_value(source_ev, Ev))
+                self.img = self.img * core.calc_exposure(self.img, core.calculate_correction_value(source_ev, Ev))
 
                 # ホワイトバランス定義
                 wb = raw.camera_whitebalance

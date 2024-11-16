@@ -18,6 +18,7 @@ import core
 import imageset
 import curve
 import effects
+import pipeline
 import param_slider
 import viewer_widget
 import histogram_widget
@@ -37,14 +38,14 @@ class MainWidget(MDWidget):
         self.imgset = None
         self.click_x = 0
         self.click_y = 0        
-        self.is_zoomed = False
+        self.crop_image = None
         self.crop_info = None
+        self.is_zoomed = False
         self.drag_start_point = None
         self.primary_param = {}
         self.primary_effects = effects.create_effects()
         self.apply_thread = None
         self.is_draw_image = False
-        self.img1_cache = None
 
     def on_kv_post(self, *args, **kwargs):
         super().on_kv_post(*args, **kwargs)
@@ -94,7 +95,7 @@ class MainWidget(MDWidget):
  
     def load_image(self, file_path, exif_data):
         self.imgset = imageset.ImageSet()
-        self.imgset.load(file_path, exif_data, self.primary_param, self.start_draw_image)
+        self.imgset.load(file_path, exif_data, self.primary_param, self.start_draw_image_and_crop)
 
         self.texture = KVTexture.create(size=(self.texture_width, self.texture_height), colorfmt='rgb', bufferfmt='float')
         self.texture.flip_vertical()
@@ -102,17 +103,22 @@ class MainWidget(MDWidget):
         self.click_x = 0
         self.click_y = 0
         self.is_zoomed = False
+        self.crop_image = None
         _, self.crop_info = core.crop_image(self.imgset.img, self.texture_width, self.texture_height, self.click_x, self.click_y, (0, 0), self.is_zoomed)
+        self.start_draw_image()
+    
+    def start_draw_image_and_crop(self):
+        self.crop_image = None
         self.start_draw_image()
 
     def empty_image(self):
         self.imgset = None
         self.texture = KVTexture.create(size=(self.texture_width, self.texture_height), colorfmt='rgb', bufferfmt='float')
+        self.texture.flip_vertical()
         self.ids["preview"].texture = None
 
     # @mainthread
     def blit_image(self, img):
-        np.clip(img, 0, 1)
         self.texture.blit_buffer(img.tobytes(), colorfmt='rgb', bufferfmt='float')
         self.ids["preview"].texture = None # 更新のために必要
         self.ids["preview"].texture = self.texture
@@ -122,56 +128,17 @@ class MainWidget(MDWidget):
 
     def draw_image(self, offset, dt):
         if self.imgset is not None:
-            img, self.crop_info = self.process_pipeline(self.imgset.img, self.crop_info, offset, self.is_zoomed, self.texture_width, self.texture_height, self.click_x, self.click_y, self.primary_effects, self.primary_param, self.ids['mask_editor2'])
-
+            img, self.crop_image, self.crop_info = pipeline.process_pipeline(self.imgset.img, self.crop_info, offset, self.crop_image, self.is_zoomed, self.texture_width, self.texture_height, self.click_x, self.click_y, self.primary_effects, self.primary_param, self.ids['mask_editor2'])
             img = core.apply_gamma(img, 1.0/2.222)
             self.draw_histogram(img)
+            img = np.clip(img, 0, 1)
             self.blit_image(img)
-
         self.is_draw_image = False
-
-    def process_pipeline(self, img, crop_info, offset, is_zoomed, texture_width, texture_height, click_x, click_y, primary_effects, primary_param, mask_editor):
-
-        # 背景レイヤー
-        img0, reset = effects.pipeline_lv0(img, primary_effects, primary_param)
-        if is_zoomed:
-            imgc, crop_info2 = core.crop_image_info(img0, crop_info, offset)
-        else:
-            imgc, crop_info2 = core.crop_image(img0, texture_width, texture_height, click_x, click_y, offset, is_zoomed)
-        mask_editor.set_image(img0, texture_width, texture_height, crop_info2, math.radians(primary_param.get('rotation', 0)), -1)
-
-        # 並列処理
-        #split_img = []
-        #split_img.extend(np.vsplit(imgc, 8))
-        #for i, img in enumerate(split_img):
-        #    split_img[i] = MainWidget._process_pipeline2(img, primary_effects, primary_param, mask_editor)
-        #result_img = joblib.Parallel(n_jobs=-1, require='sharedmem')(joblib.delayed(MainWidget._process_pipeline2)(img, primary_effects, primary_param, mask_editor) for img in split_img)
-        #img2 = np.vstack(result_img)        
-        img2 = MainWidget._process_pipeline2(imgc, primary_effects, primary_param, mask_editor)
-
-        return img2, crop_info2
-
-    @staticmethod
-    def _process_pipeline2(imgc, primary_effects, primary_param, mask_editor):
-        img1 = effects.pipeline_lv1(imgc, primary_effects, primary_param)
-        img2 = effects.pipeline_lv2(img1, primary_effects, primary_param)
-        img3 = effects.pipeline_lv3(img2, primary_effects, primary_param)
-
-        # マスクレイヤー
-        img2 = img3
-        mask_list = mask_editor.get_layers_list()
-        for mask in mask_list:
-            img1 = effects.pipeline_lv1(img2, mask.effects, mask.effects_param)
-            img2 = effects.pipeline_lv2(img1, mask.effects, mask.effects_param)
-
-            img2 = core.apply_mask(img2, mask.get_mask_image(), img3)
-
-        return img2
 
     def start_draw_image(self, offset=(0, 0)):
         if self.is_draw_image == False: #２重コール防止
-            Clock.schedule_once(partial(self.draw_image, offset), -1)
             self.is_draw_image = True
+            Clock.schedule_once(partial(self.draw_image, offset), -1)
         #self.apply_thread = threading.Thread(target=self.draw_image, daemon=True)
         #self.apply_thread.start()
     
@@ -192,12 +159,11 @@ class MainWidget(MDWidget):
         if effects is None:
             effects = self.primary_effects
             param = self.primary_param
-        #self.ids['effects'].disabled = True
+            
         for dict in effects:
             for l in dict.values():
                 l.set2widget(self, param)
                 l.reeffect()
-        #self.ids['effects'].disabled = False
     
     @mainthread
     def on_select(self, card):
@@ -209,10 +175,8 @@ class MainWidget(MDWidget):
             self.load_json()
             self.set2widget_all(self.primary_effects, self.primary_param)
             self.set_exif_data(card.exif_data)
-            self.img1_cache = None
         else:
             self.empty_image()
-            self.img1_cache = None
 
     def on_image_touch_down(self, touch):
         if self.collide_point(*touch.pos):
@@ -227,7 +191,7 @@ class MainWidget(MDWidget):
 
                 _, self.crop_info = core.crop_image(self.imgset.img, self.texture_width, self.texture_height, self.click_x, self.click_y, (0, 0), self.is_zoomed)
                 effects.reeffect_all(self.primary_effects)
-                self.start_draw_image()
+                self.start_draw_image_and_crop()
 
             # ドラッグ操作
             elif self.is_zoomed == True:
@@ -241,20 +205,19 @@ class MainWidget(MDWidget):
                     offset_y = touch.pos[1] - self.drag_start_point[1]
                     offset_x = -offset_x
 
-                    #_, self.crop_info = core.crop_image_info(self.imgset.img, self.crop_info, (offset_x, offset_y))
+                    _, self.crop_info = core.crop_image_info(self.imgset.img, self.crop_info, (offset_x, offset_y))
                     effects.reeffect_all(self.primary_effects)
-                    self.start_draw_image((offset_x, offset_y))
+                    self.start_draw_image_and_crop((offset_x, offset_y))
 
                     self.drag_start_point = touch.pos
                 
-
     def on_image_touch_up(self, touch):
         if self.is_zoomed == True:
             if self.drag_start_point != None:
                 self.drag_start_point = None
 
     def on_select_press(self):
-        macos.FileChooser(title="Select Folder", mode="dir", filters=[("Jpeg Files", "*.jpg")], on_selection=self.handle_dir_selection).run()
+        macos.FileChooser(title="Select Folder", mode="dir", filters=[("Jpeg Files", "*.jpg")], on_selection=self.handle_for_dir_selection).run()
 
     def delay_set_image(self, dt):
         self.mask_editor2.set_image(self.imgset.img, self.texture_width, self.texture_height, self.crop_info, math.radians(self.primary_param.get('rotation', 0)), -1)
@@ -269,7 +232,7 @@ class MainWidget(MDWidget):
             self.ids['preview_widget'].remove_widget(self.mask_editor2)
             self.ids['mask_editor2'].set_active_mask(None)
 
-    def handle_dir_selection(self, selection):
+    def handle_for_dir_selection(self, selection):
         if selection is not None:
             self.ids['viewer'].set_path(selection[0].decode())
 
@@ -327,8 +290,8 @@ class MainApp(MDApp):
 
         KVWindow.size = (dp(600), dp(400))
         scr_w,scr_h = pag.size()
-        KVWindow.left = (scr_w - dp(600)) / 2
-        KVWindow.top = (scr_h - dp(400)) / 2
+        KVWindow.left = (scr_w - dp(600)) // 2
+        KVWindow.top = (scr_h - dp(400)) // 2
 
         # testcode
         #widget.load_image("DSCF0090.raf")

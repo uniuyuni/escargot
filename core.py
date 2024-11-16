@@ -8,11 +8,12 @@ from jax import jit
 from functools import partial
 import colour
 import lensfunpy
-from scipy.interpolate import PchipInterpolator
+#from scipy.interpolate import PchipInterpolator
 from scipy.interpolate import splprep, splev
 
 import sigmoid
 import dng_sdk
+from scipyjax import interpolate
 
 jax.config.update("jax_platform_name", "METAL")
 
@@ -95,7 +96,7 @@ def convert_RGB2TempTint(rgb):
 
     return float(dng.fTemperature), float(dng.fTint), float(xyz[1])
 
-def __invert_temp_tint(temp, tint, ref_temp=6500.0):
+def __invert_temp_tint(temp, tint, ref_temp):
 
     # 色温度の反転
     mired_temp = 1e6 / temp
@@ -107,7 +108,7 @@ def __invert_temp_tint(temp, tint, ref_temp=6500.0):
 
     return inverted_temp, inverted_tint
 
-def invert_RGB2TempTint(rgb, ref_temp=6500.0):
+def invert_RGB2TempTint(rgb, ref_temp=5000.0):
     temp, tint, Y = convert_RGB2TempTint(rgb)
 
     invert_temp, invert_tint = __invert_temp_tint(temp, tint, ref_temp)
@@ -130,7 +131,7 @@ def convert_TempTint2RGB(temp, tint, Y):
 
     return rgb.astype(np.float32)
 
-def invert_TempTint2RGB(temp, tint, Y, reference_temp):
+def invert_TempTint2RGB(temp, tint, Y, reference_temp=5000.0):
 
     inverted_temp, inverted_tint = __invert_temp_tint(temp, tint, reference_temp)
     
@@ -197,7 +198,6 @@ def __create_gaussian_kernel(width: int, height: int, sigma: float):
 def __gaussian_blur(src, ksize=(3, 3), sigma=0.0):
     kw, kh = ksize
     kernel = __create_gaussian_kernel(kw, kh, sigma)
-    print(kernel)
 
     dest = []
     for i in range(src.shape[2]):
@@ -212,6 +212,12 @@ def gaussian_blur(src, ksize=(3, 3), sigma=0.0):
     array.block_until_ready()
 
     return np.array(array)
+
+def __lensblur_filter(image, radius):
+    result = lensblur_filter_jax(image, radius)
+    result.block_until_ready()
+
+    return np.array(result)
 
 def lensblur_filter(image, radius):
     # カーネルを生成
@@ -314,7 +320,7 @@ def modify_lens(img, exif_data):
 
 
 # 露出補正
-def adjust_exposure(img, ev):
+def calc_exposure(img, ev):
     # img: 変換元画像
     # ev: 補正値 -4.0〜4.0
 
@@ -342,25 +348,18 @@ def adjust_contrast(img, cf, c):
 
 
 # 画像の明るさを制御点を元に補正する
-def apply_curve(image, control_points, control_values, return_spline=False):    
+def apply_curve(image, control_points, control_values):    
     # image: 入力画像 HLS(float32)のLだけ
     # control_points : ピクセル値の制御点 list of float32 
     # control_values : 各制御点に対する補正値 list of float32
-    # return_spline : Trueの場合、スプライン補間のオブジェクトを返す bool
 
     # エルミート補間
-    cs = PchipInterpolator(control_points, control_values)
+    #cs = PchipInterpolator(control_points, control_values)
     
     # 画像データに補正を適用
-    corrected_image = cs(image)
+    corrected_image = interpolate(control_points, control_values, image)
 
-    # 値をuint16の範囲内にクリッピング
-    # corrected_image = np.clip(corrected_image, 0, 65535).astype(np.float32)
-
-    if return_spline:
-        return corrected_image, cs
-    else:
-        return corrected_image
+    return corrected_image
 
 def adjust_shadow(img, black):
     f = -black/100.0*5.0
@@ -421,7 +420,7 @@ def apply_level_adjustment(image, black_level, midtone_level, white_level):
 
 # 彩度補正と自然な彩度補正
 @partial(jit, static_argnums=(1, 2))
-def __adjust_saturation(s, sat, vib):
+def __calc_saturation(s, sat, vib):
 
     # 彩度変更値と自然な彩度変更値を計算
     if sat >= 0:
@@ -448,8 +447,8 @@ def __adjust_saturation(s, sat, vib):
 
     return final_s
 
-def adjust_saturation(s, sat, vib):
-    array = __adjust_saturation(s, sat, vib)
+def calc_saturation(s, sat, vib):
+    array = __calc_saturation(s, sat, vib)
     array.block_until_ready()
 
     return np.array(array)
@@ -492,21 +491,49 @@ def apply_lut(img, lut):
     
     return result
 
-def __adjust_hls(hls_img, mask, adjust):
-    hls = np.copy(hls_img)
-    hls[mask, 0] = hls_img[mask, 0] + adjust[0]*1.8
-    hls[mask, 1] = hls_img[mask, 1] * (2.0**adjust[1])
-    hls[mask, 2] = hls_img[mask, 2] * (2.0**adjust[2])
-    return hls
+def __adjust_hls(hls_img, hue_condition, adjust):
+    """
+    HLS色空間での色調整をJAXで実装（jnp.whereを使用）
+    
+    Args:
+        hls_img: HLS形式の画像配列
+        hue_condition: 色相に対する条件式
+        adjust: 調整値の配列 [色相, 明度, 彩度]
+    """
+    # 各チャンネルごとにwhere演算で値を更新
+    h = jnp.where(hue_condition[..., None], 
+                  hls_img[..., 0:1] + adjust[0]*1.8,
+                  hls_img[..., 0:1])
+    
+    l = jnp.where(hue_condition[..., None],
+                  hls_img[..., 1:2] * (2.0**adjust[1]),
+                  hls_img[..., 1:2])
+    
+    s = jnp.where(hue_condition[..., None],
+                  hls_img[..., 2:3] * (2.0**adjust[2]),
+                  hls_img[..., 2:3])
+    
+    # 結果を結合
+    return jnp.concatenate([h, l, s], axis=-1)
 
 def adjust_hls_red(hls_img, red_adjust):
-    hue_img = hls_img[:, :, 0]
+    """
+    赤色領域の調整をJAXで実装
+    
+    Args:
+        hls_img: HLS形式の画像配列
+        red_adjust: 赤色の調整値 [色相, 明度, 彩度]
+    """
+    hue = hls_img[..., 0]
+    
+    # 赤色の条件式
+    red_condition = jnp.logical_or(
+        jnp.logical_and(hue >= 0, hue < 22.5),
+        jnp.logical_and(hue >= 337.5, hue < 360)
+    )
+    
+    return __adjust_hls(hls_img, red_condition, red_adjust)
 
-    # 赤
-    red_mask = ((hue_img >= 0) & (hue_img < 22.5)) | ((hue_img >= 337.5) & (hue_img < 360))
-    hls_img = __adjust_hls(hls_img, red_mask, red_adjust)
-
-    return hls_img
 
 def adjust_hls_orange(hls_img, orange_adjust):
     hue_img = hls_img[:, :, 0]
@@ -597,8 +624,7 @@ def adjust_shadow_highlight(image, highlight_adjustment=0, shadow_adjustment=0):
     # 両方の補正を平均して自然なトーンに調整
     adjusted_image = (highlights_adjusted + shadows_adjusted) / 2
     
-    # 補正範囲を [0, 2] に制限
-    return np.clip(adjusted_image, 0, 2)
+    return adjusted_image
 
 
 # マスクイメージの適用
@@ -617,8 +643,8 @@ def apply_mask(img1, msk, img2):
     return np.array(array)
 
 
-#@partial(jit, static_argnums=(1,2,3,4,5,6))
-def crop_image(image, texture_width, texture_height, click_x, click_y, offset, is_zoomed):
+@partial(jit, static_argnums=(1,2,3,4,5,6))
+def __crop_image(image, texture_width, texture_height, click_x, click_y, offset, is_zoomed):
     # 画像のサイズを取得
     image_height, image_width = image.shape[:2]
 
@@ -647,24 +673,21 @@ def crop_image(image, texture_width, texture_height, click_x, click_y, offset, i
 
     if not is_zoomed:
         # リサイズ
-        resized_img = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
-        #resized_img = jax.image.resize(image, (new_height, new_width, 3), method="lanczos3")
-
-        # 背景を作成（透明な黒）
-        #result = jnp.zeros((texture_height, texture_width, 3), dtype=np.float32)
+        #resized_img = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
+        resized_img = jax.image.resize(image, (new_height, new_width, 3), method="linear")
 
         # リサイズした画像を中央に配置
         #result[offset_y:offset_y+new_height, offset_x:offset_x+new_width] = resized_img
-        result = np.pad(resized_img, ((offset_y, texture_height-(offset_y+new_height)), (offset_x, texture_width-(offset_x+new_width)), (0, 0)))
+        result = jnp.pad(resized_img, ((offset_y, texture_height-(offset_y+new_height)), (offset_x, texture_width-(offset_x+new_width)), (0, 0)))
 
-        crop_info = [0, 0, image_width, image_height, scale]
+        crop_info = (0, 0, image_width, image_height, scale)
 
     else:
         # クリック位置を元の画像の座標系に変換
         click_x = click_x - offset_x
         click_y = click_y - offset_y
-        click_image_x = int(click_x / scale)
-        click_image_y = int(click_y / scale)
+        click_image_x = click_x / scale
+        click_image_y = click_y / scale
 
         # 切り抜き範囲を計算
         crop_width = int(texture_width)
@@ -675,25 +698,39 @@ def crop_image(image, texture_width, texture_height, click_x, click_y, offset, i
         crop_y = click_image_y - crop_height // 2
 
         # クロップ
-        result, crop_info = crop_image_info(image, [crop_x, crop_y, crop_width, crop_height, 1.0], offset)
+        result, crop_info = __crop_image_info(image, (crop_x, crop_y, crop_width, crop_height, 1.0), offset)
     
     return result, crop_info
 
-def crop_image_info(image, crop_info, offset=(0, 0)):
+def crop_image(image, texture_width, texture_height, click_x, click_y, offset, is_zoomed):
+    result, crop_info = __crop_image(image, texture_width, texture_height, click_x, click_y, offset, is_zoomed)
+    result.block_until_ready()
+
+    return np.array(result), (int(crop_info[0]), int(crop_info[1]), int(crop_info[2]), int(crop_info[3]), float(crop_info[4]))
+
+@partial(jit, static_argnums=(1, 2))
+def __crop_image_info(image, crop_info, offset=(0, 0)):
     
     # 情報取得
     image_height, image_width = image.shape[:2]
     crop_x, crop_y, crop_width, crop_height, scale = crop_info
 
     # オフセット適用
-    crop_x += int(offset[0])
-    crop_y += int(offset[1])
+    crop_x = int(crop_x + offset[0])
+    crop_y = int(crop_y + offset[1])
 
     # 画像の範囲外にならないように調整
     crop_x = max(0, min(crop_x, image_width - crop_width))
     crop_y = max(0, min(crop_y, image_height - crop_height))
 
     # 画像を切り抜く
-    cropped_img = image[crop_y:crop_y+crop_height, crop_x:crop_x+crop_width]
+    cropped_img = jax.lax.slice(image, (crop_y, crop_x, 0), (crop_y+crop_height, crop_x+crop_width, 3))
+    #cropped_img = image[crop_y:crop_y+crop_height, crop_x:crop_x+crop_width]
 
-    return cropped_img, [crop_x, crop_y, crop_width, crop_height, scale]
+    return cropped_img, (crop_x, crop_y, crop_width, crop_height, scale)
+
+def crop_image_info(image, crop_info, offset=(0, 0)):
+    result, crop_info = __crop_image_info(image, crop_info, offset)
+    result.block_until_ready()
+
+    return np.array(result), (int(crop_info[0]), int(crop_info[1]), int(crop_info[2]), int(crop_info[3]), float(crop_info[4]))

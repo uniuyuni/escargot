@@ -331,10 +331,9 @@ class CircularGradientMask(BaseMask):
     def update(self):
         # 更新
         cp_center = self.control_points[0]
-        center = cp_center.ctrl_center
-        center[0] += float(np.finfo(np.float32).eps)
-        center[1] += float(np.finfo(np.float32).eps)
-        cp_center.ctrl_center = center
+        x = cp_center.ctrl_center[0] + float(np.finfo(np.float32).eps)
+        y = cp_center.ctrl_center[1] + float(np.finfo(np.float32).eps)
+        cp_center.ctrl_center = [x, y]
 
     def calculate_point(self, radius_x, radius_y, angle_deg):
         angle_rad = math.radians(angle_deg)
@@ -1185,7 +1184,7 @@ class MaskEditor2(FloatLayout):
 
         self.image_size[0], self.image_size[1] = image.shape[1], image.shape[0]
         self.texture_size = [tx, ty]
-        self.crop_info = crop_info.copy()
+        self.crop_info = crop_info
         self.__set_image_info(rotate_rad)
         return True
 
