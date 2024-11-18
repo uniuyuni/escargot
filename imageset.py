@@ -116,6 +116,8 @@ class ImageSet:
 
             temp, tint, Y, = core.invert_RGB2TempTint((1.0, 1.0, 1.0), 5000.0)
             self.__set_temperature(param, temp, tint, Y)
+            
+            param['img_size'] = [self.img.shape[1], self.img.shape[0]]
         else:
             logging.warning("file is not supported " + file_path)
             return False
@@ -134,6 +136,7 @@ class ImageSet:
             temp, tint, Y, = core.invert_RGB2TempTint((1.0, 1.0, 1.0), 5000.0)
             self.__set_temperature(param, temp, tint, Y)
             self.img = thumb
+            param['img_size'] = [self.img.shape[1], self.img.shape[0]]
     
         #thumb_size = core.calc_resize_image((thumb.shape[1], thumb.shape[0]), self.thumb_width)
         #thumb = cv2.resize(thumb, thumb_size)
@@ -153,7 +156,6 @@ class ImageSet:
             logging.warning("file is not supported " + file_path)
             return False
             
-        param['img_size'] = [self.img.shape[1], self.img.shape[0]]
 
         #self.tmb = cv2.resize(self.img, dsize=core.calc_resize_image((self.img.shape[1], self.img.shape[0]), 256))
 

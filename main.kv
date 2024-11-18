@@ -270,6 +270,15 @@ MainWidget:
                                 valign: 'center'
 
                             ParamSlider:
+                                id: slider_microcontrast
+                                text: "Micro Contrast"
+                                min: -100
+                                max: 100
+                                value: 0
+                                step: 1
+                                on_slider: root.apply_effects_lv(2, 'microcontrast')
+
+                            ParamSlider:
                                 id: slider_dehaze
                                 text: "Dehaze"
                                 min: -1.0
@@ -1062,6 +1071,29 @@ MainWidget:
                                     radius: 40
                                     line_color: 'grey'
                                     on_active: root.apply_effects_lv(1, 'defocus')
+
+                                    MDChipText:
+                                        text: "AI"
+                                        font_size: '9pt'
+                                        color: 'b0b0b0' 
+
+                            BoxLayout:
+                                size: 0, dp(30)
+                                size_hint_y: None
+                                orientation: 'horizontal'
+                                ParamLabel:
+                                    text: "Subpixel shift"
+                                VSpacer:
+                                    size_hint_x: 5
+                                MDChip:
+                                    type: 'filter'
+                                    pos_hint: {"center_x": .5, "center_y": .5}
+                                    size: dp(100), dp(20)
+                                    size_hint: None, None
+                                    id: switch_subpixel_shift
+                                    radius: dp(20)
+                                    line_color: 'grey'
+                                    on_active: root.apply_effects_lv(0, 'subpixel_shift')
 
                                     MDChipText:
                                         text: "AI"

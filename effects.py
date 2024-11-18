@@ -10,13 +10,15 @@ import importlib
 #import DRBNet
 #import colorcorrect.algorithm as cca
 #import perlin
-#import lama
+#import iopaint.predict
 #import dehazing.dehaze
 
 import core
 import cubelut
 import mask_editor
 import crop_editor
+import microcontrast
+import subpixel_shift
 
 #補正既定クラス
 class Effect():
@@ -65,13 +67,63 @@ class RotationEffect(Effect):
     def apply_diff(self, img):
         return self.diff
 
+class LensModifierEffect(Effect):
+
+    def set2widget(self, widget, param):
+        widget.ids["switch_color_modification"].active = False if param.get('color_modification', 0) == 0 else True
+        widget.ids["switch_subpixel_distortion"].active = False if param.get('subpixel_distortion', 0) == 0 else True
+        widget.ids["switch_geometry_distortion"].active = False if param.get('geometry_distortion', 0) == 0 else True
+
+    def set2param(self, param, widget):
+        param['color_modification'] = 0 if widget.ids["switch_color_modification"].active == False else 1
+        param['subpixel_distortion'] = 0 if widget.ids["switch_subpixel_distortion"].active == False else 1
+        param['geometry_distortion'] = 0 if widget.ids["switch_geometry_distortion"].active == False else 1
+
+    def make_diff(self, img, param):
+        cd = param.get('color_modification', 0)
+        sd = param.get('subpixel_distortion', 0)
+        gd = param.get('geometry_distortion', 0)
+        if cd <= 0 and sd <= 0 and gd <= 0:
+            self.diff = None
+            self.hash = None
+        else:
+            param_hash = hash((cd, sd, gd))
+            if self.hash != param_hash:
+                self.diff = core.modify_lensimage(img, None, cd > 0, sd > 0, gd > 0)
+                self.hash = param_hash
+        
+        return self.diff
+    
+    def apply_diff(self, img):
+        return self.diff
+
+class SubpixelShiftEffect(Effect):
+
+    def set2widget(self, widget, param):
+        widget.ids["switch_subpixel_shift"].active = False if param.get('subpixel_shift', 0) == 0 else True
+
+    def set2param(self, param, widget):
+        param['subpixel_shift'] = 0 if widget.ids["switch_subpixel_shift"].active == False else 1
+
+    def make_diff(self, img, param):
+        ss = param.get('subpixel_shift', 0)
+        if ss <= 0:
+            self.diff = None
+            self.hash = None
+        else:
+            param_hash = hash((ss))
+            if self.hash != param_hash:
+                self.diff = subpixel_shift.create_enhanced_image(img)
+                self.hash = param_hash
+        
+        return self.diff
+    
+    def apply_diff(self, img):
+        return self.diff
+
 class AINoiseReductonEffect(Effect):
     __net = None
     __noise2void = None
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
 
     def set2widget(self, widget, param):
         widget.ids["switch_ai_noise_reduction"].active = False if param.get('ai_noise_reduction', 0) == 0 else True
@@ -151,8 +203,7 @@ class InpaintDiff:
         self.image = kwargs.get('image', None)
 
 class InpaintEffect(Effect):
-    __lama = None
-    __net = None
+    __iopaint = None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -193,27 +244,27 @@ class InpaintEffect(Effect):
         ip = param.get('inpaint', 0)
         ipp = param.get('inpaint_predict', 0)
         if (ip > 0 and ipp > 0) is True:
-            if InpaintEffect.__lama is None:
-                InpaintEffect.__lama = importlib.import_module('lama')
-
-            if InpaintEffect.__net is None:
-                InpaintEffect.__net = InpaintEffect.__lama.setup_predict()
+            if InpaintEffect.__iopaint is None:
+                InpaintEffect.__iopaint = importlib.import_module('iopaint.predict')
 
             cx, cy, cw, ch, sc = self.crop_editor.get_crop_info()
-            img2 = InpaintEffect.__lama.predict(img[cy:cy+ch, cx:cx+cw], self.mask_editor.get_mask()[cy:cy+ch, cx:cx+cw], InpaintEffect.__net)
+            img2 = InpaintEffect.__iopaint.predict(img[cy:cy+ch, cx:cx+cw], self.mask_editor.get_mask()[cy:cy+ch, cx:cx+cw])
             self.crop_info_list.append(InpaintDiff(crop_info=(cx, cy, cw, ch), image=img2))
-            self.diff = self.crop_info_list
             self.mask_editor.clear_mask()
             self.mask_editor.update_canvas()
         
+        self.diff = None if len(self.crop_info_list) <= 0 else self.crop_info_list
         return self.diff
     
     def apply_diff(self, img):
-        for i in range(len(self.crop.info_list)):
-            cx, cy, cw, ch = self.crop_info_list[i].crop_info
-            img[cy:cy+ch, cx:cx+cw] = self.crop_info_list[i].image
-        
-        return img
+        if self.diff is self.crop_info_list:
+            img2 = img.copy()
+            for inpaint_diff in self.crop_info_list:
+                cx, cy, cw, ch = inpaint_diff.crop_info
+                img2[cy:cy+ch, cx:cx+cw] = inpaint_diff.image
+            self.diff = img2
+            
+        return self.diff
 
 
 class DefocusEffect(Effect):
@@ -429,6 +480,28 @@ class ContrastEffect(Effect):
 
         elif self.hash != param_hash:
             rgb2 = core.adjust_contrast(rgb, con, 0.5)
+            self.diff = rgb2-rgb
+            self.hash = param_hash
+
+        return self.diff
+
+class MicroContrastEffect(Effect):
+
+    def set2widget(self, widget, param):
+        widget.ids["slider_microcontrast"].set_slider_value(param.get('microcontrast', 0))
+
+    def set2param(self, param, widget):
+        param['microcontrast'] = widget.ids["slider_microcontrast"].value
+
+    def make_diff(self, rgb, param):
+        con = param.get('microcontrast', 0)
+        param_hash = hash((con))
+        if con == 0:
+            self.diff = None
+            self.hash = None
+
+        elif self.hash != param_hash:
+            rgb2, _ = microcontrast.calculate_microcontrast(rgb, 7, con)
             self.diff = rgb2-rgb
             self.hash = param_hash
 
@@ -1220,6 +1293,7 @@ def create_effects():
     effects = [{}, {}, {}, {}]
 
     lv0 = effects[0]
+    lv0['subpixel_shift'] = SubpixelShiftEffect()
     lv0['inpaint'] = InpaintEffect()
     lv0['rotation'] = RotationEffect()
 
@@ -1237,6 +1311,7 @@ def create_effects():
     lv2['color_correct'] = ColorCorrectEffect()
     lv2['exposure'] = ExposureEffect()
     lv2['contrast'] = ContrastEffect()
+    lv2['microcontrast'] = MicroContrastEffect()
     lv2['midtone'] = MidtoneEffect()
     lv2['tone'] = ToneEffect()
     lv2['saturation'] = SaturationEffect()

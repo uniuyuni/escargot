@@ -51,7 +51,7 @@ def pipeline_lv0(img, effects, param):
     lv0 = effects[0]
     lv1reset = False
 
-    rgb = img.copy()
+    rgb = img
     for i, n in enumerate(lv0):
         if lv1reset == True:
             lv0[n].reeffect()
@@ -192,6 +192,8 @@ def pipeline_lv2(img, effects, param):
     diff = lv2['exposure'].make_diff(rgb, param)
     if diff is not None: rgb = lv2['exposure'].apply_diff(rgb)
     diff = lv2['contrast'].make_diff(rgb, param)
+    if diff is not None: rgb += diff
+    diff = lv2['microcontrast'].make_diff(rgb, param)
     if diff is not None: rgb += diff
     diff = lv2['midtone'].make_diff(rgb, param)
     if diff is not None: rgb += diff

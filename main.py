@@ -107,9 +107,10 @@ class MainWidget(MDWidget):
         _, self.crop_info = core.crop_image(self.imgset.img, self.texture_width, self.texture_height, self.click_x, self.click_y, (0, 0), self.is_zoomed)
         self.start_draw_image()
     
-    def start_draw_image_and_crop(self):
-        self.crop_image = None
-        self.start_draw_image()
+    def start_draw_image_and_crop(self, offset=(0, 0)):
+        if self.is_draw_image == False:
+            self.crop_image = None
+            self.start_draw_image(offset)
 
     def empty_image(self):
         self.imgset = None
@@ -205,7 +206,7 @@ class MainWidget(MDWidget):
                     offset_y = touch.pos[1] - self.drag_start_point[1]
                     offset_x = -offset_x
 
-                    _, self.crop_info = core.crop_image_info(self.imgset.img, self.crop_info, (offset_x, offset_y))
+                    #_, self.crop_info = core.crop_image_info(self.imgset.img, self.crop_info, (offset_x, offset_y))
                     effects.reeffect_all(self.primary_effects)
                     self.start_draw_image_and_crop((offset_x, offset_y))
 

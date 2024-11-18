@@ -3,12 +3,14 @@ from kivy.app import App as KVApp
 from kivy.uix.boxlayout import BoxLayout as KVBoxLayout
 from kivy.uix.widget import Widget as KVWidget
 from kivy.uix.image import Image as KVImage
-from kivy.graphics import Rectangle as KVRectangle
+from kivy.graphics import Rectangle as KVRectangle, PushMatrix as KVPushMatrix, PopMatrix as KVPopMatrix
 from kivy.properties import NumericProperty as KVNumericProperty
 from kivy.graphics.texture import Texture as KVTexture
+from kivy.clock import Clock
 
 import cv2
 import numpy as np
+
 
 class MaskEditor(KVImage):
     brush_size = KVNumericProperty(300)
@@ -26,6 +28,11 @@ class MaskEditor(KVImage):
         self.update_canvas()
         self.bind(size=self.update_canvas, pos=self.update_canvas)
 
+        Clock.schedule_once(self.create_ui, -1)
+
+    def create_ui(self, dt):
+        self.pos = self.parent.pos
+
     def get_mask(self):
         return self.mask[:,:,3]
     
@@ -36,11 +43,13 @@ class MaskEditor(KVImage):
         # Update canvas with the current mask
         self.canvas_texture.blit_buffer(self.mask.tobytes(), colorfmt='rgba', bufferfmt='ubyte')
         self.texture = self.canvas_texture
+        self.canvas.clear()
         with self.canvas:
-            self.canvas.clear()
+            KVPushMatrix()
             zw = self.canvas_width * self.zoom
             zh = self.canvas_height * self.zoom
-            KVRectangle(texture=self.canvas_texture, pos=((self.size[0]-zw)/2, (self.size[1]-zh)/2), size=(zw, zh))
+            KVRectangle(texture=self.canvas_texture, pos=(self.x + (self.size[0]-zw)/2, self.y + (self.size[1]-zh)/2), size=(zw, zh))
+            KVPopMatrix()
 
     def on_touch_down(self, touch):
         if self.collide_point(touch.x, touch.y):
@@ -68,10 +77,11 @@ class MaskEditor(KVImage):
         return int((self.size[0]-zw)/2), int((self.size[1]-zh)/2)
 
     def get_canvas_coordinates(self, x, y):
+        x, y = x - self.x, y - self.y
         # Convert screen coordinates to canvas coordinates
         sx, sy = self.get_shift_pos()
-        cx = int((x -self.x -sx) / (self.canvas_width * self.zoom) * self.canvas_width)
-        cy = int((self.size[1]-(y -self.y +sy)) / (self.canvas_height * self.zoom) * self.canvas_height)
+        cx = int((x - sx) / (self.canvas_width * self.zoom) * self.canvas_width)
+        cy = int((self.size[1]-(y + sy)) / (self.canvas_height * self.zoom) * self.canvas_height)
         return cx, cy
 
     def paint(self, touch):
@@ -91,14 +101,6 @@ class MaskEditor(KVImage):
 
     def draw_circle(self, cx, cy, radius, value):
         cv2.circle(self.mask, (cx, cy), radius, value, thickness=-1)
-        """
-        for y in range(-radius, radius):
-            for x in range(-radius, radius):
-                if x**2 + y**2 <= radius**2:
-                    nx, ny = cx + x, cy + y
-                    if 0 <= nx < self.canvas_width and 0 <= ny < self.canvas_height:
-                        self.mask[ny, nx] = value
-        """
 
     def draw_line(self, start, end, radius, value):
         x0, y0 = start

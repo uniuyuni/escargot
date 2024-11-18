@@ -5,6 +5,7 @@ from kivy.properties import NumericProperty as KVNumericProperty, ListProperty a
 from kivy.uix.floatlayout import FloatLayout as KVFloatLayout
 from kivy.uix.label import Label as KVLabel
 from kivy.metrics import dp
+from kivy.clock import Clock
 
 class CropEditor(KVFloatLayout):
     input_width = KVNumericProperty(dp(400))  # 元の画像の幅を指定するプロパティ
@@ -38,6 +39,11 @@ class CropEditor(KVFloatLayout):
                   scale=self.update_crop_size,
                   size=self.update_centering)
 
+        Clock.schedule_once(self.create_ui, -1)
+
+    def create_ui(self, dt):
+        self.pos = self.parent.pos
+        
         # 初期設定の反映
         self.update_crop_size()
 
@@ -61,8 +67,8 @@ class CropEditor(KVFloatLayout):
 
     def update_centering(self, *args):
         # 中心に移動するためのトランスレーションを設定
-        self.translate.x = (self.width - self.crop_size[0]) / 2
-        self.translate.y = (self.height - self.crop_size[1]) / 2
+        self.translate.x = self.pos[0] + (self.width - self.crop_size[0]) / 2
+        self.translate.y = self.pos[1] + (self.height - self.crop_size[1]) / 2
 
         self.update_rect()
 

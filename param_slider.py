@@ -2,6 +2,7 @@
 from kivymd.app import MDApp
 from kivy.uix.boxlayout import BoxLayout as KVBoxLayout
 from kivy.properties import NumericProperty as KVNumericProperty, StringProperty as KVStringProperty, BooleanProperty as KVBooleanProperty
+from kivy.metrics import dp
 
 class ParamSlider(KVBoxLayout):
     text = KVStringProperty()
@@ -11,7 +12,8 @@ class ParamSlider(KVBoxLayout):
     step = KVNumericProperty(1)
     for_float = KVBooleanProperty(False)
     slider = KVNumericProperty(0)
-    
+    label_width = KVNumericProperty(dp(100))
+
     def __init__(self, **kwargs):
         super(ParamSlider, self).__init__(**kwargs)
     
@@ -21,6 +23,7 @@ class ParamSlider(KVBoxLayout):
         self.disabled = True
         self.reset_value = self.value
         self.ids['label'].text = self.text
+        self.ids['label'].width = self.label_width
         self.ids['slider'].min = self.min
         self.ids['slider'].max = self.max
         self.ids['slider'].value = self.value
