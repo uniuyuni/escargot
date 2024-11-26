@@ -215,6 +215,7 @@ class InpaintEffect(Effect):
     def set2widget(self, widget, param):
         widget.ids["switch_inpaint"].active = False if param.get('inpaint', 0) == 0 else True
         widget.ids["button_inpaint_predict"].state = "normal" if param.get('inpaint_predict', 0) == 0 else "down"
+        self.crop_info_list = param.get('inpaint_crop_info_list', [])
 
     def set2param(self, param, widget):
         param['inpaint'] = 0 if widget.ids["switch_inpaint"].active == False else 1
@@ -241,6 +242,7 @@ class InpaintEffect(Effect):
                 self.crop_editor = None
 
     def make_diff(self, img, param):
+        self.crop_info_list = param.get('inpaint_crop_info_list', [])
         ip = param.get('inpaint', 0)
         ipp = param.get('inpaint_predict', 0)
         if (ip > 0 and ipp > 0) is True:
@@ -248,8 +250,12 @@ class InpaintEffect(Effect):
                 InpaintEffect.__iopaint = importlib.import_module('iopaint.predict')
 
             cx, cy, cw, ch, sc = self.crop_editor.get_crop_info()
-            img2 = InpaintEffect.__iopaint.predict(img[cy:cy+ch, cx:cx+cw], self.mask_editor.get_mask()[cy:cy+ch, cx:cx+cw])
-            self.crop_info_list.append(InpaintDiff(crop_info=(cx, cy, cw, ch), image=img2))
+            mask = cv2.GaussianBlur(self.mask_editor.get_mask()[cy:cy+ch, cx:cx+cw], (63, 63), 0)
+            img2 = InpaintEffect.__iopaint.predict(img[cy:cy+ch, cx:cx+cw], mask, resize_limit=1024+512, use_realesrgan=False)
+            bboxes = core.get_multiple_mask_bbox(self.mask_editor.get_mask()[cy:cy+ch, cx:cx+cw])
+            for bbox in bboxes:
+                self.crop_info_list.append(InpaintDiff(crop_info=bbox, image=img2[bbox[1]:bbox[1]+bbox[3], bbox[0]:bbox[0]+bbox[2]]))
+            param['inpaint_crop_info_list'] = self.crop_info_list
             self.mask_editor.clear_mask()
             self.mask_editor.update_canvas()
         
@@ -776,15 +782,15 @@ class GradingEffect(Effect):
 
     def set2widget(self, widget, param):
         widget.ids["grading" + self.numstr].set_point_list(param.get('grading' + self.numstr, None))
-        widget.ids["slider_grading" + self.numstr + "_hue"].set_slider_value(param.get('grading' + self.numstr + '_hue', 0))
-        widget.ids["slider_grading" + self.numstr + "_lum"].set_slider_value(param.get('grading' + self.numstr + '_lum', 0))
-        widget.ids["slider_grading" + self.numstr + "_sat"].set_slider_value(param.get('grading' + self.numstr + '_sat', 0))
+        widget.ids["grading" + self.numstr + "_color_picker"].ids['slider_hue'].set_slider_value(param.get('grading' + self.numstr + '_hue', 0))
+        widget.ids["grading" + self.numstr + "_color_picker"].ids['slider_lum'].set_slider_value(param.get('grading' + self.numstr + '_lum', 0))
+        widget.ids["grading" + self.numstr + "_color_picker"].ids['slider_sat'].set_slider_value(param.get('grading' + self.numstr + '_sat', 0))
 
     def set2param(self, param, widget):
         param["grading" + self.numstr] = widget.ids["grading" + self.numstr].get_point_list()
-        param["grading" + self.numstr + "_hue"] = widget.ids["slider_grading" + self.numstr + "_hue"].value
-        param["grading" + self.numstr + "_lum"] = widget.ids["slider_grading" + self.numstr + "_lum"].value
-        param["grading" + self.numstr + "_sat"] = widget.ids["slider_grading" + self.numstr + "_sat"].value
+        param["grading" + self.numstr + "_hue"] = widget.ids["grading" + self.numstr + "_color_picker"].ids['slider_hue'].value
+        param["grading" + self.numstr + "_lum"] = widget.ids["grading" + self.numstr + "_color_picker"].ids['slider_lum'].value
+        param["grading" + self.numstr + "_sat"] = widget.ids["grading" + self.numstr + "_color_picker"].ids['slider_sat'].value
 
     def make_diff(self, rgb, param):
         pl = param.get("grading" + self.numstr, None)

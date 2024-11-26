@@ -10,7 +10,7 @@ from kivy.properties import ListProperty, NumericProperty
 from kivy.graphics import Color, Ellipse, Quad
 from kivy.metrics import dp
 from kivy.clock import Clock
-from kivy.lang import Builder
+from kivy.lang import Builder as KVBuilder
 from colorsys import rgb_to_hls, hls_to_rgb
 import math
 
@@ -45,7 +45,7 @@ class CWColorWheel(MDBoxLayout):
         self.canvas.clear()
         with self.canvas:
             segments = 360  # 円周方向の分割数
-            radial_steps = 50  # 半径方向のステップ数
+            radial_steps = 25  # 半径方向のステップ数
             
             for r in range(radial_steps):
                 inner_dist = r / radial_steps
@@ -145,24 +145,10 @@ class CWColorWheel(MDBoxLayout):
 
 class CWColorPicker(MDCard):
     current_color = ListProperty([1, 0, 0, 1])
-    
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        Clock.schedule_once(self.setup_ui)
 
-    def setup_ui(self, dt):
-        
-        # パレットの設定
-        default_colors = [
-            [1, 0, 0, 1], [0, 1, 0, 1], [0, 0, 1, 1],
-            [1, 1, 0, 1], [1, 0, 1, 1], [0, 1, 1, 1],
-            [1, 1, 1, 1], [0, 0, 0, 1], [0.5, 0.5, 0.5, 1]
-        ]
-        
-        for color in default_colors:
-            btn = CWColorButton(background_color=color)
-            self.ids.palette.add_widget(btn)
-        
+    def on_kv_post(self, *args, **kwargs):
+        super().on_kv_post(*args, **kwargs)
+
         self.ids.color_wheel.bind(selected_color=self.on_wheel_color)
         self.bind(current_color=self.on_current_color)
 
@@ -171,40 +157,36 @@ class CWColorPicker(MDCard):
 
     def on_current_color(self, instance, value):
         r, g, b, _ = self.current_color
-        self.ids.red_slider.set_slider_value(r * 255)
-        self.ids.green_slider.set_slider_value(g * 255)
-        self.ids.blue_slider.set_slider_value(b * 255)
+        self.ids.slider_red.set_slider_value(r * 255)
+        self.ids.slider_green.set_slider_value(g * 255)
+        self.ids.slider_blue.set_slider_value(b * 255)
 
         h, l, s = rgb_to_hls(r, g, b)
-        self.ids.hue_slider.set_slider_value(h * 360)
-        self.ids.lightness_slider.set_slider_value(l * 100)
-        self.ids.saturation_slider.set_slider_value(s * 100)
+        self.ids.slider_hue.set_slider_value(h * 360)
+        self.ids.slider_lum.set_slider_value(l * 100)
+        self.ids.slider_sat.set_slider_value(s * 100)
 
         self.ids.color_wheel.set_color_from_rgb(self.current_color)
         self.update_preview(instance, value)
-        self.update_value_label()
 
     def on_wheel_color(self, instance, value):
         self.current_color = value
     
     def on_slider_change_rgb(self):
-        r = self.ids.red_slider.value / 255
-        g = self.ids.green_slider.value / 255
-        b = self.ids.blue_slider.value / 255
+        r = self.ids.slider_red.value / 255
+        g = self.ids.slider_green.value / 255
+        b = self.ids.slider_blue.value / 255
         self.current_color = [r, g, b, 1]
 
     def on_slider_change_hls(self):
-        h = self.ids.hue_slider.value / 360
-        l = self.ids.lightness_slider.value / 100
-        s = self.ids.saturation_slider.value / 100
+        h = self.ids.slider_hue.value / 360
+        l = self.ids.slider_lum.value / 100
+        s = self.ids.slider_sat.value / 100
         r, g, b = hls_to_rgb(h, l, s)
         self.current_color = [r, g, b, 1]
-    
-    def update_value_label(self):
-        r, g, b, _ = self.current_color
-        self.ids.value_label.text = f"RGB: ({int(r*255)}, {int(g*255)}, {int(b*255)})"
-        #h, l, s = rgb_to_hls(r, g, b)
-        #self.ids.value_label.text = f"HLS: ({int(h*360)}°, {int(l*100)}%, {int(s*100)}%)"
+
+    def get_current_color_hls(self):
+        return rgb_to_hls(*self.current_color)
 
 class MainScreen(MDScreen):
     pass
@@ -212,7 +194,7 @@ class MainScreen(MDScreen):
 class CustomColorPickerApp(MDApp):
     def build(self):
         self.theme_cls.theme_style = "Dark"
-        Builder.load_file('color_picker.kv')
+        KVBuilder.load_file('color_picker.kv')
         screen = MainScreen()
         screen.add_widget(CWColorPicker(id='color_picker'))
         return screen

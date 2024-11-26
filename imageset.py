@@ -25,6 +25,29 @@ class ImageSet:
         self.tmb = None     # 縮小画像 float32
         self.prv = None     # 加工画像 float32
 
+    def __get_image_size(self, exif_data):
+        top, left = exif_data.get("RawImageCropTopLeft", "0 0").split()
+        top, left = int(top), int(left)
+
+        width, height = exif_data.get("RawImageCroppedSize", "0x0").split('x')
+        width, height = int(width), int(height)
+        if width == 0 and height == 0:
+            width, height = exif_data.get("ImageSize", "0x0").split('x')
+            width, height = int(width), int(height)
+            if width == 0 and height == 0:
+                raise AttributeError("Not Find image size data")
+            
+        return (top, left, width, height)
+    
+    def __set_image_size(self, exif_data, top, left, width, height):
+        if exif_data.get("RawImageCropTopLeft", None) is not None:
+            exif_data["RawImageCropTopLeft"] = str(top) + " " + str(left)
+
+        if exif_data.get("RawImageCroppedSize", None) is not None:
+            exif_data["RawImageCroppedSize"] = str(width) + "x" + str(height)
+
+        exif_data["ImageSize"] = str(width) + "x" + str(height)
+
     def __set_temperature(self, param, temp, tint, Y):
         param['color_temperature_reset'] = temp
         param['color_temperature'] = param['color_temperature_reset']
@@ -52,25 +75,22 @@ class ImageSet:
 
                 self.img = self.src
 
+                # float32へ
+                self.img = self.img.astype(np.float32)/65535.0
+
+                # レンズ補正
+                self.img = core.modify_lens(self.img, exif_data)
+
                 # 回転情報取得
                 rad, flip = util.split_orientation(util.str_to_orientation(exif_data.get("Orientation", "")))
 
-                # クロップ
-                top, left = exif_data.get("RawImageCropTopLeft", "0 0").split()
-                top, left = int(top), int(left)
-                width, height = exif_data.get("RawImageCroppedSize", "0x0").split('x')
-                width, height = int(width), int(height)
+                # クロップとexifデータの回転
+                top, left, width, height = self.__get_image_size(exif_data)
                 if rad < 0.0:
                     top, left = left, top
-                    exif_data["RawImageCropTopLeft"] = str(top) + " " + str(left)
-
                     width, height = height, width
-                    exif_data["RawImageCroppedSize"] = str(width) + "x" + str(height)
-                    exif_data["ImageSize"] = str(width) + "x" + str(height)
+                    self.__set_image_size(exif_data, top, left, width, height)
                 self.img = self.img[top:top+height, left:left+width]
-
-                # float32へ
-                self.img = self.img.astype(np.float32)/65535.0
 
                 # プロファイルを適用
                 dcp_path = os.getcwd() + "/dcp/Fujifilm X-Pro3 Adobe Standard velvia.dcp"
@@ -79,6 +99,9 @@ class ImageSet:
                 processor = DCPProcessor(profile)
                 self.img = processor.process(self.img, illuminant='1', use_look_table=True).astype(np.float32)
 
+                # コントラスト補正
+                #self.img = skimage.exposure.equalize_adapthist(self.img, clip_limit=0.03)
+                
                 # 明るさ補正
                 source_ev, _ = core.calculate_ev_from_image(core.normalize_image(self.img))
                 Av = exif_data.get('ApertureValue', 1.0)
@@ -97,11 +120,15 @@ class ImageSet:
                 temp, tint, Y, = core.invert_RGB2TempTint(wb, 5000.0)
                 self.__set_temperature(param, temp, tint, Y)
 
+                param['img_size'] = [self.img.shape[1], self.img.shape[0]]
+                if self.img.shape[1] != width or self.img.shape[0] != height:
+                    logging.error("ImageSize is not ndarray.shape")
+
         except (rawpy.LibRawFileUnsupportedError, rawpy.LibRawIOError):
             logging.warning("file is not supported " + file_path)
             return False
         
-        callback()
+        callback(self)
         return True
 
     def __load_rgb(self, file_path, exif_data, param, callback):
@@ -118,11 +145,14 @@ class ImageSet:
             self.__set_temperature(param, temp, tint, Y)
             
             param['img_size'] = [self.img.shape[1], self.img.shape[0]]
+            top, left, width, height = self.__get_image_size(exif_data)
+            if self.img.shape[1] != width or self.img.shape[0] != height:
+                logging.error("ImageSize is not ndarray.shape")
         else:
             logging.warning("file is not supported " + file_path)
             return False
         
-        callback()
+        callback(self)
         return True
     
     def __load_thumb(self, exif_data, param):
@@ -136,11 +166,11 @@ class ImageSet:
             temp, tint, Y, = core.invert_RGB2TempTint((1.0, 1.0, 1.0), 5000.0)
             self.__set_temperature(param, temp, tint, Y)
             self.img = thumb
-            param['img_size'] = [self.img.shape[1], self.img.shape[0]]
-    
-        #thumb_size = core.calc_resize_image((thumb.shape[1], thumb.shape[0]), self.thumb_width)
-        #thumb = cv2.resize(thumb, thumb_size)
 
+            top, left, width, height = self.__get_image_size(exif_data)
+            self.img = cv2.resize(self.img, dsize=(width, height))
+            param['img_size'] = [width, height]
+    
     def load(self, file_path, exif_data, param, callback):
         if file_path.lower().endswith(viewer_widget.supported_formats_raw):
             self.__load_thumb(exif_data, param)
@@ -156,11 +186,7 @@ class ImageSet:
             logging.warning("file is not supported " + file_path)
             return False
             
-
-        #self.tmb = cv2.resize(self.img, dsize=core.calc_resize_image((self.img.shape[1], self.img.shape[0]), 256))
-
         self.file_path = file_path
-
-        logging.info("load file " + file_path)
+        logging.info("loading file " + file_path)
 
         return True

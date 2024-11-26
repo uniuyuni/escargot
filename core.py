@@ -10,6 +10,8 @@ import colour
 import lensfunpy
 #from scipy.interpolate import PchipInterpolator
 from scipy.interpolate import splprep, splev
+from scipy.ndimage import label
+import logging
 
 import sigmoid
 import dng_sdk
@@ -290,33 +292,36 @@ def blend_screen(base, over):
 
     return result
 
-def modify_lens(img, exif_data):
-    db = lensfunpy.Database()
-    print(exif_data['Make'], exif_data['Model'])
-    print(exif_data['LensMake'], exif_data['LensModel'])
-    print(exif_data['FocalLength'], exif_data['ApertureValue'])
+def modify_lens(img, exif_data, is_cm=True, is_sd=True, is_gd=True):
+    #logging.info(exif_data['Make'], exif_data['Model'])
+    #logging.info(exif_data['LensMake'], exif_data['LensModel'])
+    #logging.info(exif_data['FocalLength'], exif_data['ApertureValue'])
 
+    db = lensfunpy.Database()
     cam = db.find_cameras(exif_data['Make'], exif_data['Model'], loose_search=True)
-    print(cam)
     lens = db.find_lenses(cam[0], exif_data['LensMake'], exif_data['LensModel'], loose_search=True)
-    print(lens)
 
     height, width = img.shape[0], img.shape[1]
     mod = lensfunpy.Modifier(lens[0], cam[0].crop_factor, width, height)
     mod.initialize(float(exif_data['FocalLength'][0:-3]), exif_data['ApertureValue'], pixel_format=np.float32)
-    
-    modimg = img.copy()
-    did_apply = mod.apply_color_modification(modimg)
 
-    undist_coords = mod.apply_subpixel_distortion()
-    modimg[..., 0] = cv2.remap(modimg[..., 0], undist_coords[..., 0, :], None, cv2.INTER_LANCZOS4)
-    modimg[..., 1] = cv2.remap(modimg[..., 1], undist_coords[..., 1, :], None, cv2.INTER_LANCZOS4)
-    modimg[..., 2] = cv2.remap(modimg[..., 2], undist_coords[..., 2, :], None, cv2.INTER_LANCZOS4)
+    modimg = img
+    if is_cm == True:
+        modimg = img.copy()
+        did_apply = mod.apply_color_modification(modimg)
+        logging.info("Apply Color Modification is Failed")
 
-    undist_coords = mod.apply_geometry_distortion()
-    modimg = cv2.remap(modimg, undist_coords, None, cv2.INTER_LANCZOS4)
+    if is_sd == True:
+        undist_coords = mod.apply_subpixel_distortion()
+        modimg[..., 0] = cv2.remap(modimg[..., 0], undist_coords[..., 0, :], None, cv2.INTER_LANCZOS4)
+        modimg[..., 1] = cv2.remap(modimg[..., 1], undist_coords[..., 1, :], None, cv2.INTER_LANCZOS4)
+        modimg[..., 2] = cv2.remap(modimg[..., 2], undist_coords[..., 2, :], None, cv2.INTER_LANCZOS4)
 
-    return modimg
+    if is_gd == True:
+        undist_coords = mod.apply_geometry_distortion()
+        modimg = cv2.remap(modimg, undist_coords, None, cv2.INTER_LANCZOS4)
+
+    return np.clip(modimg, 0, 1)
 
 
 # 露出補正
@@ -643,8 +648,8 @@ def apply_mask(img1, msk, img2):
     return np.array(array)
 
 
-@partial(jit, static_argnums=(1,2,3,4,5,6))
-def __crop_image(image, texture_width, texture_height, click_x, click_y, offset, is_zoomed):
+#@partial(jit, static_argnums=(1,2,3,4,5,6))
+def crop_image(image, texture_width, texture_height, click_x, click_y, offset, is_zoomed):
     # 画像のサイズを取得
     image_height, image_width = image.shape[:2]
 
@@ -673,12 +678,12 @@ def __crop_image(image, texture_width, texture_height, click_x, click_y, offset,
 
     if not is_zoomed:
         # リサイズ
-        #resized_img = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
-        resized_img = jax.image.resize(image, (new_height, new_width, 3), method="linear")
+        resized_img = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
+        #resized_img = jax.image.resize(image, (new_height, new_width, 3), method="linear")
 
         # リサイズした画像を中央に配置
         #result[offset_y:offset_y+new_height, offset_x:offset_x+new_width] = resized_img
-        result = jnp.pad(resized_img, ((offset_y, texture_height-(offset_y+new_height)), (offset_x, texture_width-(offset_x+new_width)), (0, 0)))
+        result = np.pad(resized_img, ((offset_y, texture_height-(offset_y+new_height)), (offset_x, texture_width-(offset_x+new_width)), (0, 0)))
 
         crop_info = (0, 0, image_width, image_height, scale)
 
@@ -698,18 +703,19 @@ def __crop_image(image, texture_width, texture_height, click_x, click_y, offset,
         crop_y = click_image_y - crop_height // 2
 
         # クロップ
-        result, crop_info = __crop_image_info(image, (crop_x, crop_y, crop_width, crop_height, 1.0), offset)
+        result, crop_info = crop_image_info(image, (crop_x, crop_y, crop_width, crop_height, 1.0), offset)
     
     return result, crop_info
 
+"""
 def crop_image(image, texture_width, texture_height, click_x, click_y, offset, is_zoomed):
     result, crop_info = __crop_image(image, texture_width, texture_height, click_x, click_y, offset, is_zoomed)
     result.block_until_ready()
 
     return np.array(result), (int(crop_info[0]), int(crop_info[1]), int(crop_info[2]), int(crop_info[3]), float(crop_info[4]))
-
-@partial(jit, static_argnums=(1, 2))
-def __crop_image_info(image, crop_info, offset=(0, 0)):
+"""
+#@partial(jit, static_argnums=(1, 2))
+def crop_image_info(image, crop_info, offset=(0, 0)):
     
     # 情報取得
     image_height, image_width = image.shape[:2]
@@ -724,13 +730,51 @@ def __crop_image_info(image, crop_info, offset=(0, 0)):
     crop_y = max(0, min(crop_y, image_height - crop_height))
 
     # 画像を切り抜く
-    cropped_img = jax.lax.slice(image, (crop_y, crop_x, 0), (crop_y+crop_height, crop_x+crop_width, 3))
-    #cropped_img = image[crop_y:crop_y+crop_height, crop_x:crop_x+crop_width]
+    #cropped_img = jax.lax.slice(image, (crop_y, crop_x, 0), (crop_y+crop_height, crop_x+crop_width, 3))
+    cropped_img = image[crop_y:crop_y+crop_height, crop_x:crop_x+crop_width]
 
     return cropped_img, (crop_x, crop_y, crop_width, crop_height, scale)
 
+"""
 def crop_image_info(image, crop_info, offset=(0, 0)):
     result, crop_info = __crop_image_info(image, crop_info, offset)
     result.block_until_ready()
 
     return np.array(result), (int(crop_info[0]), int(crop_info[1]), int(crop_info[2]), int(crop_info[3]), float(crop_info[4]))
+"""
+
+def get_multiple_mask_bbox(mask):
+    """
+    マスク画像から複数の独立した領域それぞれのバウンディングボックスを計算する
+    
+    Args:
+        mask マスク画像（2次元のnumpy配列）
+        
+    Returns:
+        各領域の(x_min, y_min, x_max, y_max)座標のリスト
+            空のマスクの場合は空リストを返す
+    """
+    # マスクが空かチェック
+    if not np.any(mask > 0):
+        return []
+    
+    # 連結成分のラベリングを実行
+    labeled_array, num_features = label(mask > 0)
+    
+    bboxes = []
+    # 各ラベルについてバウンディングボックスを計算
+    for label_id in range(1, num_features + 1):
+        # 現在のラベルのマスクを作成
+        current_mask = labeled_array == label_id
+        
+        # 行と列それぞれについて、マスクが存在する座標を取得
+        rows = np.any(current_mask, axis=1)
+        cols = np.any(current_mask, axis=0)
+        
+        # 最小と最大の座標を取得
+        y_min, y_max = np.where(rows)[0][[0, -1]]
+        x_min, x_max = np.where(cols)[0][[0, -1]]
+        
+        bboxes.append((x_min, y_min, x_max-x_min, y_max-y_min))
+    
+    return bboxes

@@ -3,6 +3,7 @@ import numpy as np
 import pyautogui as pag
 from kivymd.app import MDApp
 from kivymd.uix.widget import MDWidget
+from kivy.uix.popup import Popup as KVPopup
 from kivy.core.window import Window as KVWindow
 from kivy.graphics.texture import Texture as KVTexture
 from kivy.clock import Clock, mainthread
@@ -25,6 +26,7 @@ import histogram_widget
 import metainfo
 import util
 import mask_editor2
+import color_picker
 import macos
 
 class MainWidget(MDWidget):
@@ -107,10 +109,11 @@ class MainWidget(MDWidget):
         _, self.crop_info = core.crop_image(self.imgset.img, self.texture_width, self.texture_height, self.click_x, self.click_y, (0, 0), self.is_zoomed)
         self.start_draw_image()
     
-    def start_draw_image_and_crop(self, offset=(0, 0)):
+    def start_draw_image_and_crop(self, imgset, offset=(0, 0)):
         if self.is_draw_image == False:
-            self.crop_image = None
-            self.start_draw_image(offset)
+            if self.imgset == imgset:
+                self.crop_image = None
+                self.start_draw_image(offset)
 
     def empty_image(self):
         self.imgset = None
@@ -172,7 +175,6 @@ class MainWidget(MDWidget):
         self.ids["mask_editor2"].clear_mask()
         if card is not None:
             self.load_image(card.file_path, card.exif_data)
-            #self.imgset.img = core.modify_lens(self.imgset.img, exif_data)
             self.load_json()
             self.set2widget_all(self.primary_effects, self.primary_param)
             self.set_exif_data(card.exif_data)

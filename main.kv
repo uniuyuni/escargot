@@ -4,6 +4,7 @@
 #:include viewer_widget.kv
 #:include histogram_widget.kv
 #:include metainfo.kv
+#:include color_picker.kv
 
 MainWidget:   
 
@@ -724,7 +725,7 @@ MainWidget:
                                 valign: 'center'
 
                             TabbedPanel:
-                                size: dp(350), dp(400)
+                                size: dp(350), dp(400+600)
                                 size_hint: None, None
                                 tab_width: dp(80)
                                 tab_height: dp(20)
@@ -746,32 +747,10 @@ MainWidget:
                                             end_y: 0.0
                                             on_curve: root.apply_effects_lv(2, 'grading1')
 
-                                        ParamSlider:
-                                            id: slider_grading1_hue
-                                            text: "Hue"
-                                            min: 0.0
-                                            max: 360.0
-                                            value: 0.0
-                                            step: 1.0
-                                            on_slider: root.apply_effects_lv(2, 'grading1')
+                                        CWColorPicker:
+                                            id: grading1_color_picker
+                                            on_current_color: root.apply_effects_lv(2, 'grading1')
 
-                                        ParamSlider:
-                                            id: slider_grading1_sat
-                                            text: "Saturation"
-                                            min: 0.0
-                                            max: 100.0
-                                            value: 0.0
-                                            step: 1.0
-                                            on_slider: root.apply_effects_lv(2, 'grading1')
-
-                                        ParamSlider:
-                                            id: slider_grading1_lum
-                                            text: "Luminance"
-                                            min: 0.0
-                                            max: 100.0
-                                            value: 0.0
-                                            step: 1.0
-                                            on_slider: root.apply_effects_lv(2, 'grading1')
 
                                 TabbedPanelItem:
                                     text: 'Grading 2'
@@ -789,32 +768,9 @@ MainWidget:
                                             end_y: 1.0
                                             on_curve: root.apply_effects_lv(2, 'grading2')
 
-                                        ParamSlider:
-                                            id: slider_grading2_hue
-                                            text: "Hue"
-                                            min: 0.0
-                                            max: 360.0
-                                            value: 0.0
-                                            step: 1.0
-                                            on_slider: root.apply_effects_lv(2, 'grading2')
-
-                                        ParamSlider:
-                                            id: slider_grading2_sat
-                                            text: "Saturation"
-                                            min: 0.0
-                                            max: 100.0
-                                            value: 0.0
-                                            step: 1.0
-                                            on_slider: root.apply_effects_lv(2, 'grading2')
-
-                                        ParamSlider:
-                                            id: slider_grading2_lum
-                                            text: "Luminance"
-                                            min: 0.0
-                                            max: 100.0
-                                            value: 0.0
-                                            step: 1.0
-                                            on_slider: root.apply_effects_lv(2, 'grading2')
+                                        CWColorPicker:
+                                            id: grading2_color_picker
+                                            on_current_color: root.apply_effects_lv(2, 'grading2')
 
                             HSeparator:
                                 height: dp(15)
