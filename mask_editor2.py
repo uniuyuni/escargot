@@ -48,6 +48,7 @@ class ControlPoint(Widget):
             self.color_instruction = Color(*self.color)
             self.circle = Ellipse(pos=(-10, -10), size=(20, 20))
             PopMatrix()
+        self.center = (0, 0)
         self.update_graphics()
         self.bind(center=self.update_graphics, color=self.update_color)
 
@@ -182,6 +183,62 @@ class BaseMask(Widget):
     def draw_mask_to_fbo(self):
         pass  # 具体的な実装は各マスククラスで行う
 
+    def draw_hls_mask(self, image):
+        himg = self.draw_hue_mask(image)
+        limg = self.draw_lum_mask(himg)
+        simg = self.draw_sat_mask(limg)
+        
+        return simg
+
+    def draw_hue_mask(self, image):
+        if self.editor.crop_image_hls is not None:            
+            himg = self.editor.crop_image_hls[..., 0]
+            
+            hmin = self.effects_param.get('hue_min', 0) / 255
+            hmax = self.effects_param.get('hue_max', 359) / 359
+            if (hmin != 0) or (1 != hmax):
+                himg = np.where((himg < hmin) | (hmax < himg), 0, image)
+            else:
+                himg = image
+
+            return himg
+        
+        return None
+
+    def draw_lum_mask(self, image):
+        if self.editor.crop_image_hls is not None:            
+            limg = self.editor.crop_image_hls[..., 1]
+            
+            lmin = self.effects_param.get('lum_min', 0) / 255
+            lmax = self.effects_param.get('lum_max', 255) / 255
+            if (lmin != 0) or (1 != lmax):
+                limg = np.where((limg < lmin) | (lmax < limg), 0, image)
+            else:
+                limg = image
+
+            #pw = (image_size[0]-limg.shape[1])//2
+            #ph = (image_size[1]-limg.shape[0])//2
+            #limg = np.pad(limg,((ph, ph), (pw, pw)))
+
+            return limg
+        
+        return None
+
+    def draw_sat_mask(self, image):
+        if self.editor.crop_image_hls is not None:            
+            simg = self.editor.crop_image_hls[..., 2]
+            
+            smin = self.effects_param.get('sat_min', 0) / 255
+            smax = self.effects_param.get('sat_max', 255) / 255
+            if (smin != 0) or (1 != smax):
+                simg = np.where((simg < smin) | (smax < simg), 0, image)
+            else:
+                simg = image
+
+            return simg
+        
+        return None
+
 # 円形グラデーションマスクのクラス
 class CircularGradientMask(BaseMask):
     inner_radius_x = NumericProperty(0)
@@ -236,8 +293,8 @@ class CircularGradientMask(BaseMask):
             dy = cy - self.center_y
             self.outer_radius_x = ((dx**2 + dy**2) ** 0.5)
             self.outer_radius_y = ((dx**2 + dy**2) ** 0.5)
-            self.inner_radius_x = self.outer_radius_x * 0.7  # 内側の半径を仮設定
-            self.inner_radius_y = self.outer_radius_y * 0.7  # 内側の半径を仮設定
+            self.inner_radius_x = self.outer_radius_x * 0.5  # 内側の半径を仮設定
+            self.inner_radius_y = self.outer_radius_y * 0.5  # 内側の半径を仮設定
             self.update_mask()
             return True
         else:
@@ -455,6 +512,9 @@ class CircularGradientMask(BaseMask):
         # グラデーションを描画
         gradient_image = self.draw_elliptical_gradient(image_size, center, inner_axes, outer_axes, self.editor.get_rotate_rad(self.rotate_rad), self.invert)
 
+        # ルミナんとマスクを作成
+        gradient_image = self.draw_hls_mask(gradient_image)
+
         return gradient_image
 
     def draw_mask_to_fbo(self):
@@ -468,49 +528,6 @@ class CircularGradientMask(BaseMask):
             # イメージを描画してもらう
             self.editor.draw_mask_image(gradient_image)
 
-    """
-    def draw_elliptical_gradient(self, image_size, center, inner_axes, outer_axes, angle_rad, invert=0, smoothness=1):
-        # 画像の初期化（黒背景、RGBA）
-        image = np.zeros((image_size[1], image_size[0]), dtype=np.float32)
-
-        # 回転角をラジアンに変換
-        cos_angle = np.cos(angle_rad)
-        sin_angle = np.sin(angle_rad)
-        
-        # 画像の座標系を作成
-        y_indices, x_indices = np.indices((image_size[1], image_size[0]))
-        x_indices = x_indices - center[0]
-        y_indices = y_indices - center[1]
-
-        # 回転を適用して軸を調整
-        x_rotated = x_indices * cos_angle + y_indices * sin_angle
-        y_rotated = -x_indices * sin_angle + y_indices * cos_angle
-
-        # 内側と外側の楕円の距離を計算
-        inner_ellipse_distance = (x_rotated**2 / inner_axes[0]**2 + y_rotated**2 / inner_axes[1]**2)
-        outer_ellipse_distance = (x_rotated**2 / outer_axes[0]**2 + y_rotated**2 / outer_axes[1]**2)
-
-        # グラデーションの計算（通常または反転）
-        gradient = np.clip((outer_ellipse_distance - 1) / (outer_ellipse_distance - inner_ellipse_distance + 1e-5), 0, 1)
-        #gradient = np.clip(np.sqrt((outer_ellipse_distance - 1) / (outer_ellipse_distance - inner_ellipse_distance + 1e-5)), 0, 1)
-        
-        # 滑らかさを適用
-        gradient = gradient ** smoothness
-
-        # 反転オプション
-        if invert == 1:
-            gradient = 1 - gradient  # グラデーションを反転
-        
-        # 内側の楕円を完全に白にする
-        # gradient[inner_ellipse_distance < 1] = 1 if invert == 0 else 0  # 反転時は内側が黒
-        # 外側の楕円を完全に黒にする
-        gradient[outer_ellipse_distance > 1] = 0 if invert == 0 else 1  # 反転時は外側が白
-
-        # R画像の生成
-        image[...] = gradient  # Aチャンネル
-
-        return np.flipud(image)
-    """
     def draw_elliptical_gradient(self, image_size, center, inner_axes, outer_axes, angle_rad, invert=0, smoothness=2.0):
     
         # 座標グリッドの作成
@@ -559,7 +576,7 @@ class CircularGradientMask(BaseMask):
 
         #return gradient
         return np.flipud(gradient)
-
+    
 # GradientMask クラス
 class GradientMask(BaseMask):
     start_point = ListProperty([0, 0])    # グラデーションの開始点
@@ -654,10 +671,9 @@ class GradientMask(BaseMask):
 
     def update(self):
         cp_center = self.control_points[0]
-        center = cp_center.ctrl_center
-        center[0] += float(np.finfo(np.float32).eps)
-        center[1] += float(np.finfo(np.float32).eps)
-        cp_center.ctrl_center = center #
+        x = cp_center.ctrl_center[0] + float(np.finfo(np.float32).eps)
+        y = cp_center.ctrl_center[1] + float(np.finfo(np.float32).eps)
+        cp_center.ctrl_center = [x, y]
 
     def create_control_points(self):
         # 中心のコントロールポイント
@@ -793,6 +809,9 @@ class GradientMask(BaseMask):
 
         # グラデーションを描画
         gradient_image = self.draw_gradient(image_size, center, start_point, end_point, self.editor.get_rotate_rad(self.rotate_rad))
+        
+        # ルミナんとマスクを作成
+        gradient_image = self.draw_hls_mask(gradient_image)
 
         return gradient_image
     
@@ -850,6 +869,8 @@ class FullMask(BaseMask):
         super().__init__(editor, **kwargs)
         self.name = "Full"
         self.initializing = True  # 初期配置中かどうか
+
+        self.center = (0, 0)
 
         with self.canvas:
             PushMatrix()
@@ -920,10 +941,9 @@ class FullMask(BaseMask):
 
     def update(self):
         cp_center = self.control_points[0]
-        center = cp_center.ctrl_center
-        center[0] += float(np.finfo(np.float32).eps)
-        center[1] += float(np.finfo(np.float32).eps)
-        cp_center.ctrl_center = center #
+        x = cp_center.ctrl_center[0] + float(np.finfo(np.float32).eps)
+        y = cp_center.ctrl_center[1] + float(np.finfo(np.float32).eps)
+        cp_center.ctrl_center = [x, y]
 
     def on_center_control_point_move(self, instance, value):
         dx = instance.ctrl_center[0] - self.center_x
@@ -961,8 +981,11 @@ class FullMask(BaseMask):
         image_size = (int(self.editor.texture_size[0]), int(self.editor.texture_size[1]))
         center = self.editor.tcg_to_texture(*self.center)
 
-        # グラデーションを描画
-        gradient_image = self.draw_elliptical_gradient(image_size, center)
+        # 描画
+        gradient_image = self.draw_full(image_size, center)
+
+        # ルミナんとマスクを作成
+        gradient_image = self.draw_hls_mask(gradient_image)
 
         return gradient_image
 
@@ -979,7 +1002,7 @@ class FullMask(BaseMask):
            # イメージを描画してもらう
             self.editor.draw_mask_image(gradient_image)
 
-    def draw_elliptical_gradient(self, image_size, center):
+    def draw_full(self, image_size, center):
         # 画像の初期化（黒背景、RGBA）
         image = np.zeros((image_size[1], image_size[0]), dtype=np.float32)
 
@@ -1151,7 +1174,7 @@ class MaskEditor2(FloatLayout):
 
         self.current_mask_type = None
         self.center_rotate_rad = 0
-        self.orientation = 1
+        self.orientation = (0, 0)
         self.margin = (0, 0)
         self.texture_size = [0, 0]
         self._keyboard = Window.request_keyboard(self._keyboard_closed, self)
@@ -1177,22 +1200,31 @@ class MaskEditor2(FloatLayout):
         self.crop_info = [0, 0, self.size[0], self.size[1], scale]
         self.__set_image_info(0)
         return True
+    
+    def set_crop_image(self, crop_image):
+        ci = np.clip(crop_image, 0, 1)
+        self.crop_image_hls = cv2.cvtColor(ci, cv2.COLOR_RGB2HLS_FULL)
 
-    def set_image(self, image, tx, ty, crop_info, rotate_rad, dt):
+    def set_image(self, image, tx, ty, crop_info, dt):
         self.image_widget.source = None
         self.image_widget.opacity = 0
 
         self.image_size[0], self.image_size[1] = image.shape[1], image.shape[0]
         self.texture_size = [tx, ty]
         self.crop_info = crop_info
-        self.__set_image_info(rotate_rad)
+        self.__set_image_info()
         return True
+    
+    def set_orientation(self, rotation, rotation2, flip):
+        self.center_rotate_rad = math.radians(rotation)
+        self.orientation = (math.radians(rotation2), flip)
 
-    def __set_image_info(self, rotate_rad):
-        self.center_rotate_rad = rotate_rad
+    def __set_image_info(self):
         self.margin = ((self.size[0]-self.texture_size[0])/2, (self.size[1]-self.texture_size[1])/2)
         sx, sy = core.calc_resize_image((self.crop_info[2], self.crop_info[3]), max(self.texture_size))
         self.margin2 = ((self.texture_size[0]-sx)/2, (self.texture_size[1]-sy)/2)
+        self.margin2 = (self.texture_size[0]/2, self.texture_size[1]/2)
+        #self.margin2 = (0, 0)
         
         # 既存のマスクに対する更新を処理
         for mask in reversed(self.mask_layers):
@@ -1239,9 +1271,9 @@ class MaskEditor2(FloatLayout):
         btn_gradient.bind(on_press=self.select_gradient_mask)
         self.ui_layout.add_widget(btn_gradient)
 
-        btn_gradient = Button(text='Full', size_hint=(1, 0.1))
-        btn_gradient.bind(on_press=self.select_full_mask)
-        self.ui_layout.add_widget(btn_gradient)
+        btn_full = Button(text='Full', size_hint=(1, 0.1))
+        btn_full.bind(on_press=self.select_full_mask)
+        self.ui_layout.add_widget(btn_full)
 
         btn_free_draw = Button(text='Draw', size_hint=(1, 0.1))
         btn_free_draw.bind(on_press=self.select_free_draw_mask)
@@ -1259,6 +1291,8 @@ class MaskEditor2(FloatLayout):
         mask = self.get_active_mask()
         if mask is not None:
             mask.is_draw_mask = is_draw_mask
+            if is_draw_mask == True:
+                mask.update()
 
     def draw_mask_image(self, glayimg):
         if self.rectangle is not None:
@@ -1361,19 +1395,22 @@ class MaskEditor2(FloatLayout):
         if mask is not None:
             mask.active = True
             self.root.set2widget_all(mask.effects, mask.effects_param)
+            #mask.update()
         else:
             self.draw_mask_image(None)
             self.root.set2widget_all(None, None)
         self.root.start_draw_image()
 
     def get_rotate_rad(self, rotate_rad):
-        rad, flip = util.split_orientation(self.orientation)
+        rad, flip = self.orientation
+        """
         if flip == 0:
             rad = rotate_rad + rad
         if flip == 1:
             rad = -rotate_rad + rad
         if flip == 2:
             rad = -rotate_rad + rad
+        """
         return self.center_rotate_rad + rad
     
     def world_to_tcg_scale(self, x, y):
@@ -1387,35 +1424,35 @@ class MaskEditor2(FloatLayout):
         wx, wy = self.to_window(*self.pos)
         cx, cy = cx - wx, cy - wy
         cx, cy = cx - self.margin[0], cy - self.margin[1]
-        cx, cy = cx + self.margin2[0], cy + self.margin2[1]
+        cx, cy = cx - self.texture_size[0]/2, cy - self.texture_size[1]/2
         cx, cy = cx / self.crop_info[4], cy / self.crop_info[4]
-        cx, cy = cx + self.crop_info[0], (self.texture_size[1] / self.crop_info[4] - cy) + self.crop_info[1]
-        cx, cy = cx - self.image_size[0]/2, cy - self.image_size[1]/2
-        cx, cy = self.center_rotate(cx, cy, self.center_rotate_rad)
+        cx, cy = cx + self.crop_info[0], cy + self.crop_info[1] #(self.texture_size[1] / self.crop_info[4] - cy) + self.crop_info[1]
+        #cx, cy = cx - self.image_size[0]/2, cy - self.image_size[1]/2
+        cx, cy = self.center_rotate_invert(cx, cy, self.center_rotate_rad)
         return (cx, cy)
 
     def tcg_to_world(self, cx, cy):
-        cx, cy = self.center_rotate_invert(cx, cy, self.center_rotate_rad)
-        cx, cy = cx + self.image_size[0]/2, cy + self.image_size[1]/2
-        cx, cy = cx - self.crop_info[0], (self.texture_size[1] / self.crop_info[4] + self.crop_info[1]) - cy
+        cx, cy = self.center_rotate(cx, cy, self.center_rotate_rad)
+        #cx, cy = cx + self.image_size[0]/2, cy + self.image_size[1]/2
+        cx, cy = cx - self.crop_info[0], cy - self.crop_info[1] #(self.texture_size[1] / self.crop_info[4] + self.crop_info[1]) - cy
         cx, cy = cx * self.crop_info[4], cy * self.crop_info[4]        
         cx, cy = cx + self.margin[0], cy + self.margin[1]
-        cx, cy = cx - self.margin2[0], cy - self.margin2[1]
+        cx, cy = cx + self.texture_size[0]/2, cy + self.texture_size[1]/2
         wx, wy = self.to_window(*self.pos)
         cx, cy = cx + wx, cy + wy
         return (cx, cy)
 
     def tcg_to_texture(self, cx, cy):
-        cx, cy = self.center_rotate_invert(cx, cy, self.center_rotate_rad)
-        cx, cy = cx + self.image_size[0]/2, cy + self.image_size[1]/2
-        cx, cy = cx - self.crop_info[0], (self.texture_size[1] / self.crop_info[4] + self.crop_info[1]) - cy
+        cx, cy = self.center_rotate(cx, cy, self.center_rotate_rad)
+        #cx, cy = cx + self.image_size[0]/2, cy + self.image_size[1]/2
+        cx, cy = cx - self.crop_info[0], cy - self.crop_info[1] #(self.texture_size[1] / self.crop_info[4] + self.crop_info[1]) - cy
         cx, cy = cx * self.crop_info[4], cy * self.crop_info[4]        
         #cx, cy = cx + self.margin[0], cy + self.margin[1]
-        cx, cy = cx - self.margin2[0], cy - self.margin2[1]
+        cx, cy = cx + self.texture_size[0]/2, cy + self.texture_size[1]/2
         return (cx, cy)
 
     def apply_orientation(self, cx, cy):
-        rad, flip = util.split_orientation(self.orientation)
+        rad, flip = self.orientation
 
         if (flip & 1) == 1:
             cx = -cx
@@ -1433,7 +1470,7 @@ class MaskEditor2(FloatLayout):
         return (new_cx, new_cy)
 
     def center_rotate_invert(self, cx, cy, rotation_rad):
-        rad, _ = util.split_orientation(self.orientation)
+        rad, _ = self.orientation
 
         new_cx = cx * math.cos(rotation_rad + rad) + cy * math.sin(rotation_rad + rad)
         new_cy = -cx * math.sin(rotation_rad + rad) + cy * math.cos(rotation_rad + rad)

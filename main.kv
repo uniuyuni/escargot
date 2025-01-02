@@ -43,6 +43,9 @@ MainWidget:
                             id: exif_file_name
                             key: "File Name"
                         MetaInfo:
+                            id: exif_file_size
+                            key: "File Size"
+                        MetaInfo:
                             id: exif_create_date
                             key: "Create Date"
                         MetaInfo:
@@ -649,6 +652,73 @@ MainWidget:
                                             value: 0.0
                                             step: 0.05
                                             on_slider: root.apply_effects_lv(2, 'hls_magenta')
+
+                            HSeparator:
+                                height: 30
+ 
+                            Label:
+                                text_size: self.size
+                                size: 0, dp(20)
+                                size_hint_y: None
+                                text: ' Exception'
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
+
+                            BoxLayout:
+                                size: 0, dp(30)
+                                size_hint_y: None
+                                orientation: 'horizontal'
+                                ParamLabel:
+                                    text: "Highlight"
+                                VSpacer:
+                                    size_hint_x: 5
+                                MDChip:
+                                    type: 'filter'
+                                    pos_hint: {"center_x": .5, "center_y": .5}
+                                    size: dp(100), dp(20)
+                                    size_hint: None, None
+                                    id: switch_highlight_compress
+                                    radius: 40
+                                    line_color: 'grey'
+                                    on_active: root.apply_effects_lv(3, 'highlight_compress')
+
+                                    MDChipText:
+                                        text: "Compress"
+                                        font_size: '9pt'
+                                        color: 'b0b0b0' 
+
+                            BoxLayout:
+                                size: 0, dp(30)
+                                size_hint_y: None
+                                orientation: 'horizontal'
+                                ParamLabel:
+                                    text: "Correct"
+                                VSpacer:
+                                    size_hint_x: 5
+                                MDChip:
+                                    type: 'filter'
+                                    pos_hint: {"center_x": .5, "center_y": .5}
+                                    size: dp(100), dp(20)
+                                    size_hint: None, None
+                                    id: switch_correct_overexposed_areas
+                                    radius: 40
+                                    line_color: 'grey'
+                                    on_active: root.apply_effects_lv(3, 'correct_overexposed_areas')
+
+                                    MDChipText:
+                                        text: "OverexposedColor"
+                                        font_size: '9pt'
+                                        color: 'b0b0b0' 
+
+                            BoxLayout:
+                                size_hint_y: None
+                                orientation: "vertical"
+                                height: self.minimum_height
+                                
+                                CWColorPicker:
+                                    id: cp_correct_overexposed_areas
+                                    on_current_color: root.apply_effects_lv(3, 'correct_overexposed_areas')
 
                 TabbedPanelItem:
                     text: 'Curves'
@@ -1265,6 +1335,134 @@ MainWidget:
                                 value: 0
                                 step: 0.1
                                 on_slider: root.apply_effects_lv(0, 'rotation')
+
+                            VSpacer:
+                                width: dp(5)
+                            
+                            BoxLayout:
+                                size: 0, dp(20)
+                                size_hint: 1, None
+
+                                HSpacer:
+                                    width: dp(100)
+                                Button:
+                                    pos_hint: {'center_x': .5, 'center_y': .5}
+                                    size: 0, dp(20)
+                                    size_hint: 1, None
+                                    text: "L"
+                                    on_press: root.set_effect_param(0, 'rotation', 90)
+                                Button:
+                                    pos_hint: {'center_x': .5, 'center_y': .5}
+                                    size: 0, dp(20)
+                                    size_hint: 1, None
+                                    text: "R"
+                                    on_press: root.set_effect_param(0, 'rotation', -90)
+                                Button:
+                                    pos_hint: {'center_x': .5, 'center_y': .5}
+                                    size: 0, dp(20)
+                                    size_hint: 1, None
+                                    text: "H"
+                                    on_press: root.set_effect_param(0, 'rotation', 'hflip')
+                                Button:
+                                    pos_hint: {'center_x': .5, 'center_y': .5}
+                                    size: 0, dp(20)
+                                    size_hint: 1, None
+                                    text: "V"
+                                    on_press: root.set_effect_param(0, 'rotation', 'vflip')
+
+                            HSeparator:
+                                height: dp(15)
+
+                TabbedPanelItem:
+                    text: 'Mask2'
+
+                    MDScrollView:
+
+                        MDBoxLayout:
+                            size_hint_y: None
+                            orientation: "vertical"
+                            height: self.minimum_height
+
+                            Label:
+                                text_size: self.size
+                                size: 0, dp(20)
+                                size_hint_y: None
+                                text: ' Hue'
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
+
+                            ParamSlider:
+                                id: slider_hue_min
+                                text: "Min"
+                                min: 0
+                                max: 359
+                                value: 0
+                                step: 1
+                                on_slider: root.apply_effects_lv(3, 'hue_min')
+
+                            ParamSlider:
+                                id: slider_hue_max
+                                text: "Max"
+                                min: 0
+                                max: 360*2-1
+                                value: 359
+                                step: 1
+                                on_slider: root.apply_effects_lv(3, 'hue_max')
+
+                            Label:
+                                text_size: self.size
+                                size: 0, dp(20)
+                                size_hint_y: None
+                                text: ' Lum'
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
+
+                            ParamSlider:
+                                id: slider_lum_min
+                                text: "Min"
+                                min: 0
+                                max: 255
+                                value: 0
+                                step: 1
+                                on_slider: root.apply_effects_lv(3, 'lum_min')
+
+                            ParamSlider:
+                                id: slider_lum_max
+                                text: "Max"
+                                min: 0
+                                max: 255
+                                value: 255
+                                step: 1
+                                on_slider: root.apply_effects_lv(3, 'lum_max')
+
+                            Label:
+                                text_size: self.size
+                                size: 0, dp(20)
+                                size_hint_y: None
+                                text: ' Sat'
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
+
+                            ParamSlider:
+                                id: slider_sat_min
+                                text: "Min"
+                                min: 0
+                                max: 255
+                                value: 0
+                                step: 1
+                                on_slider: root.apply_effects_lv(3, 'sat_min')
+
+                            ParamSlider:
+                                id: slider_sat_max
+                                text: "Max"
+                                min: 0
+                                max: 255
+                                value: 255
+                                step: 1
+                                on_slider: root.apply_effects_lv(3, 'sat_max')
 
                             HSeparator:
                                 height: dp(15)

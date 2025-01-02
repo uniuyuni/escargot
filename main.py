@@ -133,6 +133,9 @@ class MainWidget(MDWidget):
     def draw_image(self, offset, dt):
         if self.imgset is not None:
             img, self.crop_image, self.crop_info = pipeline.process_pipeline(self.imgset.img, self.crop_info, offset, self.crop_image, self.is_zoomed, self.texture_width, self.texture_height, self.click_x, self.click_y, self.primary_effects, self.primary_param, self.ids['mask_editor2'])
+            util.print_nan_inf(img)
+            
+            #self.mask_editor2.set_crop_image(self.crop_image)
             img = core.apply_gamma(img, 1.0/2.222)
             self.draw_histogram(img)
             img = np.clip(img, 0, 1)
@@ -153,7 +156,20 @@ class MainWidget(MDWidget):
         else:
             mask.effects[lv][effect].set2param(mask.effects_param, self)
 
-        self.ids['mask_editor2'].set_draw_mask(False)
+        self.ids['mask_editor2'].set_draw_mask(lv == 3)
+        self.start_draw_image()
+
+    def set_effect_param(self, lv, effect, arg):
+        mask = self.ids['mask_editor2'].get_active_mask()
+        if mask is None:
+            self.primary_effects[lv][effect].set2param2(self.primary_param, arg)
+        else:
+            mask.effects[lv][effect].set2param2(mask.effects_param, arg)
+
+        #if lv == 0 and effect == 'rotation':
+        #    self.ids['mask_editor2'].set_orientation(self.primary_param.get('rotation', 0), self.primary_param.get('rotation2', 0), self.primary_param.get('flip_mode', 0))
+
+        self.ids['mask_editor2'].set_draw_mask(lv == 3)
         self.start_draw_image()
     
     def reset_param(self, param):
@@ -192,9 +208,10 @@ class MainWidget(MDWidget):
                     # ウィンドウ座標からローカルイメージ座標に変換
                     self.click_x, self.click_y = util.to_texture(touch.pos, self.ids['preview'])
 
-                _, self.crop_info = core.crop_image(self.imgset.img, self.texture_width, self.texture_height, self.click_x, self.click_y, (0, 0), self.is_zoomed)
+                self.crop_info = None
+                #_, self.crop_info = core.crop_image(self.imgset.img, self.texture_width, self.texture_height, self.click_x, self.click_y, (0, 0), self.is_zoomed)
                 effects.reeffect_all(self.primary_effects)
-                self.start_draw_image_and_crop()
+                self.start_draw_image_and_crop(self.imgset)
 
             # ドラッグ操作
             elif self.is_zoomed == True:
@@ -210,7 +227,7 @@ class MainWidget(MDWidget):
 
                     #_, self.crop_info = core.crop_image_info(self.imgset.img, self.crop_info, (offset_x, offset_y))
                     effects.reeffect_all(self.primary_effects)
-                    self.start_draw_image_and_crop((offset_x, offset_y))
+                    self.start_draw_image_and_crop(self.imgset, (offset_x, offset_y))
 
                     self.drag_start_point = touch.pos
                 
@@ -223,7 +240,8 @@ class MainWidget(MDWidget):
         macos.FileChooser(title="Select Folder", mode="dir", filters=[("Jpeg Files", "*.jpg")], on_selection=self.handle_for_dir_selection).run()
 
     def delay_set_image(self, dt):
-        self.mask_editor2.set_image(self.imgset.img, self.texture_width, self.texture_height, self.crop_info, math.radians(self.primary_param.get('rotation', 0)), -1)
+        self.mask_editor2.set_orientation(self.primary_param.get('rotation', 0), self.primary_param.get('rotation2', 0), self.primary_param.get('flip_mode', 0))
+        self.mask_editor2.set_image(self.imgset.img, self.texture_width, self.texture_height, self.crop_info, -1)
         
     def on_mask2_press(self, value):
         if value == "down":
@@ -261,6 +279,7 @@ class MainWidget(MDWidget):
 
     def set_exif_data(self, exif_data):
         self.ids['exif_file_name'].value = exif_data.get("FileName", "-")
+        self.ids['exif_file_size'].value = exif_data.get("FileSize", "-")
         self.ids['exif_create_date'].value = exif_data.get("CreateDate", "-")
         self.ids['exif_image_size'].value = exif_data.get("ImageSize", "-")
         self.ids['exif_iso_speed'].value = str(exif_data.get("ISO", "-"))

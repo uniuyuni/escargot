@@ -51,21 +51,78 @@ class RotationEffect(Effect):
     def set2param(self, param, widget):
         param['rotation'] = widget.ids["slider_rotation"].value
 
+    def set2param2(self, param, arg):
+        if arg == 'hflip':
+            param['flip_mode'] = param.get('flip_mode', 0) ^ 1
+
+        elif arg == 'vflip':
+            param['flip_mode'] = param.get('flip_mode', 0) ^ 2
+
+        elif arg == 90:
+            rot = param.get('rotation2', 0) + 90.0
+            if rot >= 90*4:
+                rot = 0
+            param['rotation2'] = rot
+
+        elif arg == -90:
+            rot = param.get('rotation2', 0) - 90.0
+            if rot < 0:
+                rot = 90*3
+            param['rotation2'] = rot
+
+        else:
+            pass
+
     def make_diff(self, img, param):
         ang = param.get('rotation', 0)
-        if ang == 0:
+        ang2 = param.get('rotation2', 0)
+        flp = param.get('flip_mode', 0)
+        if ang == 0 and ang2 == 0 and flp == 0:
             self.diff = None
             self.hash = None
         else:
-            param_hash = hash((ang))
+            param_hash = hash((ang, ang2, flp))
             if self.hash != param_hash:
-                self.diff = core.rotation(img, ang)
+                self.diff = core.rotation(img, ang + ang2, flp)
                 self.hash = param_hash
         
         return self.diff
     
     def apply_diff(self, img):
         return self.diff
+
+class CropEffect(Effect):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        
+        self.crop_editor = None
+
+    def set2widget(self, widget, param):
+        widget.ids["switch_crop"].active = False if param.get('crop', 0) == 0 else True
+
+    def set2param(self, param, widget):
+        param['crop'] = 0 if widget.ids["switch_crop"].active == False else 1
+
+        if param['crop'] > 0:
+            if self.crop_editor is None:
+                self.crop_editor = crop_editor.CropEditor(input_width=param['img_size'][0], input_height=param['img_size'][1], scale=widget.get_scale())
+                widget.ids["preview_widget"].add_widget(self.crop_editor)
+            
+        if param['crop'] <= 0:
+            if self.crop_editor is not None:
+                widget.ids["preview_widget"].remove_widget(self.crop_editor)
+                self.crop_editor = None
+
+    def make_diff(self, img, param):
+        cr = param.get('crop', 0)
+        if cr > 0:
+            self.diff = self.crop_editor.get_crop_info()
+        return self.diff
+    
+    def apply_diff(self, img):
+        cx, cy, cw, ch = self.diff
+        return img[cy:cy+ch, cx:cx+cw]
 
 class LensModifierEffect(Effect):
 
@@ -326,10 +383,13 @@ class ColorCorrectEffect(Effect):
                 if ColorCorrectEffect.__cca is None:
                     ColorCorrectEffect.__cca = importlib.import_module('colorcorrect.algorithm')
 
-                self.diff = ColorCorrectEffect.__cca.automatic_color_equalization(rgb)-rgb
+                self.diff = ColorCorrectEffect.__cca
                 self.hash = param_hash
 
         return self.diff
+    
+    def apply_diff(self, rgb):
+        return ColorCorrectEffect.__cca.automatic_color_equalization(rgb)
 
 class LUTEffect(Effect):
     file_pathes = { '---': None }
@@ -359,10 +419,13 @@ class LUTEffect(Effect):
             if self.hash != param_hash:
                 if self.lut is None:
                     self.lut = cubelut.read_lut(lut_path)
-                self.diff = cubelut.process_image(rgb, self.lut) - rgb
+                self.diff = self.lut
                 self.hash = param_hash
 
         return self.diff
+    
+    def apply_diff(self, rgb):
+        return cubelut.process_image(rgb, self.diff)
 
 class LensblurFilterEffect(Effect):
 
@@ -485,11 +548,13 @@ class ContrastEffect(Effect):
             self.hash = None
 
         elif self.hash != param_hash:
-            rgb2 = core.adjust_contrast(rgb, con, 0.5)
-            self.diff = rgb2-rgb
+            self.diff = con
             self.hash = param_hash
 
         return self.diff
+    
+    def apply_diff(self, rgb):
+        return core.adjust_contrast(rgb, self.diff, 0.5)
 
 class MicroContrastEffect(Effect):
 
@@ -507,11 +572,14 @@ class MicroContrastEffect(Effect):
             self.hash = None
 
         elif self.hash != param_hash:
-            rgb2, _ = microcontrast.calculate_microcontrast(rgb, 7, con)
-            self.diff = rgb2-rgb
+            self.diff = con
             self.hash = param_hash
 
         return self.diff
+    
+    def apply_diff(self, rgb):
+        rgb2, _ = microcontrast.calculate_microcontrast(rgb, 7, self.diff)
+        return rgb2
 
 class MidtoneEffect(Effect):
 
@@ -521,7 +589,7 @@ class MidtoneEffect(Effect):
     def set2param(self, param, widget):
         param['midtone'] = widget.ids["slider_midtone"].value
 
-    def make_diff(self, hls_l, param):
+    def make_diff(self, rgb, param):
         mt = param.get('midtone', 0)
         param_hash = hash((mt))
         if mt == 0:
@@ -529,13 +597,13 @@ class MidtoneEffect(Effect):
             self.hash = None
 
         elif self.hash != param_hash:
-            hls2_l = core.adjust_shadow_highlight(hls_l, mt, mt)
-            #hls2_l = core.adjust_shadow(hls_l, mt)
-            #hls2_l = core.adjust_highlight(hls2_l, mt)
-            self.diff = hls2_l-hls_l    # Lのみ保存
+            self.diff = mt
             self.hash = param_hash
 
         return self.diff
+    
+    def apply_diff(self, rgb):
+        return core.adjust_shadow_highlight(rgb, self.diff, self.diff)
 
 class ToneEffect(Effect):
 
@@ -551,7 +619,7 @@ class ToneEffect(Effect):
         param['shadow'] = widget.ids["slider_shadow"].value
         param['highlight'] = widget.ids["slider_highlight"].value
 
-    def make_diff(self, hls_l, param):
+    def make_diff(self, rgb, param):
         black = param.get('black', 0)
         white = param.get('white', 0)
         shadow = param.get('shadow', 0)
@@ -569,12 +637,14 @@ class ToneEffect(Effect):
             values[2] += white * 100.0
             points /= 65535.0
             values /= 65535.0
-
-            hls2_l = core.adjust_shadow_highlight(hls_l, highlight, shadow)
-            hls2_l = core.apply_curve(hls2_l, points, values)
-            self.diff = hls2_l-hls_l    # Lのみ保存
+            self.diff = (highlight, shadow, points, values)
             self.hash = param_hash
         return self.diff
+    
+    def apply_diff(self, rgb):
+        rgb2 = core.adjust_shadow_highlight(rgb, self.diff[0], self.diff[1])
+        rgb2 = core.apply_curve(rgb2, self.diff[2], self.diff[3])
+        return rgb2
 
 class SaturationEffect(Effect):
 
@@ -632,14 +702,14 @@ class DehazeEffect(Effect):
                         DehazeEffect.__dehaze = importlib.import_module('dehazing.dehaze')
 
                     self.dehaze = DehazeEffect.__dehaze.dehaze(rgb)
-                    #dehaze = importlib.import_module('dehaze')
-                    #self.dehaze = dehaze.dehaze_image(rgb)
 
-                rgb2 = de * self.dehaze + (1.0 - de) * rgb
-                self.diff = rgb2-rgb
+                self.diff = de
                 self.hash = param_hash
 
         return self.diff
+    
+    def apply_diff(self, rgb):
+        return self.diff * self.dehaze + (1.0 - self.diff) * rgb
 
 class LevelEffect(Effect):
 
@@ -656,7 +726,7 @@ class LevelEffect(Effect):
         param['white_level'] = wl
         param['mid_level'] = ml
 
-    def make_diff(self, hls_l, param):
+    def make_diff(self, rgb, param):
         bl = param.get('black_level', 0)
         wl = param.get('white_level', 255)
         ml = param.get('mid_level', 127)
@@ -666,11 +736,13 @@ class LevelEffect(Effect):
             self.hash = None
 
         elif self.hash != param_hash:
-            hls2_l = core.apply_level_adjustment(hls_l, bl, ml, wl)
-            self.diff = hls2_l-hls_l    # Lのみ保存
+            self.diff = (bl, ml, wl)
             self.hash = param_hash
 
         return self.diff
+    
+    def apply_diff(self, rgb):
+        return core.apply_level_adjustment(rgb, self.diff[0], self.diff[1], self.diff[2])
 
 class TonecurveEffect(Effect):
 
@@ -1294,6 +1366,98 @@ class AfterExposureEffect(Effect):
     def apply_diff(self, rgb):
         return rgb * self.diff
 
+class Mask2HLSEffect(Effect):
+
+    def set2widget(self, widget, param):
+        widget.ids["slider_hue_min"].set_slider_value(param.get('hue_min', 0))
+        widget.ids["slider_hue_max"].set_slider_value(param.get('hue_max', 359))
+        widget.ids["slider_lum_min"].set_slider_value(param.get('lum_min', 0))
+        widget.ids["slider_lum_max"].set_slider_value(param.get('lum_max', 255))
+        widget.ids["slider_sat_min"].set_slider_value(param.get('sat_min', 0))
+        widget.ids["slider_sat_max"].set_slider_value(param.get('sat_max', 255))
+
+    def set2param(self, param, widget):
+        param['hue_min'] = widget.ids["slider_hue_min"].value
+        param['hue_max'] = widget.ids["slider_hue_max"].value
+        param['lum_min'] = widget.ids["slider_lum_min"].value
+        param['lum_max'] = widget.ids["slider_lum_max"].value
+        param['sat_min'] = widget.ids["slider_sat_min"].value
+        param['sat_max'] = widget.ids["slider_sat_max"].value
+
+    def make_diff(self, rgb, param):
+        hmin = param.get('hue_min', 0)
+        hmax = param.get('hue_max', 359)
+        lmin = param.get('lum_min', 0)
+        lmax = param.get('lum_max', 255)
+        smin = param.get('sat_min', 0)
+        smax = param.get('sat_max', 255)
+        if hmin == 0:
+            self.diff = None
+            self.hash = None
+        else:        
+            param_hash = hash((hmin, hmax, lmin, lmax, smin, smax))
+            if self.hash != param_hash:
+                self.diff = None
+                self.hash = param_hash
+
+        return self.diff
+
+class HighlightCompressEffect(Effect):
+
+    def set2widget(self, widget, param):
+        widget.ids["switch_highlight_compress"].active = False if param.get('highlight_compress', 0) == 0 else True
+
+    def set2param(self, param, widget):
+        param['highlight_compress'] = 0 if widget.ids["switch_highlight_compress"].active == False else 1
+
+    def make_diff(self, img, param):
+        hc = param.get('highlight_compress', 0)
+        if hc <= 0:
+            self.diff = None
+            self.hash = None
+        else:        
+            param_hash = hash((hc))
+            if self.hash != param_hash:
+                self.diff = 1.0
+                self.hash = param_hash
+
+        return self.diff
+    
+    def apply_diff(self, rgb):
+        return core.highlight_compress(rgb)
+
+class CorrectOverexposedAreas(Effect):
+
+    def set2widget(self, widget, param):
+        widget.ids["switch_correct_overexposed_areas"].active = False if param.get('correct_overexposed_areas', 0) == 0 else True
+        widget.ids["cp_correct_overexposed_areas"].ids['slider_red'].set_slider_value(param.get('correct_overexposed_areas_red', 0))
+        widget.ids["cp_correct_overexposed_areas"].ids['slider_green'].set_slider_value(param.get('correct_overexposed_areas_green', 0))
+        widget.ids["cp_correct_overexposed_areas"].ids['slider_blue'].set_slider_value(param.get('correct_overexposed_areas_blue', 0))
+
+    def set2param(self, param, widget):
+        param['correct_overexposed_areas'] = 0 if widget.ids["switch_correct_overexposed_areas"].active == False else 1
+        param["correct_overexposed_areas_red"] = widget.ids["cp_correct_overexposed_areas"].ids['slider_red'].value
+        param["correct_overexposed_areas_green"] = widget.ids["cp_correct_overexposed_areas"].ids['slider_green'].value
+        param["correct_overexposed_areas_blue"] = widget.ids["cp_correct_overexposed_areas"].ids['slider_blue'].value
+
+    def make_diff(self, img, param):
+        coa = param.get('correct_overexposed_areas', 0)
+        coar = param.get("correct_overexposed_areas_red", 0)
+        coag = param.get("correct_overexposed_areas_green", 0)
+        coab = param.get("correct_overexposed_areas_blue", 0)
+        if coa <= 0:
+            self.diff = None
+            self.hash = None
+        else:        
+            param_hash = hash((coa, coar, coag, coab))
+            if self.hash != param_hash:
+                self.diff = (coar/255, coag/255, coab/255)
+                self.hash = param_hash
+
+        return self.diff
+    
+    def apply_diff(self, rgb):
+        return core.correct_overexposed_areas(rgb, correction_color=self.diff)
 
 def create_effects():
     effects = [{}, {}, {}, {}]
@@ -1348,6 +1512,14 @@ def create_effects():
 
     lv3 = effects[3]
     lv3['after_exposure'] = AfterExposureEffect()
+    lv3['hue_min'] = Mask2HLSEffect()
+    lv3['hue_max'] = Mask2HLSEffect()
+    lv3['lum_min'] = Mask2HLSEffect()
+    lv3['lum_max'] = Mask2HLSEffect()
+    lv3['sat_min'] = Mask2HLSEffect()
+    lv3['sat_max'] = Mask2HLSEffect()
+    lv3['highlight_compress'] = HighlightCompressEffect()
+    lv3['correct_overexposed_areas'] = CorrectOverexposedAreas()
 
     return effects
 

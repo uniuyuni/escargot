@@ -8,10 +8,12 @@ from jax import jit
 from functools import partial
 import colour
 import lensfunpy
-#from scipy.interpolate import PchipInterpolator
+from scipy.interpolate import PchipInterpolator
 from scipy.interpolate import splprep, splev
 from scipy.ndimage import label
+from scipy.ndimage import gaussian_filter
 import logging
+import math
 
 import sigmoid
 import dng_sdk
@@ -157,21 +159,40 @@ def calc_resize_image(original_size, max_length):
 
     return (new_width, new_height)
 
-def rotation(img, angle):
-    
-    # 変換後の画像高さを定義
+def rotation(img, angle, flip_mode=0):
+    # 元の画像の高さと幅を取得
     height = img.shape[0]
-    # 変換後の画像幅を定義
     width = img.shape[1]
-    # 回転の軸を指定:今回は中心
-    center = (int(width/2), int(height/2))
-    # scaleを指定
-    scale = 1
     
-    trans = cv2.getRotationMatrix2D(center, angle, scale)
-    img_rotate_affine = cv2.warpAffine(img, trans, (width, height), flags=cv2.INTER_CUBIC)
+    # 回転の中心点を計算
+    center = (int(width/2), int(height/2))
+    
+    # 回転行列を計算（スケール付き）
+    trans = cv2.getRotationMatrix2D(center, angle, 1)
 
-    return img_rotate_affine
+    # 回転後画像サイズ    
+    size = max(width, height)
+    
+    # 変換行列に平行移動を追加
+    trans[0, 2] += (size / 2) - center[0]
+    trans[1, 2] += (size / 2) - center[1]
+
+    # フリップモードの処理
+    # bit0が1なら左右反転、bit1が1なら上下反転
+    img_affine = img
+    if flip_mode & 1:  # 左右反転
+        img_affine = cv2.flip(img_affine, 1)
+    
+    if flip_mode & 2:  # 上下反転
+        img_affine = cv2.flip(img_affine, 0)
+
+    # 回転と中心補正を同時に行う
+    img_affine = cv2.warpAffine(img_affine, trans, (size, size), 
+                                flags=cv2.INTER_CUBIC, 
+                                borderMode=cv2.BORDER_CONSTANT, 
+                                borderValue=(-1, -1, -1))
+
+    return img_affine
 
 @partial(jit, static_argnums=(0, 1, 2))
 def __create_gaussian_kernel(width: int, height: int, sigma: float):
@@ -201,11 +222,14 @@ def __gaussian_blur(src, ksize=(3, 3), sigma=0.0):
     kw, kh = ksize
     kernel = __create_gaussian_kernel(kw, kh, sigma)
 
-    dest = []
-    for i in range(src.shape[2]):
-        dest.append(jscipy.signal.convolve2d(src[:, :, i], kernel, mode='same'))
+    if src.ndim >= 3:
+        dest = []
+        for i in range(src.shape[2]):
+            dest.append(jscipy.signal.convolve2d(src[:, :, i], kernel, mode='same'))
 
-    dest = jnp.stack(dest, -1)
+        dest = jnp.stack(dest, -1)
+    else:
+        dest = jscipy.signal.convolve2d(src, kernel, mode='same')
 
     return dest
 
@@ -261,6 +285,66 @@ def lucy_richardson_gauss(srcf, iteration):
     array.block_until_ready()
 
     return np.array(array)
+
+def tone_mapping(x, exposure=1.0):
+    # Reinhard トーンマッピング
+    return x / (x + 1.0)
+
+def highlight_compress(image):
+
+    x = tone_mapping(image)
+
+    return x
+
+def correct_overexposed_areas(image_rgb: np.ndarray,
+                            threshold_low=0.94,
+                            threshold_high=1.0,
+                            correction_color=(0.94, 0.94, 0.96),
+                            blur_sigma=15.0) -> np.ndarray:  # シグマ値を3.0に増加
+    """
+    float32形式のRGB画像（0-1）の白飛び部分を自然に補正する関数
+    
+    Parameters:
+    -----------
+    image_rgb : np.ndarray
+        入力画像（float32形式、RGB、値域0-1）
+        shape: (height, width, 3)
+    threshold_low : float
+        補正を開始する明るさの閾値（デフォルト: 0.94）
+    threshold_high : float
+        完全な白とみなす閾値（デフォルト: 1.0）
+    correction_color : tuple
+        補正に使用する色（デフォルト: わずかに青みがかった白）
+    blur_sigma : float
+        ガウシアンブラーのシグマ値（デフォルト: 15.0）
+        大きい値ほど広い範囲でブレンドされる
+    """
+    # 各チャンネルの輝度に基づいてマスクを作成
+    # 各ピクセルの最小値を使用することで、より慎重に白領域を検出
+    pixel_brightness = np.min(image_rgb, axis=2)
+    
+    # グラデーショナルなマスクを作成
+    correction_mask = np.clip((pixel_brightness - threshold_low) / 
+                            (threshold_high - threshold_low), 0, 1)
+    
+    # マスクを大きめのシグマ値でぼかす
+    correction_mask = gaussian_filter(correction_mask, sigma=blur_sigma)
+    
+    # さらになめらかな補正のため、マスクを累乗して非線形に
+    correction_mask = correction_mask ** 1.5  # 補正の急激な変化を抑える
+    
+    # 補正色のマップを作成
+    correction = np.zeros_like(image_rgb, dtype=np.float32)
+    for i in range(3):
+        correction[:,:,i] = correction_color[i]
+    
+    # 補正を適用
+    correction_mask = np.expand_dims(correction_mask, axis=2)
+    
+    # 元の画像と補正色をブレンド
+    result = image_rgb * (1 - correction_mask) + correction * correction_mask
+    
+    return result
 
 # ローパスフィルタ
 def lowpass_filter(img, r):
@@ -338,16 +422,18 @@ def calc_exposure(img, ev):
 def adjust_contrast(img, cf, c):
     # img: 変換元画像
     # cf: コントラストファクター -100.0〜100.0
+    # c: 中心値 0〜1.0
 
-    #c = 0.5   # 中心値
     f = cf/100.0*10.0  #-10.0〜10.0に変換
 
     if f == 0.0:
         adjust_img = img.copy()
     elif f >= 0.0:
-        adjust_img = sigmoid.scaled_sigmoid(img, f, c)
+        mm = max(1.0, np.max(img))
+        adjust_img = sigmoid.scaled_sigmoid(img/mm, f, c/mm)*mm
     else:
-        adjust_img = sigmoid.scaled_inverse_sigmoid(img, f, c)
+        mm = max(1.0, np.max(img))
+        adjust_img = sigmoid.scaled_inverse_sigmoid(img/mm, f, c/mm)*mm
 
     return adjust_img
 
@@ -359,12 +445,14 @@ def apply_curve(image, control_points, control_values):
     # control_values : 各制御点に対する補正値 list of float32
 
     # エルミート補間
-    #cs = PchipInterpolator(control_points, control_values)
-    
-    # 画像データに補正を適用
-    corrected_image = interpolate(control_points, control_values, image)
+    cs = PchipInterpolator(control_points, control_values)    
+    corrected_image = cs(image)
 
-    return corrected_image
+    #corrected_image = interpolate(control_points, control_values, image)
+    #corrected_image.block_until_ready()
+    #return np.array(corrected_image).astype(np.float32)
+
+    return corrected_image.astype(np.float32)
 
 def adjust_shadow(img, black):
     f = -black/100.0*5.0
@@ -434,6 +522,9 @@ def __calc_saturation(s, sat, vib):
         sat = 1.0 + sat/100.0
     vib /= 50.0
 
+    # 計算の破綻を防止（元データは壊さない）
+    s = jnp.clip(s, 0.0, 1.0)
+
     # 自然な彩度調整
     if vib == 0.0:
         final_s = s
@@ -459,8 +550,11 @@ def calc_saturation(s, sat, vib):
     return np.array(array)
 
 
-# スプラインカーブの適用
-def calc_point_list_to_lut(img, point_list):
+def calc_point_list_to_lut(img, point_list, max_value=2.0):
+    """
+    コントロールポイントからLUTを生成する関数（垂直な傾きに対応）
+    max_value: LUTが対応する最大値（デフォルト2.0）
+    """
     # ソートとリスト内包表記をtogetherly処理
     point_list = sorted((pl[0], pl[1]) for pl in point_list)
     
@@ -469,27 +563,95 @@ def calc_point_list_to_lut(img, point_list):
     
     # スプライン補間の計算
     tck, u = splprep([x, y], k=min(3, len(x)-1), s=0)
-    unew = np.linspace(0, 1.0, 1024, dtype=np.float32)
+    unew = np.linspace(0, 1.0, 1024*3, dtype=np.float32)
     out = splev(unew, tck)
     
-    # Generate the tone curve mapping
+    # Generate the tone curve mapping for 0-1 range
     x, y = out
     
-    # 拡張されたレンジでLUTを生成（0〜2の範囲をカバー）
-    extended_range = np.linspace(0, 2.0, 131072)  # 2倍のレンジ
-    lut = np.interp(extended_range, x, y, left=y[0], right=y[-1]).astype(np.float32)
+    # 最後の点での傾きを計算
+    last_point = point_list[-1]
+    second_last_point = point_list[-2]
+    dx = last_point[0] - second_last_point[0]
+    dy = last_point[1] - second_last_point[1]
+    
+    # 傾きの計算（垂直な場合の処理を含む）
+    if abs(dx) < 1e-6:  # 実質的に垂直な場合
+        is_vertical = True
+        y_at_1 = last_point[1]
+        vertical_x = last_point[0]  # 垂直線のx座標
+    else:
+        is_vertical = False
+        slope = dy / dx
+        y_at_1 = np.interp(1.0, x, y)
+    
+    # 拡張されたレンジでLUTを生成
+    lut_size = 65536
+    extended_range = np.linspace(0, max_value, lut_size)
+    
+    # 結果を格納する配列
+    lut = np.zeros(lut_size, dtype=np.float32)
+    
+    if is_vertical:
+        # 垂直な場合の処理
+        # vertical_xより左側は通常の補間
+        mask_before_vertical = extended_range <= vertical_x
+        lut[mask_before_vertical] = np.interp(
+            extended_range[mask_before_vertical],
+            x,
+            y,
+            left=y[0]
+        ).astype(np.float32)
+        
+        # vertical_xより右側は最大値
+        lut[~mask_before_vertical] = y_at_1
+    else:
+        # 通常の処理（非垂直の場合）
+        mask_below_1 = extended_range <= 1.0
+        
+        # 1以下の値には通常の補間を適用
+        lut[mask_below_1] = np.interp(
+            extended_range[mask_below_1],
+            x,
+            y,
+            left=y[0]
+        ).astype(np.float32)
+        
+        if max_value > 1.0:
+            x_above_1 = extended_range[~mask_below_1]
+            
+            if abs(slope) > 10:  # 急な傾き（ただし垂直でない）の場合
+                # 対数関数ベースの外挿
+                log_scale = np.log(slope + 1)
+                rel_x = x_above_1 - 1.0
+                lut[~mask_below_1] = y_at_1 + log_scale * np.log1p(rel_x * slope)
+            else:  # 緩やかな傾きの場合
+                # 有理関数による外挿
+                scale_factor = min(5.0, max(1.0, abs(slope)))
+                a = y_at_1 * scale_factor
+                b = scale_factor - 1
+                lut[~mask_below_1] = y_at_1 + (a * (x_above_1 - 1.0)) / (b + (x_above_1 - 1.0))
+    
+    # 最終的な値の範囲を確認し、必要に応じて調整
+    if np.any(np.isnan(lut)) or np.any(np.isinf(lut)):
+        problematic_mask = np.isnan(lut) | np.isinf(lut)
+        if is_vertical:
+            lut[problematic_mask] = y_at_1
+        else:
+            lut[problematic_mask] = y_at_1 + slope * (extended_range[problematic_mask] - 1.0)
     
     return lut
 
-def apply_lut(img, lut):
+def apply_lut(img, lut, max_value=3.0):
+    """
+    画像にLUTを適用する関数
+    max_value: LUTが対応する最大値（デフォルト2.0）
+    """
     if lut is None:
         return img
     
-    # 入力画像の値を適切にクリップ
-    img_clipped = np.clip(img, 0, 2.0)
-    
     # スケーリングしてLUTのインデックスに変換
-    lut_indices = (img_clipped * 65535).astype(np.uint16)
+    lut_indices = ((img * 65535) / max_value).clip(0, 65535).astype(np.uint16)
     
     # LUTを適用
     result = lut[lut_indices]
@@ -613,14 +775,14 @@ def adjust_shadow_highlight(image, highlight_adjustment=0, shadow_adjustment=0):
         center, spread = 0.65, 0.22  # ハイライトの中心と広がり
         compression_effect = 1 - highlight_adjustment * np.exp(-((x - center) / spread) ** 2)
         adjusted_x = x * compression_effect + highlight_adjustment * np.exp(-((x - center) / (spread * 2)) ** 2)
-        return np.where((x == 2.0) | (x == 0.0), x, adjusted_x)  # 完全な黒と白には影響を与えない
+        return np.where((x >= 2.0) | (x <= 0.0), x, adjusted_x)  # 完全な黒と白には影響を与えない
 
     # シャドウ補正：山を押しつぶすようにトーンを変化
     def shadow_function(x):
         center, spread = 0.35, 0.22  # シャドウの中心と広がり
         compression_effect = 1 + shadow_adjustment * np.exp(-((x - center) / spread) ** 2)
         adjusted_x = x * compression_effect + shadow_adjustment * np.exp(-((x - center) / (spread * 2)) ** 2)
-        return np.where((x == 2.0) | (x == 0.0), x, adjusted_x)  # 完全な黒と白には影響を与えない
+        return np.where((x >= 2.0) | (x <= 0.0), x, adjusted_x)  # 完全な黒と白には影響を与えない
     
     # ハイライトとシャドウの範囲ごとに補正を適用
     highlights_adjusted = highlight_function(image)
@@ -683,7 +845,7 @@ def crop_image(image, texture_width, texture_height, click_x, click_y, offset, i
 
         # リサイズした画像を中央に配置
         #result[offset_y:offset_y+new_height, offset_x:offset_x+new_width] = resized_img
-        result = np.pad(resized_img, ((offset_y, texture_height-(offset_y+new_height)), (offset_x, texture_width-(offset_x+new_width)), (0, 0)))
+        result = np.pad(resized_img, ((offset_y, texture_height-(offset_y+new_height)), (offset_x, texture_width-(offset_x+new_width)), (0, 0)), constant_values=-1)
 
         crop_info = (0, 0, image_width, image_height, scale)
 
@@ -734,6 +896,11 @@ def crop_image_info(image, crop_info, offset=(0, 0)):
     cropped_img = image[crop_y:crop_y+crop_height, crop_x:crop_x+crop_width]
 
     return cropped_img, (crop_x, crop_y, crop_width, crop_height, scale)
+
+def crop_image_info2(image, crop_info, offset=(0,0)):
+    crop_image, _ = crop_image_info(image, crop_info, offset)
+
+    return cv2.resize(crop_image, (int(crop_image.shape[1] * crop_info[4]), int(crop_image.shape[0] * crop_info[4])))
 
 """
 def crop_image_info(image, crop_info, offset=(0, 0)):

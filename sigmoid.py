@@ -24,7 +24,7 @@ def scaled_sigmoid(x, gain, mid):
 def __naive_inverse_sigmoid(x, gain, mid):
     min = __naive_sigmoid(0.0, gain, mid)
     max = __naive_sigmoid(1.0, gain, mid)
-    s = __naive_sigmoid(jnp.clip(x, 1e-7, 1 - 1e-7), gain, mid)
+    #s = __naive_sigmoid(jnp.clip(x, 1e-7, 1 - 1e-7), gain, mid)
     a = (max - min) * x + min
     return jnp.log(1.0 / a - 1.0)
 

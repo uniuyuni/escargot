@@ -4,41 +4,48 @@ import cv2
 import numpy as np
 
 import core
+from film_simulation import apply_film_simulation
 
-def process_pipeline(img, crop_info, offset, crop_image, is_zoomed, texture_width, texture_height, click_x, click_y, primary_effects, primary_param, mask_editor):
+def process_pipeline(img, crop_info, offset, crop_image, is_zoomed, texture_width, texture_height, click_x, click_y, primary_effects, primary_param, mask_editor2):
 
     # 背景レイヤー
     img0, reset = pipeline_lv0(img, primary_effects, primary_param)
     if crop_image is None or reset == True:
         if is_zoomed:
+            if crop_info is None:
+                _, crop_info = core.crop_image(img0, texture_width, texture_height, click_x, click_y, (0, 0), is_zoomed)
             imgc, crop_info2 = core.crop_image_info(img0, crop_info, offset)
         else:
             imgc, crop_info2 = core.crop_image(img0, texture_width, texture_height, click_x, click_y, offset, is_zoomed)
-        mask_editor.set_image(img0, texture_width, texture_height, crop_info2, math.radians(primary_param.get('rotation', 0)), -1)
+        mask_editor2.set_orientation(primary_param.get('rotation', 0), primary_param.get('rotation2', 0), primary_param.get('flip_mode', 0))
+        mask_editor2.set_image(img0, texture_width, texture_height, crop_info2, -1)
     else:
         imgc = crop_image
         crop_info2 = crop_info
+    mask_editor2.set_crop_image(imgc)
 
     # 並列処理
     #split_img = []
     #split_img.extend(np.vsplit(imgc, 4))
     #height = 1024//4
     #for i, img in enumerate(split_img):
-    #    split_img[i] = MainWidget._process_pipeline2(img, height*i, height, primary_effects, primary_param, mask_editor)
-    #result_img = joblib.Parallel(n_jobs=-1, require='sharedmem')(joblib.delayed(MainWidget._process_pipeline2)(img, height*i, height, primary_effects, primary_param, mask_editor) for i, img in enumerate(split_img))
+    #    split_img[i] = MainWidget._process_pipeline2(img, height*i, height, primary_effects, primary_param, mask_editor2)
+    #result_img = joblib.Parallel(n_jobs=-1, require='sharedmem')(joblib.delayed(MainWidget._process_pipeline2)(img, height*i, height, primary_effects, primary_param, mask_editor2) for i, img in enumerate(split_img))
     #img2 = np.vstack(result_img)        
-    img2 = _process_pipeline2(imgc, 0, 1024, primary_effects, primary_param, mask_editor)
+    img2 = _process_pipeline2(imgc, 0, 1024, primary_effects, primary_param, mask_editor2)
+
+    #img2 = apply_film_simulation(img2, 'ektar100')
 
     return img2, imgc, crop_info2
 
-def _process_pipeline2(imgc, slice_y, slice_h, primary_effects, primary_param, mask_editor):
+def _process_pipeline2(imgc, slice_y, slice_h, primary_effects, primary_param, mask_editor2):
     img1 = pipeline_lv1(imgc, primary_effects, primary_param)
     img2 = pipeline_lv2(img1, primary_effects, primary_param)
     img3 = pipeline_lv3(img2, primary_effects, primary_param)
 
     # マスクレイヤー
     img2 = img3
-    mask_list = mask_editor.get_layers_list()
+    mask_list = mask_editor2.get_layers_list()
     for mask in mask_list:
         img1 = pipeline_lv1(img2, mask.effects, mask.effects_param)
         img2 = pipeline_lv2(img1, mask.effects, mask.effects_param)
@@ -96,20 +103,14 @@ def pipeline_lv1(img, effects, param):
     return rgb
 
 
-def pipeline_lv2(img, effects, param):
+def pipeline_lv2(rgb, effects, param):
     lv2 = effects[2]
-
-    rgb = img.copy()
 
     diff = lv2['color_temperature'].make_diff(rgb, param)
     if diff is not None: rgb = lv2['color_temperature'].apply_diff(rgb)
 
     # 以降HLS
     hls = cv2.cvtColor(rgb, cv2.COLOR_RGB2HLS_FULL)
-
-    # Lのみ
-    #hls_l = hls[:, :, 1]
-    #hls2_l = hls_l.copy()
 
     # HLS
     hls2 = hls.copy()
@@ -159,20 +160,16 @@ def pipeline_lv2(img, effects, param):
     diff = lv2['SatvsSat'].make_diff(hls_s, param)
     if diff is not None: hls2_s = lv2['SatvsSat'].apply_diff(hls2_s)
     diff = lv2['saturation'].make_diff(hls2_s, param)
-
     if diff is not None: hls2_s = lv2['saturation'].apply_diff(hls2_s)
     hls[:, :, 2] = hls2_s
 
-    # 合成
-    #hls[:,:,1] = np.clip(hls[:,:,1], 0, 1.0)
-    #hls[:,:,2] = np.clip(hls[:,:,2], 0, 1.0)
+    # 以降RGB
     rgb = cv2.cvtColor(hls, cv2.COLOR_HLS2RGB_FULL)
 
-    # RGB
     diff = lv2['color_correct'].make_diff(rgb, param)
-    if diff is not None: rgb += diff
+    if diff is not None: rgb2 = lv2['color_correct'].apply_diff(rgb)
     diff = lv2['dehaze'].make_diff(rgb, param)
-    if diff is not None: rgb += diff
+    if diff is not None: rgb2 = lv2['dehaze'].apply_diff(rgb)
 
     rgb2 = rgb.copy()
     diff = lv2['tonecurve'].make_diff(rgb, param)
@@ -192,20 +189,19 @@ def pipeline_lv2(img, effects, param):
     diff = lv2['exposure'].make_diff(rgb, param)
     if diff is not None: rgb = lv2['exposure'].apply_diff(rgb)
     diff = lv2['contrast'].make_diff(rgb, param)
-    if diff is not None: rgb += diff
+    if diff is not None: rgb = lv2['contrast'].apply_diff(rgb)
     diff = lv2['microcontrast'].make_diff(rgb, param)
-    if diff is not None: rgb += diff
+    if diff is not None: rgb = lv2['microcontrast'].apply_diff(rgb)
     diff = lv2['midtone'].make_diff(rgb, param)
-    if diff is not None: rgb += diff
+    if diff is not None: rgb = lv2['midtone'].apply_diff(rgb)
     diff = lv2['tone'].make_diff(rgb, param)
-    if diff is not None: rgb += diff
+    if diff is not None: rgb = lv2['tone'].apply_diff(rgb)
     diff = lv2['level'].make_diff(rgb, param)
-    if diff is not None: rgb += diff
+    if diff is not None: rgb = lv2['level'].apply_diff(rgb)
 
     diff = lv2['lut'].make_diff(rgb, param)
-    if diff is not None: rgb += diff
+    if diff is not None: rgb = lv2['lut'].apply_diff(rgb)
 
-    #rgb = np.clip(rgb, 0, 1.0)
     return rgb
 
 def pipeline_lv3(rgb, effects, param):

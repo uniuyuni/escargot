@@ -13,6 +13,8 @@ from dcp_profile import DCPReader, DCPProcessor
 
 import util
 import viewer_widget
+import x_trans_demosaic_ext
+
 
 class ImageSet:
 
@@ -55,11 +57,46 @@ class ImageSet:
         param['color_tint'] = param['color_tint_reset']
         param['color_Y'] = Y
 
+    def __demosaic_sample(self, raw_image):
+
+        x_trans_pattern = np.array([
+            ['G', 'R', 'B', 'G', 'B', 'R'],
+            ['B', 'G', 'G', 'R', 'G', 'G'],
+            ['R', 'G', 'G', 'B', 'G', 'G'],
+            ['G', 'B', 'R', 'G', 'R', 'B'],
+            ['R', 'G', 'G', 'B', 'G', 'G'],
+            ['B', 'G', 'G', 'R', 'G', 'G']
+        ])
+
+        height, width = raw_image.shape
+        r_img = np.zeros((height, width), dtype=np.float32)
+        g_img = np.zeros((height, width), dtype=np.float32)
+        b_img = np.zeros((height, width), dtype=np.float32)
+
+        r_mask = x_trans_pattern[np.arange(height)[:, np.newaxis] % 6, np.arange(width) % 6] == 'R'
+        r_img[r_mask] = raw_image[r_mask]
+        r_img = cv2.GaussianBlur(r_img, (5, 5), 0)
+        g_mask = x_trans_pattern[np.arange(height)[:, np.newaxis] % 6, np.arange(width) % 6] == 'G'
+        g_img[g_mask] = raw_image[g_mask]
+        g_img = cv2.GaussianBlur(g_img, (5, 5), 0)
+        b_mask = x_trans_pattern[np.arange(height)[:, np.newaxis] % 6, np.arange(width) % 6] == 'B'
+        b_img[b_mask] = raw_image[b_mask]
+        b_img = cv2.GaussianBlur(b_img, (5, 5), 0)
+
+        result = np.stack([r_img, g_img, b_img], -1)
+        return result
+
+    def __black(self, in_img, black_level):
+        in_img[in_img < black_level] = black_level
+        out_img = in_img - black_level
+        return out_img
+
     def __load_raw(self, file_path, exif_data, param, callback):
         try:
             # RAWで読み込んでみる
             with rawpy.imread(file_path) as raw:
 
+                
                 self.src = raw.postprocess( output_color=rawpy.ColorSpace.raw,
                                             demosaic_algorithm=rawpy.DemosaicAlgorithm.LINEAR,
                                             output_bps=16,
@@ -72,7 +109,19 @@ class ImageSet:
                                             no_auto_bright=True,
                                             highlight_mode=5,
                                             auto_bright_thr=0.0005)
+                """
+                # ブラックレベル補正
+                raw_image = self.__black(raw.raw_image_visible, raw.black_level_per_channel[0])
 
+                # float32へ
+                raw_image = raw_image.astype(np.float32) / ((1<<exif_data.get('BitsPerSample', 14))-1)
+
+                #height, width = raw_image.shape
+                #output = np.zeros((height, width, 3), dtype=np.float32)
+                #self.src = x_trans_demosaic_ext.x_trans_demosaic(raw_image, output)
+                #self.src = output     
+                self.src = self.__demosaic_sample(raw_image)
+                """
                 self.img = self.src
 
                 # float32へ
@@ -97,11 +146,11 @@ class ImageSet:
                 reader = DCPReader(dcp_path)
                 profile = reader.read()
                 processor = DCPProcessor(profile)
-                self.img = processor.process(self.img, illuminant='1', use_look_table=True).astype(np.float32)
-
+                #self.img = processor.process(self.img, illuminant='1', use_look_table=True).astype(np.float32)
+                
                 # コントラスト補正
                 #self.img = skimage.exposure.equalize_adapthist(self.img, clip_limit=0.03)
-                
+
                 # 明るさ補正
                 source_ev, _ = core.calculate_ev_from_image(core.normalize_image(self.img))
                 Av = exif_data.get('ApertureValue', 1.0)
@@ -190,3 +239,8 @@ class ImageSet:
         logging.info("loading file " + file_path)
 
         return True
+
+if __name__ == '__main__':
+    dcp_path = os.getcwd() + "/dcp/Fujifilm X-Pro3 Adobe Standard velvia.dcp"
+    reader = DCPReader(dcp_path)
+    profile = reader.read()

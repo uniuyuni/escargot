@@ -66,6 +66,61 @@ def split_orientation(orientation):
 
     return rad, flip
 
+def make_orientation(rotation, flip):
+    """
+    回転角と反転情報からEXIFオリエンテーションタグの値を生成する関数
+
+    Args:
+        rotation (int): 回転角（0, 90, 180, 270のいずれか）
+        flip_horizontal (bool, optional): 水平方向の反転
+        flip_vertical (bool, optional): 垂直方向の反転
+
+    Returns:
+        int: 対応するEXIFオリエンテーションタグの値
+    """
+
+    # 回転と反転の組み合わせをマッピング
+    orientation_reverse_map = {
+        (0, False, False): 1,
+        (0, True, False): 2,
+        (180, False, False): 3,
+        (0, True, True): 3,
+        (0, False, True): 4,
+        (270, True, False): 5,
+        (270, False, False): 6,
+        (270, False, True): 7,
+        (180, True, False): 4,
+        (90, True, False): 7,
+        (90, False, False): 8,
+        (0, True, True): 3,
+        (180, False, True): 8,
+        (180, True, True): 5,
+        (90, True, True): 8,
+        (90, False, True): 7,
+        (270, True, True): 6,
+    }
+
+    # 入力値のバリデーション
+    if rotation not in [0, 90, 180, 270]:
+        raise ValueError(f"無効な回転角: {rotation}")
+    flip_horizontal = (flip & 1) == 1
+    flip_vertical = (flip & 2) == 2
+
+    orientation = orientation_reverse_map.get((rotation, flip_horizontal, flip_vertical))
+    
+    if orientation is None:
+        raise ValueError(f"サポートされていない回転・反転の組み合わせ")
+
+    return orientation
+
+def print_nan_inf(img):
+    result = np.isnan(img)
+    count = result.sum()
+    print("NaN=", count)
+    result = np.isinf(img)
+    count = result.sum()
+    print("inf=", count)
+
 def tone_map(x, threshold=1.0):
     return np.where(x > threshold, np.log1p(x - threshold) + threshold, x)
 

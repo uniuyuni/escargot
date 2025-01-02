@@ -29,42 +29,43 @@ class PchipInterpolatorJax:
         d = jnp.zeros_like(self.x)
         
         # Interior points
-        dk = jnp.where(
+        w1 = 2 * self.h[1:] + self.h[:-1]
+        w2 = self.h[1:] + 2 * self.h[:-1]
+        
+        # Weighted harmonic mean of slopes
+        s = jnp.where(
             self.slopes[:-1] * self.slopes[1:] > 0,
-            (self.h[1:] + self.h[:-1]) / (
-                self.h[1:] / self.slopes[:-1] + self.h[:-1] / self.slopes[1:]
-            ),
+            1 / ((w1 / (3 * self.h[1:] * self.slopes[:-1]) + 
+                  w2 / (3 * self.h[:-1] * self.slopes[1:]))),
             0.0
         )
-        d = d.at[1:-1].set(dk)
+        d = d.at[1:-1].set(s)
         
-        # End points - use one-sided derivatives
+        # End points
         # Left endpoint
-        d = d.at[0].set(
-            jnp.where(
-                self._check_edge_case(self.slopes[0], self.slopes[1], self.h[0], self.h[1]),
-                ((2 * self.h[0] + self.h[1]) * self.slopes[0] - self.h[0] * self.slopes[1]) / (self.h[0] + self.h[1]),
-                0.0
+        if n > 2:
+            d = d.at[0].set(
+                jnp.where(
+                    self.slopes[0] * self.slopes[1] > 0,
+                    ((2 * self.h[0] + self.h[1]) * self.slopes[0] - self.h[0] * self.slopes[1]) / (self.h[0] + self.h[1]),
+                    3 * self.slopes[0] * (1 - self.h[0] / (self.h[0] + self.h[1]))
+                )
             )
-        )
-        
-        # Right endpoint
-        d = d.at[-1].set(
-            jnp.where(
-                self._check_edge_case(self.slopes[-1], self.slopes[-2], self.h[-1], self.h[-2]),
-                ((2 * self.h[-1] + self.h[-2]) * self.slopes[-1] - self.h[-1] * self.slopes[-2]) / (self.h[-1] + self.h[-2]),
-                0.0
+            
+            # Right endpoint
+            d = d.at[-1].set(
+                jnp.where(
+                    self.slopes[-1] * self.slopes[-2] > 0,
+                    ((2 * self.h[-1] + self.h[-2]) * self.slopes[-1] - self.h[-1] * self.slopes[-2]) / (self.h[-1] + self.h[-2]),
+                    3 * self.slopes[-1] * (1 - self.h[-1] / (self.h[-1] + self.h[-2]))
+                )
             )
-        )
+        else:
+            # For n == 2, use simple derivatives
+            d = d.at[0].set(self.slopes[0])
+            d = d.at[-1].set(self.slopes[0])
         
         return d
-    
-    @staticmethod
-    def _check_edge_case(slope1: float, slope2: float, h1: float, h2: float) -> bool:
-        """
-        Check if the edge case should use the one-sided derivative
-        """
-        return (slope1 * slope2) > 0
     
     def __call__(self, xi: jnp.ndarray) -> jnp.ndarray:
         """
@@ -93,9 +94,10 @@ class PchipInterpolatorJax:
         
         return h00 * y_left + h10 * h * d_left + h01 * y_right + h11 * h * d_right
 
+@jit
 def interpolate(x: jnp.ndarray, y: jnp.ndarray, xi: jnp.ndarray) -> jnp.ndarray:
     """
     Convenience function for PCHIP interpolation
     """
     interpolator = PchipInterpolatorJax(x, y)
-    return np.array(interpolator(xi).block_until_ready())
+    return interpolator(xi)
