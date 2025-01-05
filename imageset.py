@@ -128,7 +128,7 @@ class ImageSet:
                 self.img = self.img.astype(np.float32)/65535.0
 
                 # レンズ補正
-                self.img = core.modify_lens(self.img, exif_data)
+                #self.img = core.modify_lens(self.img, exif_data)
 
                 # 回転情報取得
                 rad, flip = util.split_orientation(util.str_to_orientation(exif_data.get("Orientation", "")))
@@ -142,10 +142,10 @@ class ImageSet:
                 self.img = self.img[top:top+height, left:left+width]
 
                 # プロファイルを適用
-                dcp_path = os.getcwd() + "/dcp/Fujifilm X-Pro3 Adobe Standard velvia.dcp"
-                reader = DCPReader(dcp_path)
-                profile = reader.read()
-                processor = DCPProcessor(profile)
+                #dcp_path = os.getcwd() + "/dcp/Fujifilm X-Pro3 Adobe Standard velvia.dcp"
+                #reader = DCPReader(dcp_path)
+                #profile = reader.read()
+                #processor = DCPProcessor(profile)
                 #self.img = processor.process(self.img, illuminant='1', use_look_table=True).astype(np.float32)
                 
                 # コントラスト補正
@@ -168,6 +168,7 @@ class ImageSet:
                 self.img[:,:,1] *= wb[1]
                 temp, tint, Y, = core.invert_RGB2TempTint(wb, 5000.0)
                 self.__set_temperature(param, temp, tint, Y)
+                param['white_balance'] = wb
 
                 param['img_size'] = [self.img.shape[1], self.img.shape[0]]
                 if self.img.shape[1] != width or self.img.shape[0] != height:

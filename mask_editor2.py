@@ -189,13 +189,18 @@ class BaseMask(Widget):
         simg = self.draw_sat_mask(limg)
         
         return simg
+    
+    def apply_mask_blur(self, image):
+        ksize = max(0, self.effects_param.get('mask2_blur', 0)-1)
+        img2 = core.gaussian_blur(image, (ksize, ksize))
+        return img2
 
     def draw_hue_mask(self, image):
         if self.editor.crop_image_hls is not None:            
             himg = self.editor.crop_image_hls[..., 0]
             
-            hmin = self.effects_param.get('hue_min', 0) / 255
-            hmax = self.effects_param.get('hue_max', 359) / 359
+            hmin = self.effects_param.get('mask2_hue_min', 0) / 255
+            hmax = self.effects_param.get('mask2_hue_max', 359) / 359
             if (hmin != 0) or (1 != hmax):
                 himg = np.where((himg < hmin) | (hmax < himg), 0, image)
             else:
@@ -209,8 +214,8 @@ class BaseMask(Widget):
         if self.editor.crop_image_hls is not None:            
             limg = self.editor.crop_image_hls[..., 1]
             
-            lmin = self.effects_param.get('lum_min', 0) / 255
-            lmax = self.effects_param.get('lum_max', 255) / 255
+            lmin = self.effects_param.get('mask2_lum_min', 0) / 255
+            lmax = self.effects_param.get('mask2_lum_max', 255) / 255
             if (lmin != 0) or (1 != lmax):
                 limg = np.where((limg < lmin) | (lmax < limg), 0, image)
             else:
@@ -228,8 +233,8 @@ class BaseMask(Widget):
         if self.editor.crop_image_hls is not None:            
             simg = self.editor.crop_image_hls[..., 2]
             
-            smin = self.effects_param.get('sat_min', 0) / 255
-            smax = self.effects_param.get('sat_max', 255) / 255
+            smin = self.effects_param.get('mask2_sat_min', 0) / 255
+            smax = self.effects_param.get('mask2_sat_max', 255) / 255
             if (smin != 0) or (1 != smax):
                 simg = np.where((simg < smin) | (smax < simg), 0, image)
             else:
@@ -514,6 +519,9 @@ class CircularGradientMask(BaseMask):
 
         # ルミナんとマスクを作成
         gradient_image = self.draw_hls_mask(gradient_image)
+
+        # マスクぼかし
+        gradient_image = self.apply_mask_blur(gradient_image)
 
         return gradient_image
 
@@ -813,6 +821,9 @@ class GradientMask(BaseMask):
         # ルミナんとマスクを作成
         gradient_image = self.draw_hls_mask(gradient_image)
 
+        # マスクぼかし
+        gradient_image = self.apply_mask_blur(gradient_image)
+
         return gradient_image
     
     def draw_mask_to_fbo(self):
@@ -987,6 +998,9 @@ class FullMask(BaseMask):
         # ルミナんとマスクを作成
         gradient_image = self.draw_hls_mask(gradient_image)
 
+        # マスクぼかし
+        gradient_image = self.apply_mask_blur(gradient_image)
+        
         return gradient_image
 
  

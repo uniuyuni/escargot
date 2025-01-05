@@ -48,6 +48,7 @@ class MainWidget(MDWidget):
         self.primary_effects = effects.create_effects()
         self.apply_thread = None
         self.is_draw_image = False
+        self.config = {}
 
     def on_kv_post(self, *args, **kwargs):
         super().on_kv_post(*args, **kwargs)
@@ -55,6 +56,27 @@ class MainWidget(MDWidget):
         self.mask_editor2 = self.ids['mask_editor2']
         self.ids['preview_widget'].remove_widget(self.mask_editor2)
         self.mask_editor2.disabled = True
+
+    def set_config(self, key, value):
+        self.config[key] = value
+        self.save_config()
+
+    def apply_config(self):
+        self.set_lut_path(self.config.get('lut_path', os.getcwd() + "/lut"))
+
+    def save_config(self):
+        file_path = os.getcwd() + '/config.json'
+        with open(file_path, 'w') as f:
+            json.dump(self.config, f)
+
+    def load_config(self):
+        file_path = os.getcwd() + '/config.json'
+        try:
+            with open(file_path, 'r') as f:
+                self.config = json.load(f)
+                self.apply_config()
+        except FileNotFoundError as e:
+            pass
 
     def serialize(self):
         tdatetime = dt.now()
@@ -262,7 +284,9 @@ class MainWidget(MDWidget):
 
     def handle_for_lut(self, selection):
         if selection is not None:
-            self.set_lut_path(selection[0].decode())
+            path = selection[0].decode()
+            self.set_lut_path(path)
+            self.set_config('lut_path', path)
 
     def set_lut_path(self, path):
         lut_values = ['None']

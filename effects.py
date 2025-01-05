@@ -20,7 +20,7 @@ import crop_editor
 import microcontrast
 import subpixel_shift
 
-#補正既定クラス
+# 補正基底クラス
 class Effect():
 
     def __init__(self, **kwargs):
@@ -43,6 +43,7 @@ class Effect():
     def apply_diff(self, img):
         pass
 
+# 画像回転、反転
 class RotationEffect(Effect):
 
     def set2widget(self, widget, param):
@@ -154,6 +155,7 @@ class LensModifierEffect(Effect):
     def apply_diff(self, img):
         return self.diff
 
+# サブピクセルシフト合成
 class SubpixelShiftEffect(Effect):
 
     def set2widget(self, widget, param):
@@ -178,6 +180,7 @@ class SubpixelShiftEffect(Effect):
     def apply_diff(self, img):
         return self.diff
 
+# AI ノイズ除去
 class AINoiseReductonEffect(Effect):
     __net = None
     __noise2void = None
@@ -206,6 +209,7 @@ class AINoiseReductonEffect(Effect):
         
         return self.diff
 
+# NLMノイズ除去
 class NLMNoiseReductionEffect(Effect):
     __skimage = None
 
@@ -308,7 +312,9 @@ class InpaintEffect(Effect):
 
             cx, cy, cw, ch, sc = self.crop_editor.get_crop_info()
             mask = cv2.GaussianBlur(self.mask_editor.get_mask()[cy:cy+ch, cx:cx+cw], (63, 63), 0)
-            img2 = InpaintEffect.__iopaint.predict(img[cy:cy+ch, cx:cx+cw], mask, resize_limit=1024+512, use_realesrgan=False)
+            img = img[cy:cy+ch, cx:cx+cw] #* param.get('white_balance', [1, 1, 1])
+            img2 = InpaintEffect.__iopaint.predict(img, mask, resize_limit=1024+512, use_realesrgan=True)
+            img2 = img2 #/ param.get('white_balance', [1, 1, 1])
             bboxes = core.get_multiple_mask_bbox(self.mask_editor.get_mask()[cy:cy+ch, cx:cx+cw])
             for bbox in bboxes:
                 self.crop_info_list.append(InpaintDiff(crop_info=bbox, image=img2[bbox[1]:bbox[1]+bbox[3], bbox[0]:bbox[0]+bbox[2]]))
@@ -891,32 +897,6 @@ class GradingEffect(Effect):
         blend_inv = 1-blend
         return (rgb*blend_inv + rgb*rgbs*blend)
 
-class LumvsLumEffect(Effect):
-
-    def set2widget(self, widget, param):
-        widget.ids["LumvsLum"].set_point_list(param.get('LumvsLum', None))
-
-    def set2param(self, param, widget):
-        param['LumvsLum'] = widget.ids["LumvsLum"].get_point_list()
-
-    def make_diff(self, hls_l, param):
-        ll = param.get("LumvsLum", None)
-        if ll is None:
-            self.diff = None
-            self.hash = None
-
-        else:
-            param_hash = hash(np.sum(ll))
-            if self.hash != param_hash:
-                hls2_l = core.calc_point_list_to_lut(hls_l, ll)
-                self.diff = 2.0**((hls2_l-0.5)*2.0)   # Lのみ保存
-                self.hash = param_hash
-
-        return self.diff
-
-    def apply_diff(self, hls_l):
-        return hls_l * self.diff
-
 class HuevsHueEffect(Effect):
 
     def set2widget(self, widget, param):
@@ -934,40 +914,14 @@ class HuevsHueEffect(Effect):
         else:
             param_hash = hash(np.sum(hh))
             if self.hash != param_hash:
-                hls2_h = core.calc_point_list_to_lut(hls_h/360.0, hh)
-                self.diff = (hls2_h-0.5)*360.0    # Hのみ保存
+                lut = core.calc_point_list_to_lut(hh)
+                self.diff = ((lut-0.5)*2.0)*360
                 self.hash = param_hash
 
         return self.diff
 
     def apply_diff(self, hls_h):
-        return hls_h + self.diff
-
-class HuevsSatEffect(Effect):
-
-    def set2widget(self, widget, param):
-        widget.ids["HuevsSat"].set_point_list(param.get('HuevsSat', None))
-
-    def set2param(self, param, widget):
-        param['HuevsSat'] = widget.ids["HuevsSat"].get_point_list()
-
-    def make_diff(self, hls_s, param):
-        hs = param.get("HuevsSat", None)
-        if hs is None:
-            self.diff = None
-            self.hash = None
-
-        else:
-            param_hash = hash(np.sum(hs))
-            if self.hash != param_hash:
-                hls2_s = core.calc_point_list_to_lut(hls_s, hs)
-                self.diff = 2.0**((hls2_s-0.5)*2.0)     # Sのみ保存
-                self.hash = param_hash
-
-        return self.diff
-
-    def apply_diff(self, hls_s):
-        return hls_s * self.diff
+        return core.apply_lut_add(hls_h, self.diff, 359)
 
 class HuevsLumEffect(Effect):
 
@@ -986,14 +940,66 @@ class HuevsLumEffect(Effect):
         else:
             param_hash = hash(np.sum(hl))
             if self.hash != param_hash:
-                hls2_l = core.calc_point_list_to_lut(hls_l, hl)
-                self.diff = 2.0**((hls2_l-0.5)*2.0)     # Lのみ保存
+                lut = core.calc_point_list_to_lut(hl)
+                self.diff = 2.0**((lut-0.5)*2.0)
                 self.hash = param_hash
 
         return self.diff
 
     def apply_diff(self, hls_l):
-        return hls_l * self.diff
+        return core.apply_lut_mul(hls_l, self.diff, 1.0)
+
+class HuevsSatEffect(Effect):
+
+    def set2widget(self, widget, param):
+        widget.ids["HuevsSat"].set_point_list(param.get('HuevsSat', None))
+
+    def set2param(self, param, widget):
+        param['HuevsSat'] = widget.ids["HuevsSat"].get_point_list()
+
+    def make_diff(self, hls_s, param):
+        hs = param.get("HuevsSat", None)
+        if hs is None:
+            self.diff = None
+            self.hash = None
+
+        else:
+            param_hash = hash(np.sum(hs))
+            if self.hash != param_hash:
+                lut = core.calc_point_list_to_lut(hs)
+                self.diff = (lut-0.5)*2.0+1.0
+                self.hash = param_hash
+
+        return self.diff
+
+    def apply_diff(self, hls_s):
+        return core.apply_lut_mul(hls_s, self.diff, 1.0)
+
+class LumvsLumEffect(Effect):
+
+    def set2widget(self, widget, param):
+        widget.ids["LumvsLum"].set_point_list(param.get('LumvsLum', None))
+
+    def set2param(self, param, widget):
+        param['LumvsLum'] = widget.ids["LumvsLum"].get_point_list()
+
+    def make_diff(self, hls_l, param):
+        ll = param.get("LumvsLum", None)
+        if ll is None:
+            self.diff = None
+            self.hash = None
+
+        else:
+            param_hash = hash(np.sum(ll))
+            if self.hash != param_hash:
+                lut = core.calc_point_list_to_lut(ll)
+                self.diff = 2.0**((lut-0.5)*2.0)
+                self.hash = param_hash
+
+        return self.diff
+
+    def apply_diff(self, hls_l):
+        return core.apply_lut_mul(hls_l, self.diff, 1.0)
 
 class LumvsSatEffect(Effect):
 
@@ -1012,40 +1018,14 @@ class LumvsSatEffect(Effect):
         else:
             param_hash = hash(np.sum(ls))
             if self.hash != param_hash:
-                hls2_s = core.calc_point_list_to_lut(hls_l, ls)
-                self.diff = 2.0**((hls2_s-0.5)*2.0)     # Sのみ保存
-                self.hash = param_hash
-
-        return self.diff
-
-    def apply_diff(self, hls_l):
-        return hls_l * self.diff
-
-class SatvsSatEffect(Effect):
-
-    def set2widget(self, widget, param):
-        widget.ids["SatvsSat"].set_point_list(param.get('SatvsSat', None))
-
-    def set2param(self, param, widget):
-        param['SatvsSat'] = widget.ids["SatvsSat"].get_point_list()
-
-    def make_diff(self, hls_s, param):
-        ss = param.get("SatvsSat", None)
-        if ss is None:
-            self.diff = None
-            self.hash = None
-
-        else:
-            param_hash = hash(np.sum(ss))
-            if self.hash != param_hash:
-                hls2_s = core.calc_point_list_to_lut(hls_s, ss)
-                self.diff = 2.0**((hls2_s-0.5)*2.0)     # Sのみ保存
+                lut = core.calc_point_list_to_lut(ls)
+                self.diff = (lut-0.5)*2.0+1.0
                 self.hash = param_hash
 
         return self.diff
 
     def apply_diff(self, hls_s):
-        return hls_s * self.diff
+        return core.apply_lut_mul(hls_s, self.diff, 1.0)
 
 class SatvsLumEffect(Effect):
 
@@ -1064,15 +1044,40 @@ class SatvsLumEffect(Effect):
         else:
             param_hash = hash(np.sum(sl))
             if self.hash != param_hash:
-                hls2_l = core.calc_point_list_to_lut(hls_s, sl)
-                self.diff = 2.0**((hls2_l-0.5)*2.0)     # Lのみ保存
+                lut = core.calc_point_list_to_lut(sl)
+                self.diff = 2.0**((lut-0.5)*2.0)
                 self.hash = param_hash
 
         return self.diff
-    
-    def apply_diff(self, hls_s):
-        return hls_s * self.diff
 
+    def apply_diff(self, hls_l):
+        return core.apply_lut_mul(hls_l, self.diff, 1.0)
+
+class SatvsSatEffect(Effect):
+
+    def set2widget(self, widget, param):
+        widget.ids["SatvsSat"].set_point_list(param.get('SatvsSat', None))
+
+    def set2param(self, param, widget):
+        param['SatvsSat'] = widget.ids["SatvsSat"].get_point_list()
+
+    def make_diff(self, hls_s, param):
+        ss = param.get("SatvsSat", None)
+        if ss is None:
+            self.diff = None
+            self.hash = None
+
+        else:
+            param_hash = hash(np.sum(ss))
+            if self.hash != param_hash:
+                lut = core.calc_point_list_to_lut(ss)
+                self.diff = (lut-0.5)*2.0+1.0
+                self.hash = param_hash
+
+        return self.diff
+
+    def apply_diff(self, hls_s):
+        return core.apply_lut_mul(hls_s, self.diff, 1.0)
 
 class HLSRedEffect(Effect):
 
@@ -1366,36 +1371,39 @@ class AfterExposureEffect(Effect):
     def apply_diff(self, rgb):
         return rgb * self.diff
 
-class Mask2HLSEffect(Effect):
+class Mask2Effect(Effect):
 
     def set2widget(self, widget, param):
-        widget.ids["slider_hue_min"].set_slider_value(param.get('hue_min', 0))
-        widget.ids["slider_hue_max"].set_slider_value(param.get('hue_max', 359))
-        widget.ids["slider_lum_min"].set_slider_value(param.get('lum_min', 0))
-        widget.ids["slider_lum_max"].set_slider_value(param.get('lum_max', 255))
-        widget.ids["slider_sat_min"].set_slider_value(param.get('sat_min', 0))
-        widget.ids["slider_sat_max"].set_slider_value(param.get('sat_max', 255))
+        widget.ids["slider_mask2_hue_min"].set_slider_value(param.get('mask2_hue_min', 0))
+        widget.ids["slider_mask2_hue_max"].set_slider_value(param.get('mask2_hue_max', 359))
+        widget.ids["slider_mask2_lum_min"].set_slider_value(param.get('mask2_lum_min', 0))
+        widget.ids["slider_mask2_lum_max"].set_slider_value(param.get('mask2_lum_max', 255))
+        widget.ids["slider_mask2_sat_min"].set_slider_value(param.get('mask2_sat_min', 0))
+        widget.ids["slider_mask2_sat_max"].set_slider_value(param.get('mask2_sat_max', 255))
+        widget.ids["slider_mask2_blur"].set_slider_value(param.get('mask2_blur', 0))
 
     def set2param(self, param, widget):
-        param['hue_min'] = widget.ids["slider_hue_min"].value
-        param['hue_max'] = widget.ids["slider_hue_max"].value
-        param['lum_min'] = widget.ids["slider_lum_min"].value
-        param['lum_max'] = widget.ids["slider_lum_max"].value
-        param['sat_min'] = widget.ids["slider_sat_min"].value
-        param['sat_max'] = widget.ids["slider_sat_max"].value
+        param['mask2_hue_min'] = widget.ids["slider_mask2_hue_min"].value
+        param['mask2_hue_max'] = widget.ids["slider_mask2_hue_max"].value
+        param['mask2_lum_min'] = widget.ids["slider_mask2_lum_min"].value
+        param['mask2_lum_max'] = widget.ids["slider_mask2_lum_max"].value
+        param['mask2_sat_min'] = widget.ids["slider_mask2_sat_min"].value
+        param['mask2_sat_max'] = widget.ids["slider_mask2_sat_max"].value
+        param['mask2_blur'] = widget.ids["slider_mask2_blur"].value
 
     def make_diff(self, rgb, param):
-        hmin = param.get('hue_min', 0)
-        hmax = param.get('hue_max', 359)
-        lmin = param.get('lum_min', 0)
-        lmax = param.get('lum_max', 255)
-        smin = param.get('sat_min', 0)
-        smax = param.get('sat_max', 255)
-        if hmin == 0:
+        hmin = param.get('mask2_hue_min', 0)
+        hmax = param.get('mask2_hue_max', 359)
+        lmin = param.get('mask2_lum_min', 0)
+        lmax = param.get('mask2_lum_max', 255)
+        smin = param.get('mask2_sat_min', 0)
+        smax = param.get('mask2_sat_max', 255)
+        blur = param.get('mask2_blur', 0)
+        if hmin == 0 and hmax == 359 and lmin == 0 and lmax == 255 and smin == 0 and smax == 255 and blur == 0:
             self.diff = None
             self.hash = None
         else:        
-            param_hash = hash((hmin, hmax, lmin, lmax, smin, smax))
+            param_hash = hash((hmin, hmax, lmin, lmax, smin, smax, blur))
             if self.hash != param_hash:
                 self.diff = None
                 self.hash = param_hash
@@ -1430,18 +1438,21 @@ class CorrectOverexposedAreas(Effect):
 
     def set2widget(self, widget, param):
         widget.ids["switch_correct_overexposed_areas"].active = False if param.get('correct_overexposed_areas', 0) == 0 else True
+        widget.ids["slider_correct_overexposed_areas_blur"].set_slider_value(param.get('correct_overexposed_areas_blur', 0))
         widget.ids["cp_correct_overexposed_areas"].ids['slider_red'].set_slider_value(param.get('correct_overexposed_areas_red', 0))
         widget.ids["cp_correct_overexposed_areas"].ids['slider_green'].set_slider_value(param.get('correct_overexposed_areas_green', 0))
         widget.ids["cp_correct_overexposed_areas"].ids['slider_blue'].set_slider_value(param.get('correct_overexposed_areas_blue', 0))
 
     def set2param(self, param, widget):
         param['correct_overexposed_areas'] = 0 if widget.ids["switch_correct_overexposed_areas"].active == False else 1
+        param['correct_overexposed_areas_blur'] = widget.ids["slider_correct_overexposed_areas_blur"].value
         param["correct_overexposed_areas_red"] = widget.ids["cp_correct_overexposed_areas"].ids['slider_red'].value
         param["correct_overexposed_areas_green"] = widget.ids["cp_correct_overexposed_areas"].ids['slider_green'].value
         param["correct_overexposed_areas_blue"] = widget.ids["cp_correct_overexposed_areas"].ids['slider_blue'].value
 
     def make_diff(self, img, param):
         coa = param.get('correct_overexposed_areas', 0)
+        coabl = param.get('correct_overexposed_areas_blur', 0)
         coar = param.get("correct_overexposed_areas_red", 0)
         coag = param.get("correct_overexposed_areas_green", 0)
         coab = param.get("correct_overexposed_areas_blue", 0)
@@ -1449,15 +1460,15 @@ class CorrectOverexposedAreas(Effect):
             self.diff = None
             self.hash = None
         else:        
-            param_hash = hash((coa, coar, coag, coab))
+            param_hash = hash((coa, coabl, coar, coag, coab))
             if self.hash != param_hash:
-                self.diff = (coar/255, coag/255, coab/255)
+                self.diff = (coabl, (coar/255, coag/255, coab/255))
                 self.hash = param_hash
 
         return self.diff
     
     def apply_diff(self, rgb):
-        return core.correct_overexposed_areas(rgb, correction_color=self.diff)
+        return core.correct_overexposed_areas(rgb, blur_sigma=self.diff[0], correction_color=self.diff[1])
 
 def create_effects():
     effects = [{}, {}, {}, {}]
@@ -1491,10 +1502,10 @@ def create_effects():
     lv2['tonecurve_red'] = TonecurveRedEffect()
     lv2['tonecurve_green'] = TonecurveGreenEffect()
     lv2['tonecurve_blue'] = TonecurveBlueEffect()
-    lv2['LumvsLum'] = LumvsLumEffect()
     lv2['HuevsHue'] = HuevsHueEffect()
-    lv2['HuevsSat'] = HuevsSatEffect()
     lv2['HuevsLum'] = HuevsLumEffect()
+    lv2['HuevsSat'] = HuevsSatEffect()
+    lv2['LumvsLum'] = LumvsLumEffect()
     lv2['LumvsSat'] = LumvsSatEffect()
     lv2['SatvsSat'] = SatvsSatEffect()
     lv2['SatvsLum'] = SatvsLumEffect()
@@ -1512,12 +1523,7 @@ def create_effects():
 
     lv3 = effects[3]
     lv3['after_exposure'] = AfterExposureEffect()
-    lv3['hue_min'] = Mask2HLSEffect()
-    lv3['hue_max'] = Mask2HLSEffect()
-    lv3['lum_min'] = Mask2HLSEffect()
-    lv3['lum_max'] = Mask2HLSEffect()
-    lv3['sat_min'] = Mask2HLSEffect()
-    lv3['sat_max'] = Mask2HLSEffect()
+    lv3['mask2'] = Mask2Effect()
     lv3['highlight_compress'] = HighlightCompressEffect()
     lv3['correct_overexposed_areas'] = CorrectOverexposedAreas()
 

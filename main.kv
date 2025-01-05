@@ -711,6 +711,15 @@ MainWidget:
                                         font_size: '9pt'
                                         color: 'b0b0b0' 
 
+                            ParamSlider:
+                                id: slider_correct_overexposed_areas_blur
+                                text: "Blur"
+                                min: 0
+                                max: 100
+                                value: 0
+                                step: 1
+                                on_slider: root.apply_effects_lv(3, 'correct_overexposed_areas')
+
                             BoxLayout:
                                 size_hint_y: None
                                 orientation: "vertical"
@@ -1152,7 +1161,7 @@ MainWidget:
                                 size_hint_y: None
                                 orientation: 'horizontal'
                                 ParamLabel:
-                                    text: "Color Correct"
+                                    text: "Correct"
                                 VSpacer:
                                     size_hint_x: 5
                                 MDChip:
@@ -1170,12 +1179,24 @@ MainWidget:
                                         font_size: '9pt'
                                         color: 'b0b0b0' 
 
+                            HSeparator:
+                                height: dp(15)
+
+                            Label:
+                                text_size: self.size
+                                size: 0, dp(20)
+                                size_hint_y: None
+                                text: ' LUT'
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
+
                             BoxLayout:
                                 size: 0, dp(30)
                                 size_hint_y: None
                                 orientation: 'horizontal'
                                 ParamLabel:
-                                    text: "LUT"
+                                    text: "File"
                                 Spinner:
                                     id: lut_spinner
                                     pos_hint: {'center_x': .5, 'center_y': .5}
@@ -1190,6 +1211,52 @@ MainWidget:
                                     size: 0, dp(20)
                                     size_hint: 1, None
                                     on_press: root.on_lut_select_folder()
+
+                            ParamSlider:
+                                id: slider_lut_intensity
+                                text: "Intensity"
+                                min: 0
+                                max: 100
+                                value: 100
+                                step: 1
+                                on_slider: root.apply_effects_lv(1, 'lut')
+
+                            HSeparator:
+                                height: dp(15)
+
+                            Label:
+                                text_size: self.size
+                                size: 0, dp(20)
+                                size_hint_y: None
+                                text: ' Film Simulation'
+                                font_size: '10pt'
+                                halign: 'left'
+                                valign: 'center'
+
+                            BoxLayout:
+                                size: 0, dp(30)
+                                size_hint_y: None
+                                orientation: 'horizontal'
+                                ParamLabel:
+                                    text: "Type"
+                                Spinner:
+                                    id: spinner_film
+                                    pos_hint: {'center_x': .5, 'center_y': .5}
+                                    size: 0, dp(20)
+                                    size_hint: 9, None
+                                    font_size: '9pt'
+                                    option_cls: "MainSpinnerOption"
+                                    values: [ 'None', ]
+                                    on_text: root.apply_effects_lv(2, 'film_simulation')
+                                    
+                            ParamSlider:
+                                id: slider_film_intensity
+                                text: "Intensity"
+                                min: 0
+                                max: 100
+                                value: 100
+                                step: 1
+                                on_slider: root.apply_effects_lv(1, 'film_simulation')
 
                             HSeparator:
                                 height: dp(15)
@@ -1336,8 +1403,8 @@ MainWidget:
                                 step: 0.1
                                 on_slider: root.apply_effects_lv(0, 'rotation')
 
-                            VSpacer:
-                                width: dp(5)
+                            HSpacer:
+                                width: dp(15)
                             
                             BoxLayout:
                                 size: 0, dp(20)
@@ -1370,8 +1437,51 @@ MainWidget:
                                     text: "V"
                                     on_press: root.set_effect_param(0, 'rotation', 'vflip')
 
+                            VSpacer:
+                                height: dp(15)
                             HSeparator:
                                 height: dp(15)
+
+                            BoxLayout:
+                                size: 0, dp(30)
+                                size_hint_y: None
+                                orientation: 'horizontal'
+                                ParamLabel:
+                                    text: "Crop"
+                                VSpacer:
+                                    size_hint_x: 5
+                                MDChip:
+                                    type: 'filter'
+                                    pos_hint: {"center_x": .5, "center_y": .5}
+                                    size: dp(100), dp(20)
+                                    size_hint: None, None
+                                    id: switch_crop
+                                    radius: 40
+                                    line_color: 'grey'
+                                    on_active: root.apply_effects_lv(0, 'crop')
+
+                                    MDChipText:
+                                        text: "Edit"
+                                        font_size: '9pt'
+                                        color: 'b0b0b0'
+                                    
+                            BoxLayout:
+                                size: 0, dp(30)
+                                size_hint_y: None
+                                orientation: 'horizontal'
+                                ParamLabel:
+                                    text: "Aspect Ratio"
+                                HSpacer:
+                                    width: dp(15)
+                                Spinner:
+                                    id: spinner_acpect_ratio
+                                    pos_hint: {'center_x': .5, 'center_y': .5}
+                                    size: 0, dp(20)
+                                    size_hint: 9, None
+                                    font_size: '9pt'
+                                    option_cls: "MainSpinnerOption"
+                                    values: [ 'None', ]
+                                    on_text: root.apply_effects_lv(2, 'crop')
 
                 TabbedPanelItem:
                     text: 'Mask2'
@@ -1393,22 +1503,22 @@ MainWidget:
                                 valign: 'center'
 
                             ParamSlider:
-                                id: slider_hue_min
+                                id: slider_mask2_hue_min
                                 text: "Min"
                                 min: 0
                                 max: 359
                                 value: 0
                                 step: 1
-                                on_slider: root.apply_effects_lv(3, 'hue_min')
+                                on_slider: root.apply_effects_lv(3, 'mask2')
 
                             ParamSlider:
-                                id: slider_hue_max
+                                id: slider_mask2_hue_max
                                 text: "Max"
                                 min: 0
                                 max: 360*2-1
                                 value: 359
                                 step: 1
-                                on_slider: root.apply_effects_lv(3, 'hue_max')
+                                on_slider: root.apply_effects_lv(3, 'mask2')
 
                             Label:
                                 text_size: self.size
@@ -1420,22 +1530,22 @@ MainWidget:
                                 valign: 'center'
 
                             ParamSlider:
-                                id: slider_lum_min
+                                id: slider_mask2_lum_min
                                 text: "Min"
                                 min: 0
                                 max: 255
                                 value: 0
                                 step: 1
-                                on_slider: root.apply_effects_lv(3, 'lum_min')
+                                on_slider: root.apply_effects_lv(3, 'mask2')
 
                             ParamSlider:
-                                id: slider_lum_max
+                                id: slider_mask2_lum_max
                                 text: "Max"
                                 min: 0
                                 max: 255
                                 value: 255
                                 step: 1
-                                on_slider: root.apply_effects_lv(3, 'lum_max')
+                                on_slider: root.apply_effects_lv(3, 'mask2')
 
                             Label:
                                 text_size: self.size
@@ -1447,25 +1557,34 @@ MainWidget:
                                 valign: 'center'
 
                             ParamSlider:
-                                id: slider_sat_min
+                                id: slider_mask2_sat_min
                                 text: "Min"
                                 min: 0
                                 max: 255
                                 value: 0
                                 step: 1
-                                on_slider: root.apply_effects_lv(3, 'sat_min')
+                                on_slider: root.apply_effects_lv(3, 'mask2')
 
                             ParamSlider:
-                                id: slider_sat_max
+                                id: slider_mask2_sat_max
                                 text: "Max"
                                 min: 0
                                 max: 255
                                 value: 255
                                 step: 1
-                                on_slider: root.apply_effects_lv(3, 'sat_max')
+                                on_slider: root.apply_effects_lv(3, 'mask2')
 
                             HSeparator:
                                 height: dp(15)
+
+                            ParamSlider:
+                                id: slider_mask2_blur
+                                text: "Blur"
+                                min: 0
+                                max: 100
+                                value: 0
+                                step: 2
+                                on_slider: root.apply_effects_lv(3, 'mask2')
 
         ViewerWidget:
             id: viewer

@@ -300,7 +300,7 @@ def correct_overexposed_areas(image_rgb: np.ndarray,
                             threshold_low=0.94,
                             threshold_high=1.0,
                             correction_color=(0.94, 0.94, 0.96),
-                            blur_sigma=15.0) -> np.ndarray:  # シグマ値を3.0に増加
+                            blur_sigma=15.0) -> np.ndarray:
     """
     float32形式のRGB画像（0-1）の白飛び部分を自然に補正する関数
     
@@ -550,7 +550,7 @@ def calc_saturation(s, sat, vib):
     return np.array(array)
 
 
-def calc_point_list_to_lut(img, point_list, max_value=2.0):
+def calc_point_list_to_lut(point_list, max_value=1.0):
     """
     コントロールポイントからLUTを生成する関数（垂直な傾きに対応）
     max_value: LUTが対応する最大値（デフォルト2.0）
@@ -642,19 +642,36 @@ def calc_point_list_to_lut(img, point_list, max_value=2.0):
     
     return lut
 
-def apply_lut(img, lut, max_value=3.0):
+def apply_lut(img, lut, max_value=1.0):
     """
     画像にLUTを適用する関数
-    max_value: LUTが対応する最大値（デフォルト2.0）
+    max_value: LUTが対応する最大値（デフォルト1.0）
     """
-    if lut is None:
-        return img
-    
     # スケーリングしてLUTのインデックスに変換
     lut_indices = ((img * 65535) / max_value).clip(0, 65535).astype(np.uint16)
     
     # LUTを適用
     result = lut[lut_indices]
+    
+    return result
+
+def apply_lut_mul(img, lut, max_value=1.0):
+
+    # スケーリングしてLUTのインデックスに変換
+    lut_indices = ((img * 65535) / max_value).clip(0, 65535).astype(np.uint16)
+    
+    # LUTを適用
+    result = lut[lut_indices] * img
+    
+    return result
+
+def apply_lut_add(img, lut, max_value=1.0):
+
+    # スケーリングしてLUTのインデックスに変換
+    lut_indices = ((img * 65535) / max_value).clip(0, 65535).astype(np.uint16)
+    
+    # LUTを適用
+    result = lut[lut_indices] + img
     
     return result
 
