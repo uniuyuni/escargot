@@ -10,10 +10,12 @@ import threading
 from dcp_profile import DCPReader, DCPProcessor
 #import skimage
 #import maxim_util
+#from scipy import ndimage
 
 import util
 import viewer_widget
 import x_trans_demosaic_ext
+import advanced_highlight_recovery
 
 
 class ImageSet:
@@ -90,18 +92,86 @@ class ImageSet:
         in_img[in_img < black_level] = black_level
         out_img = in_img - black_level
         return out_img
+    
+
+    def _recover_saturated_colors(self, image):
+        """
+        画像内の飽和したRGB値を他のチャンネルの比率を使って復元する
+        
+        Parameters:
+        image: numpy.ndarray
+            Shape が (height, width, 3) の RGB画像データ。値は0-1の範囲を想定。
+            
+        Returns:
+        numpy.ndarray:
+            復元された画像データ
+        """
+        # 入力画像のコピーを作成
+        recovered = image.copy()
+        
+        # 飽和しているピクセルを見つける（どれかのチャンネルが1.0以上）
+        saturated_pixels = np.any(image >= 1.0, axis=2)
+        
+        # 飽和したピクセルに対して処理を行う
+        for y, x in np.argwhere(saturated_pixels):
+            pixel = image[y, x]
+            
+            # 飽和していないチャンネルのインデックスを取得
+            unsaturated_idx = np.where(pixel < 1.0)[0]
+            
+            if len(unsaturated_idx) >= 2:
+                # 飽和していない2つのチャンネル間の比率を計算
+                ratio = pixel[unsaturated_idx[0]] / pixel[unsaturated_idx[1]]
+                
+                # 飽和したチャンネルの値を推定
+                saturated_idx = np.where(pixel >= 1.0)[0]
+                for idx in saturated_idx:
+                    # 飽和していないチャンネルの最大値を基準に、比率を使って推定
+                    max_unsaturated = max(pixel[unsaturated_idx])
+                    estimated_value = max_unsaturated * (1 + ratio)
+                    recovered[y, x, idx] = estimated_value
+                    
+        return recovered
+    
+    def recover_saturated_pixels(self, img, raw):
+        
+        #recovered = img.copy()
+        
+        wb = raw.camera_whitebalance
+        wb = np.array([wb[0], wb[1], wb[2]]).astype(np.float32)/1024.0
+        
+        wl = float(raw.white_level) / 65535
+        wl = 1.0
+        maskr = img[:,:,0] > wl
+        maskg = img[:,:,1] > wl
+        maskb = img[:,:,2] > wl
+        mask = np.any(img >= wl, axis=-1)
+        mask = np.stack([mask, mask, mask], 2)        
+        mm = core.cvtToGrayColor(img) #(img[:,:,0] + img[:,:,1] + img[:,:,2]) / 3
+        mm = np.stack([mm, mm, mm], 2)
+        wb = wb / max(wb[0], wb[1], wb[2])
+        mm = img / wb
+
+        #wb[0] = np.sqrt(wb[0])
+        #wb[1] = np.sqrt(wb[1])
+        #wb[2] = np.sqrt(wb[2])
+        #recovered[:,:,0] = np.where(mask, mm, img[:,:,0])
+        #recovered[:,:,1] = np.where(mask, mm, img[:,:,1])
+        #recovered[:,:,2] = np.where(mask, mm, img[:,:,2])
+        recovered = np.where(mask, mm, img)
+
+        return recovered
 
     def __load_raw(self, file_path, exif_data, param, callback):
         try:
             # RAWで読み込んでみる
             with rawpy.imread(file_path) as raw:
-
-                
-                self.src = raw.postprocess( output_color=rawpy.ColorSpace.raw,
+                            
+                self.src = raw.postprocess( output_color=rawpy.ColorSpace.XYZ,
                                             demosaic_algorithm=rawpy.DemosaicAlgorithm.LINEAR,
                                             output_bps=16,
                                             no_auto_scale=False,
-                                            use_camera_wb=False,
+                                            use_camera_wb=True,
                                             user_wb = [1.0, 1.0, 1.0, 0.0],
                                             gamma=(1.0, 0.0),
                                             four_color_rgb=True,
@@ -127,8 +197,8 @@ class ImageSet:
                 # float32へ
                 self.img = self.img.astype(np.float32)/65535.0
 
-                # レンズ補正
-                #self.img = core.modify_lens(self.img, exif_data)
+                #self.img = self.recover_saturated_pixels(self.img, raw)
+                #self.img = self._recover_saturated_colors(self.img)
 
                 # 回転情報取得
                 rad, flip = util.split_orientation(util.str_to_orientation(exif_data.get("Orientation", "")))
@@ -151,6 +221,15 @@ class ImageSet:
                 # コントラスト補正
                 #self.img = skimage.exposure.equalize_adapthist(self.img, clip_limit=0.03)
 
+                # ホワイトバランス定義
+                wb = raw.camera_whitebalance
+                wb = np.array([wb[0], wb[1], wb[2]]).astype(np.float32)/1024.0
+                wb[1] = np.sqrt(wb[1])
+                self.img /= wb
+                #self.img[:,:,1] *= wb[1]
+                temp, tint, Y, = core.invert_RGB2TempTint(wb, 5000.0)
+                self.__set_temperature(param, temp, tint, Y)
+
                 # 明るさ補正
                 source_ev, _ = core.calculate_ev_from_image(core.normalize_image(self.img))
                 Av = exif_data.get('ApertureValue', 1.0)
@@ -161,19 +240,11 @@ class ImageSet:
                 Ev = Ev + Sv
                 self.img = self.img * core.calc_exposure(self.img, core.calculate_correction_value(source_ev, Ev))
 
-                # ホワイトバランス定義
-                wb = raw.camera_whitebalance
-                wb = np.array([wb[0], wb[1], wb[2]]).astype(np.float32)/1024.0
-                wb[1] = np.sqrt(wb[1])
-                self.img[:,:,1] *= wb[1]
-                temp, tint, Y, = core.invert_RGB2TempTint(wb, 5000.0)
-                self.__set_temperature(param, temp, tint, Y)
-                param['white_balance'] = wb
-
-                param['img_size'] = [self.img.shape[1], self.img.shape[0]]
+                # イメージサイズを設定し、正方形にする
+                self.img = core.adjust_shape(self.img, param)
                 if self.img.shape[1] != width or self.img.shape[0] != height:
                     logging.error("ImageSize is not ndarray.shape")
-
+                
         except (rawpy.LibRawFileUnsupportedError, rawpy.LibRawIOError):
             logging.warning("file is not supported " + file_path)
             return False
@@ -194,10 +265,11 @@ class ImageSet:
             temp, tint, Y, = core.invert_RGB2TempTint((1.0, 1.0, 1.0), 5000.0)
             self.__set_temperature(param, temp, tint, Y)
             
-            param['img_size'] = [self.img.shape[1], self.img.shape[0]]
             top, left, width, height = self.__get_image_size(exif_data)
             if self.img.shape[1] != width or self.img.shape[0] != height:
                 logging.error("ImageSize is not ndarray.shape")
+            self.img = core.adjust_shape(self.img, param)
+            
         else:
             logging.warning("file is not supported " + file_path)
             return False
@@ -220,6 +292,7 @@ class ImageSet:
             top, left, width, height = self.__get_image_size(exif_data)
             self.img = cv2.resize(self.img, dsize=(width, height))
             param['img_size'] = [width, height]
+            param['original_img_size'] = [width, height]
     
     def load(self, file_path, exif_data, param, callback):
         if file_path.lower().endswith(viewer_widget.supported_formats_raw):

@@ -1,0 +1,37 @@
+
+BoxLayout:
+    orientation: 'vertical'
+    size: root.size
+
+    ParamLabel:
+        text: "FileType"
+    Spinner:
+        id: spinner_file_type
+        pos_hint: {'center_x': .5, 'center_y': .5}
+        size: 0, dp(20)
+        size_hint: 9, None
+        font_size: '9pt'
+        option_cls: "MainSpinnerOption"
+        values: ['JPEG', 'TIFF', 'HEIF']
+        on_text: root.set_file_type()
+    ParamSlider:
+        id: slider_quality
+        text: "Quality"
+        min: 0
+        max: 100
+        value: 0
+        step: 1
+        on_slider: root.set_quality()
+
+    ParamLabel:
+        text: "Output"
+    Spinner:
+        id: spinner_output
+        pos_hint: {'center_x': .5, 'center_y': .5}
+        size: 0, dp(20)
+        size_hint: 9, None
+        font_size: '9pt'
+        option_cls: "MainSpinnerOption"
+        values: ["Source Folder", "Select Folder"]
+        on_text: root.set_output()
+

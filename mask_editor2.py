@@ -393,10 +393,9 @@ class CircularGradientMask(BaseMask):
     def update(self):
         # 更新
         cp_center = self.control_points[0]
-        x = cp_center.ctrl_center[0] + float(np.finfo(np.float32).eps)
-        y = cp_center.ctrl_center[1] + float(np.finfo(np.float32).eps)
-        cp_center.ctrl_center = [x, y]
-
+        cp_center.ctrl_center[0] += float(np.finfo(np.float32).eps)
+        cp_center.ctrl_center[0] -= float(np.finfo(np.float32).eps)
+ 
     def calculate_point(self, radius_x, radius_y, angle_deg):
         angle_rad = math.radians(angle_deg)
         radius_x = radius_x
@@ -679,9 +678,8 @@ class GradientMask(BaseMask):
 
     def update(self):
         cp_center = self.control_points[0]
-        x = cp_center.ctrl_center[0] + float(np.finfo(np.float32).eps)
-        y = cp_center.ctrl_center[1] + float(np.finfo(np.float32).eps)
-        cp_center.ctrl_center = [x, y]
+        cp_center.ctrl_center[0] += float(np.finfo(np.float32).eps)
+        cp_center.ctrl_center[0] -= float(np.finfo(np.float32).eps)
 
     def create_control_points(self):
         # 中心のコントロールポイント
@@ -900,7 +898,7 @@ class FullMask(BaseMask):
             return super().on_touch_down(touch)
 
     def on_touch_move(self, touch):
-            return super().on_touch_move(touch)
+        return super().on_touch_move(touch)
 
     def on_touch_up(self, touch):
         if self.initializing:
@@ -952,9 +950,8 @@ class FullMask(BaseMask):
 
     def update(self):
         cp_center = self.control_points[0]
-        x = cp_center.ctrl_center[0] + float(np.finfo(np.float32).eps)
-        y = cp_center.ctrl_center[1] + float(np.finfo(np.float32).eps)
-        cp_center.ctrl_center = [x, y]
+        cp_center.ctrl_center[0] += float(np.finfo(np.float32).eps)
+        cp_center.ctrl_center[0] -= float(np.finfo(np.float32).eps)
 
     def on_center_control_point_move(self, instance, value):
         dx = instance.ctrl_center[0] - self.center_x
@@ -1191,8 +1188,8 @@ class MaskEditor2(FloatLayout):
         self.orientation = (0, 0)
         self.margin = (0, 0)
         self.texture_size = [0, 0]
-        self._keyboard = Window.request_keyboard(self._keyboard_closed, self)
-        self._keyboard.bind(on_key_down=self._on_keyboard_down)
+        #self._keyboard = Window.request_keyboard(self._keyboard_closed, self)
+        #self._keyboard.bind(on_key_down=self._on_keyboard_down)
 
         Logger.info("MaskEditor: 初期化完了")
 
@@ -1240,6 +1237,7 @@ class MaskEditor2(FloatLayout):
         self.margin2 = (self.texture_size[0]/2, self.texture_size[1]/2)
         #self.margin2 = (0, 0)
         
+    def update(self):
         # 既存のマスクに対する更新を処理
         for mask in reversed(self.mask_layers):
             #pass    # 無限ループ対策
@@ -1438,31 +1436,34 @@ class MaskEditor2(FloatLayout):
         wx, wy = self.to_window(*self.pos)
         cx, cy = cx - wx, cy - wy
         cx, cy = cx - self.margin[0], cy - self.margin[1]
-        cx, cy = cx - self.texture_size[0]/2, cy - self.texture_size[1]/2
+        cx, cy = cx, self.texture_size[1] - cy
         cx, cy = cx / self.crop_info[4], cy / self.crop_info[4]
-        cx, cy = cx + self.crop_info[0], cy + self.crop_info[1] #(self.texture_size[1] / self.crop_info[4] - cy) + self.crop_info[1]
-        #cx, cy = cx - self.image_size[0]/2, cy - self.image_size[1]/2
+        cx, cy = cx + self.crop_info[0], cy + self.crop_info[1]
+        imax = max(self.image_size[0]/2, self.image_size[1]/2)
+        cx, cy = cx - imax, cy - imax
         cx, cy = self.center_rotate_invert(cx, cy, self.center_rotate_rad)
         return (cx, cy)
 
     def tcg_to_world(self, cx, cy):
         cx, cy = self.center_rotate(cx, cy, self.center_rotate_rad)
-        #cx, cy = cx + self.image_size[0]/2, cy + self.image_size[1]/2
-        cx, cy = cx - self.crop_info[0], cy - self.crop_info[1] #(self.texture_size[1] / self.crop_info[4] + self.crop_info[1]) - cy
+        imax = max(self.image_size[0]/2, self.image_size[1]/2)
+        cx, cy = cx + imax, cy + imax
+        cx, cy = cx - self.crop_info[0], cy - self.crop_info[1]
         cx, cy = cx * self.crop_info[4], cy * self.crop_info[4]        
+        cx, cy = cx, self.texture_size[1] - cy
         cx, cy = cx + self.margin[0], cy + self.margin[1]
-        cx, cy = cx + self.texture_size[0]/2, cy + self.texture_size[1]/2
         wx, wy = self.to_window(*self.pos)
         cx, cy = cx + wx, cy + wy
         return (cx, cy)
 
     def tcg_to_texture(self, cx, cy):
         cx, cy = self.center_rotate(cx, cy, self.center_rotate_rad)
-        #cx, cy = cx + self.image_size[0]/2, cy + self.image_size[1]/2
-        cx, cy = cx - self.crop_info[0], cy - self.crop_info[1] #(self.texture_size[1] / self.crop_info[4] + self.crop_info[1]) - cy
+        imax = max(self.image_size[0]/2, self.image_size[1]/2)
+        cx, cy = cx + imax, cy + imax
+        cx, cy = cx - self.crop_info[0], cy - self.crop_info[1]
         cx, cy = cx * self.crop_info[4], cy * self.crop_info[4]        
+        cx, cy = cx, self.texture_size[1] - cy
         #cx, cy = cx + self.margin[0], cy + self.margin[1]
-        cx, cy = cx + self.texture_size[0]/2, cy + self.texture_size[1]/2
         return (cx, cy)
 
     def apply_orientation(self, cx, cy):
@@ -1477,17 +1478,21 @@ class MaskEditor2(FloatLayout):
 
     def center_rotate(self, cx, cy, rotation_rad):
         cx, cy, rad = self.apply_orientation(cx, cy)
+        rad = rotation_rad + rad
+        rad = -rad
 
-        new_cx = cx * math.cos(rotation_rad + rad) - cy * math.sin(rotation_rad + rad)
-        new_cy = cx * math.sin(rotation_rad + rad) + cy * math.cos(rotation_rad + rad)
+        new_cx = cx * math.cos(rad) - cy * math.sin(rad)
+        new_cy = cx * math.sin(rad) + cy * math.cos(rad)
 
         return (new_cx, new_cy)
 
     def center_rotate_invert(self, cx, cy, rotation_rad):
         rad, _ = self.orientation
+        rad = rotation_rad + rad
+        rad = -rad
 
-        new_cx = cx * math.cos(rotation_rad + rad) + cy * math.sin(rotation_rad + rad)
-        new_cy = -cx * math.sin(rotation_rad + rad) + cy * math.cos(rotation_rad + rad)
+        new_cx = cx * math.cos(rad) + cy * math.sin(rad)
+        new_cy = -cx * math.sin(rad) + cy * math.cos(rad)
 
         new_cx, new_cy, _ = self.apply_orientation(new_cx, new_cy)
 
@@ -1529,12 +1534,9 @@ class MaskEditor2(FloatLayout):
                 mask.update()
             return True
 
-        elif keycode[1] == 'o':
-            self.orientation += 1
-            if self.orientation > 8:
-                self.orientation = 1
-            for mask in reversed(self.mask_layers):
-                mask.update()
+        elif keycode[1] == 'a':
+            self.root.force_full_redraw()
+            
             return True
         
         elif keycode[1] == 's':

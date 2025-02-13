@@ -19,6 +19,9 @@ import mask_editor
 import crop_editor
 import microcontrast
 import subpixel_shift
+import film_simulation
+import lens_simulator
+import config
 
 # 補正基底クラス
 class Effect():
@@ -78,7 +81,7 @@ class RotationEffect(Effect):
         ang = param.get('rotation', 0)
         ang2 = param.get('rotation2', 0)
         flp = param.get('flip_mode', 0)
-        if ang == 0 and ang2 == 0 and flp == 0:
+        if False:
             self.diff = None
             self.hash = None
         else:
@@ -100,30 +103,61 @@ class CropEffect(Effect):
         self.crop_editor = None
 
     def set2widget(self, widget, param):
-        widget.ids["switch_crop"].active = False if param.get('crop', 0) == 0 else True
+        #widget.ids["switch_crop"].active = False if param.get('crop', 0) == 0 else True
+        widget.ids["spinner_acpect_ratio"].text = param.get('aspect_ratio', "None")
 
     def set2param(self, param, widget):
-        param['crop'] = 0 if widget.ids["switch_crop"].active == False else 1
+        #param['crop'] = 0 if widget.ids["switch_crop"].active == False else 1
+        param['crop'] = 0 if widget.ids["effects"].current_tab.text != "Geometry" else 1
+        param['aspect_ratio'] = widget.ids["spinner_acpect_ratio"].text
+        param['crop_info'] = param.get('crop_info', (0, 0, 0, 0, 1))
 
         if param['crop'] > 0:
             if self.crop_editor is None:
-                self.crop_editor = crop_editor.CropEditor(input_width=param['img_size'][0], input_height=param['img_size'][1], scale=widget.get_scale())
+                input_width, input_height = param['original_img_size']
+                cx, cy, cw, ch, scale = param['crop_info']
+                self.crop_editor = crop_editor.CropEditor(input_width=input_width, input_height=input_height, scale=scale, crop_rect=[cx, cy, cx+cw, cy+ch])
                 widget.ids["preview_widget"].add_widget(self.crop_editor)
+
+            if widget.ids["button_crop_reset"].state == "down":
+                self.crop_editor.set_crop_rect([0, 0, 0, 0])
+                self.crop_editor.update_crop_size()
             
         if param['crop'] <= 0:
             if self.crop_editor is not None:
+                param['crop_info'] = self.crop_editor.get_crop_info()
+
                 widget.ids["preview_widget"].remove_widget(self.crop_editor)
                 self.crop_editor = None
 
     def make_diff(self, img, param):
+        if self.crop_editor is not None:
+            ang = param.get('rotation', 0)
+            ang2 = param.get('rotation2', 0)
+            self.crop_editor.input_angle = ang + ang2
+            ar = param.get('aspect_ratio', "None")
+            self.crop_editor.aspect_ratio = 0 if ar == "None" else eval(ar)
+    
         cr = param.get('crop', 0)
-        if cr > 0:
-            self.diff = self.crop_editor.get_crop_info()
+        crop_info = param.get('crop_info', (0, 0, 0, 0, 1))
+        if cr > 0 or crop_info == (0, 0, 0, 0, 1):
+            self.diff = None
+            self.hash = None
+        else:
+            param_hash = hash((cr))
+            if self.hash != param_hash:
+                self.diff = crop_info
+                self.hash = param_hash
+                param['img_size'] = (crop_info[2], crop_info[3])
+
         return self.diff
     
     def apply_diff(self, img):
-        cx, cy, cw, ch = self.diff
-        return img[cy:cy+ch, cx:cx+cw]
+        if self.diff is not None:
+            cx, cy, cw, ch, scale = self.diff
+            
+            return img[cy:cy+ch, cx:cx+cw]
+        return img
 
 class LensModifierEffect(Effect):
 
@@ -313,7 +347,7 @@ class InpaintEffect(Effect):
             cx, cy, cw, ch, sc = self.crop_editor.get_crop_info()
             mask = cv2.GaussianBlur(self.mask_editor.get_mask()[cy:cy+ch, cx:cx+cw], (63, 63), 0)
             img = img[cy:cy+ch, cx:cx+cw] #* param.get('white_balance', [1, 1, 1])
-            img2 = InpaintEffect.__iopaint.predict(img, mask, resize_limit=1024+512, use_realesrgan=True)
+            img2 = InpaintEffect.__iopaint.predict(img, mask, model=config.get_config('iopaint_model'), resize_limit=config.get_config('iopaint_resize_limit'), use_realesrgan=config.get_config('iopaint_use_realesrgan'))
             img2 = img2 #/ param.get('white_balance', [1, 1, 1])
             bboxes = core.get_multiple_mask_bbox(self.mask_editor.get_mask()[cy:cy+ch, cx:cx+cw])
             for bbox in bboxes:
@@ -432,6 +466,65 @@ class LUTEffect(Effect):
     
     def apply_diff(self, rgb):
         return cubelut.process_image(rgb, self.diff)
+
+class FilmSimulationEffect(Effect):
+ 
+    def set2widget(self, widget, param):
+        widget.ids["spinner_film_preset"].text = param.get('film_preset', 'None')
+        widget.ids["slider_film_intensity"].set_slider_value(param.get('film_intensity', 100))
+
+    def set2param(self, param, widget):
+        param['film_preset'] = widget.ids["spinner_film_preset"].text
+        param['film_intensity'] = widget.ids["slider_film_intensity"].value
+
+    def make_diff(self, rgb, param):
+        preset = param.get('film_preset', 'None')
+        intensity = param.get('film_intensity', 100)
+        if preset == 'None' or intensity <= 0:
+            self.diff = None
+            self.hash = None
+        else:
+            param_hash = hash((preset, intensity))
+            if self.hash != param_hash:
+                self.diff = (preset, intensity)
+                self.hash = param_hash
+
+        return self.diff
+    
+    def apply_diff(self, rgb):
+        film = film_simulation.apply_film_simulation(rgb, self.diff[0])
+        per = self.diff[1] / 100.0
+        return film * per + rgb * (1-per)
+
+class LensSimulatorEffect(Effect):
+ 
+    def set2widget(self, widget, param):
+        widget.ids["spinner_lens_preset"].text = param.get('lens_preset', 'None')
+        widget.ids["slider_lens_intensity"].set_slider_value(param.get('lens_intensity', 100))
+
+    def set2param(self, param, widget):
+        param['lens_preset'] = widget.ids["spinner_lens_preset"].text
+        param['lens_intensity'] = widget.ids["slider_lens_intensity"].value
+
+    def make_diff(self, rgb, param):
+        preset = param.get('lens_preset', 'None')
+        intensity = param.get('lens_intensity', 100)
+        if preset == 'None' or intensity <= 0:
+            self.diff = None
+            self.hash = None
+        else:
+            param_hash = hash((preset, intensity))
+            if self.hash != param_hash:
+                self.diff = (preset, intensity)
+                self.hash = param_hash
+
+        return self.diff
+    
+    def apply_diff(self, rgb):
+        lens = lens_simulator.process_image(rgb, self.diff[0])
+        #lens = lens_simulator.apply_old_lens_effect(rgb, self.diff[0])
+        per = self.diff[1] / 100.0
+        return lens * per + rgb * (1-per)
 
 class LensblurFilterEffect(Effect):
 
@@ -587,30 +680,6 @@ class MicroContrastEffect(Effect):
         rgb2, _ = microcontrast.calculate_microcontrast(rgb, 7, self.diff)
         return rgb2
 
-class MidtoneEffect(Effect):
-
-    def set2widget(self, widget, param):
-        widget.ids["slider_midtone"].set_slider_value(param.get('midtone', 0))
-
-    def set2param(self, param, widget):
-        param['midtone'] = widget.ids["slider_midtone"].value
-
-    def make_diff(self, rgb, param):
-        mt = param.get('midtone', 0)
-        param_hash = hash((mt))
-        if mt == 0:
-            self.diff = None
-            self.hash = None
-
-        elif self.hash != param_hash:
-            self.diff = mt
-            self.hash = param_hash
-
-        return self.diff
-    
-    def apply_diff(self, rgb):
-        return core.adjust_shadow_highlight(rgb, self.diff, self.diff)
-
 class ToneEffect(Effect):
 
     def set2widget(self, widget, param):
@@ -618,20 +687,23 @@ class ToneEffect(Effect):
         widget.ids["slider_white"].set_slider_value(param.get('white', 0))
         widget.ids["slider_shadow"].set_slider_value(param.get('shadow', 0))
         widget.ids["slider_highlight"].set_slider_value(param.get('highlight', 0))
+        widget.ids["slider_midtone"].set_slider_value(param.get('midtone', 0))
 
     def set2param(self, param, widget):
         param['black'] = widget.ids["slider_black"].value
         param['white'] = widget.ids["slider_white"].value
         param['shadow'] = widget.ids["slider_shadow"].value
         param['highlight'] = widget.ids["slider_highlight"].value
+        param['midtone'] = widget.ids["slider_midtone"].value
 
     def make_diff(self, rgb, param):
         black = param.get('black', 0)
         white = param.get('white', 0)
         shadow = param.get('shadow', 0)
         highlight =  param.get('highlight', 0)
-        param_hash = hash((black, white, shadow, highlight))
-        if black == 0 and white == 0 and shadow == 0 and highlight == 0:
+        mt = param.get('midtone', 0)
+        param_hash = hash((black, white, shadow, highlight, mt))
+        if black == 0 and white == 0 and shadow == 0 and highlight == 0 and mt == 0:
             self.diff = None
             self.hash = None
 
@@ -643,13 +715,15 @@ class ToneEffect(Effect):
             values[2] += white * 100.0
             points /= 65535.0
             values /= 65535.0
-            self.diff = (highlight, shadow, points, values)
+            #self.diff = (highlight, shadow, points, values)
+            self.diff = (highlight, shadow, mt, white, black)
             self.hash = param_hash
         return self.diff
     
     def apply_diff(self, rgb):
-        rgb2 = core.adjust_shadow_highlight(rgb, self.diff[0], self.diff[1])
-        rgb2 = core.apply_curve(rgb2, self.diff[2], self.diff[3])
+        #rgb2 = core.adjust_shadow_highlight(rgb, self.diff[0], self.diff[1])
+        #rgb2 = core.apply_curve(rgb2, self.diff[2], self.diff[3])
+        rgb2 = core.adjust_tone(rgb, self.diff[0], self.diff[1], self.diff[2], self.diff[3], self.diff[4])
         return rgb2
 
 class SaturationEffect(Effect):
@@ -767,7 +841,7 @@ class TonecurveEffect(Effect):
         else:
             param_hash = hash(np.sum(pl))
             if self.hash != param_hash:
-                self.diff = core.calc_point_list_to_lut(rgb, pl)
+                self.diff = core.calc_point_list_to_lut(pl)
                 self.hash = param_hash
 
         return self.diff
@@ -817,7 +891,7 @@ class TonecurveGreenEffect(Effect):
         else:
             param_hash = hash(np.sum(pl))
             if self.hash != param_hash:
-                self.diff = core.calc_point_list_to_lut(rgb_g, pl)
+                self.diff = core.calc_point_list_to_lut(pl)
                 self.hash = param_hash
 
         return self.diff
@@ -842,7 +916,7 @@ class TonecurveBlueEffect(Effect):
         else:
             param_hash = hash(np.sum(pl))
             if self.hash != param_hash:
-                self.diff = core.calc_point_list_to_lut(rgb_b, pl)
+                self.diff = core.calc_point_list_to_lut(pl)
                 self.hash = param_hash
 
         return self.diff
@@ -1470,13 +1544,42 @@ class CorrectOverexposedAreas(Effect):
     def apply_diff(self, rgb):
         return core.correct_overexposed_areas(rgb, blur_sigma=self.diff[0], correction_color=self.diff[1])
 
+class VignetteEffect(Effect):
+
+    def set2widget(self, widget, param):
+        widget.ids["slider_vignette_intensity"].set_slider_value(param.get('vignette_intensity', 0))
+        widget.ids["slider_vignette_radius_percent"].set_slider_value(param.get('vignette_radius_percent', 0))
+
+    def set2param(self, param, widget):
+        param['vignette_intensity'] = widget.ids["slider_vignette_intensity"].value
+        param['vignette_radius_percent'] = widget.ids["slider_vignette_radius_percent"].value
+
+    def make_diff(self, rgb, crop_info, param):
+        vi = param.get('vignette_intensity', 0)
+        vr = param.get('vignette_radius_percent', 0)
+        param_hash = hash((vi, vr))
+        if vi == 0 and vr == 0:
+            self.diff = None
+            self.hash = None
+
+        elif self.hash != param_hash:
+            self.diff = (vi, vr, param['img_size'])
+            self.hash = param_hash
+        
+        return self.diff
+    
+    def apply_diff(self, rgb, crop_info):
+        imax = max(self.diff[2])
+        return core.apply_vignette(rgb, self.diff[0], self.diff[1], crop_info, (self.diff[2][0], self.diff[2][1]))
+
 def create_effects():
-    effects = [{}, {}, {}, {}]
+    effects = [{}, {}, {}, {}, {}]
 
     lv0 = effects[0]
     lv0['subpixel_shift'] = SubpixelShiftEffect()
     lv0['inpaint'] = InpaintEffect()
     lv0['rotation'] = RotationEffect()
+    lv0['crop'] = CropEffect()
 
     lv1 = effects[1]
     lv1['ai_noise_reduction'] = AINoiseReductonEffect()
@@ -1493,7 +1596,6 @@ def create_effects():
     lv2['exposure'] = ExposureEffect()
     lv2['contrast'] = ContrastEffect()
     lv2['microcontrast'] = MicroContrastEffect()
-    lv2['midtone'] = MidtoneEffect()
     lv2['tone'] = ToneEffect()
     lv2['saturation'] = SaturationEffect()
     lv2['dehaze'] = DehazeEffect()
@@ -1519,13 +1621,18 @@ def create_effects():
     lv2['hls_blue'] = HLSBlueEffect()
     lv2['hls_purple'] = HLSPurpleEffect()
     lv2['hls_magenta'] = HLSMagentaEffect()
+    lv2['film_simulation'] = FilmSimulationEffect()
+    lv2['lens_simulator'] = LensSimulatorEffect()
     lv2['lut'] = LUTEffect()
+    lv2['highlight_compress'] = HighlightCompressEffect()
 
     lv3 = effects[3]
     lv3['after_exposure'] = AfterExposureEffect()
     lv3['mask2'] = Mask2Effect()
-    lv3['highlight_compress'] = HighlightCompressEffect()
     lv3['correct_overexposed_areas'] = CorrectOverexposedAreas()
+
+    lv3 = effects[4]
+    lv3['vignette'] = VignetteEffect()
 
     return effects
 
@@ -1533,4 +1640,3 @@ def reeffect_all(effects):
     for dict in effects:
         for l in dict.values():
             l.reeffect()
-

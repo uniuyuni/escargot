@@ -279,6 +279,9 @@ class ViewerWidget(MDBoxLayout):
             return self.cards.index(card)
         return None
     
+    def get_selected_cards(self):
+        return self.selected_cards
+    
 
 # テストアプリケーション
 class Viewer_WidgetApp(MDApp):

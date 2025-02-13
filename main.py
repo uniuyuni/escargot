@@ -2,18 +2,12 @@ import os
 import numpy as np
 import pyautogui as pag
 from kivymd.app import MDApp
-from kivymd.uix.widget import MDWidget
-from kivy.uix.popup import Popup as KVPopup
+from kivymd.uix.boxlayout import MDBoxLayout
 from kivy.core.window import Window as KVWindow
 from kivy.graphics.texture import Texture as KVTexture
 from kivy.clock import Clock, mainthread
 from kivy.metrics import Metrics, dp
 from functools import partial
-import math
-from datetime import datetime as dt
-import json
-import joblib
-import threading
 
 import core
 import imageset
@@ -28,11 +22,47 @@ import util
 import mask_editor2
 import color_picker
 import macos
+import film_simulation
+import lens_simulator
+import config
+import export
 
-class MainWidget(MDWidget):
+class RedrawableLayout(MDBoxLayout):
+    def force_full_redraw(self):
+       
+        # 方法3: 全ての子ウィジェットを再帰的に処理
+        self._redraw_children(self)
+        
+    
+    def _redraw_children(self, widget):
+        """再帰的に全ての子ウィジェットを処理"""
+        # ウィジェットの再描画をトリガー
+        if hasattr(widget, 'canvas'):
+            widget.canvas.ask_update()
+
+        if hasattr(widget, 'do_layout'):
+            widget.do_layout()
+        
+        # プロパティの更新を強制
+        widget.property('pos').dispatch(widget)
+        widget.property('size').dispatch(widget)
+        
+        # 子ウィジェットを再帰的に処理
+        for child in widget.children:
+            self._redraw_children(child)
+
+    """
+    def on_size(self, *args):
+        self.force_full_redraw()
+    
+    def on_pos(self, *args):
+        self.force_full_redraw()
+    """
+
+class MainWidget(MDBoxLayout):
 
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        super(MainWidget, self).__init__(**kwargs)
 
         self.texture_height = 1024
         self.texture_width = 1024
@@ -48,74 +78,17 @@ class MainWidget(MDWidget):
         self.primary_effects = effects.create_effects()
         self.apply_thread = None
         self.is_draw_image = False
-        self.config = {}
+
+        #self._keyboard = KVWindow.request_keyboard(self._keyboard_closed, self)
+        #self._keyboard.bind(on_key_down=self._on_keyboard_down)
 
     def on_kv_post(self, *args, **kwargs):
-        super().on_kv_post(*args, **kwargs)
+        super(MainWidget, self).on_kv_post(*args, **kwargs)
 
-        self.mask_editor2 = self.ids['mask_editor2']
-        self.ids['preview_widget'].remove_widget(self.mask_editor2)
-        self.mask_editor2.disabled = True
-
-    def set_config(self, key, value):
-        self.config[key] = value
-        self.save_config()
-
-    def apply_config(self):
-        self.set_lut_path(self.config.get('lut_path', os.getcwd() + "/lut"))
-
-    def save_config(self):
-        file_path = os.getcwd() + '/config.json'
-        with open(file_path, 'w') as f:
-            json.dump(self.config, f)
-
-    def load_config(self):
-        file_path = os.getcwd() + '/config.json'
-        try:
-            with open(file_path, 'r') as f:
-                self.config = json.load(f)
-                self.apply_config()
-        except FileNotFoundError as e:
-            pass
-
-    def serialize(self):
-        tdatetime = dt.now()
-        tstr = tdatetime.strftime('%Y/%m/%d')
-        mask_dict = self.ids['mask_editor2'].serialize()
-
-        dict = {
-            'make': "escargo",
-            'date': tstr,
-            'version': "0.4.1",
-            'primary_param': self.primary_param,
-        }
-        if mask_dict is not None:
-            dict.update(mask_dict)
-
-        return dict
-
-    def deserialize(self, dict):
-        self.primary_param = dict['primary_param']
-        mask_dict = dict.get('mask2', None)
-        if mask_dict is not None:
-            self.ids['mask_editor2'].deserialize(dict)
-
-    def save_json(self):
-        if self.imgset is not None:
-            file_path = self.imgset.file_path + '.json'
-            with open(file_path, 'w') as f:
-                dict = self.serialize()
-                json.dump(dict, f)
-
-    def load_json(self):
-        if self.imgset is not None:
-            file_path = self.imgset.file_path + '.json'
-            try:
-                with open(file_path, 'r') as f:
-                    dict = json.load(f)
-                    self.deserialize(dict)
-            except FileNotFoundError as e:
-               pass
+        self.ids['mask_editor2'].opacity = 0
+        self.ids['mask_editor2'].disabled = True
+        self.set_film_presets()
+        self.set_lens_presets()
  
     def load_image(self, file_path, exif_data):
         self.imgset = imageset.ImageSet()
@@ -135,6 +108,7 @@ class MainWidget(MDWidget):
         if self.is_draw_image == False:
             if self.imgset == imgset:
                 self.crop_image = None
+                effects.reeffect_all(self.primary_effects)
                 self.start_draw_image(offset)
 
     def empty_image(self):
@@ -157,7 +131,7 @@ class MainWidget(MDWidget):
             img, self.crop_image, self.crop_info = pipeline.process_pipeline(self.imgset.img, self.crop_info, offset, self.crop_image, self.is_zoomed, self.texture_width, self.texture_height, self.click_x, self.click_y, self.primary_effects, self.primary_param, self.ids['mask_editor2'])
             util.print_nan_inf(img)
             
-            #self.mask_editor2.set_crop_image(self.crop_image)
+            #self.ids['mask_editor2'].set_crop_image(self.crop_image)
             img = core.apply_gamma(img, 1.0/2.222)
             self.draw_histogram(img)
             img = np.clip(img, 0, 1)
@@ -209,11 +183,15 @@ class MainWidget(MDWidget):
     
     @mainthread
     def on_select(self, card):
+        # 前の設定を保存
+        if self.imgset is not None:
+            export.save_json(self.imgset.file_path, self.primary_param, self.ids['mask_editor2'])
+
         self.reset_param(self.primary_param)
-        self.ids["mask_editor2"].clear_mask()
+        self.ids['mask_editor2'].clear_mask()
         if card is not None:
             self.load_image(card.file_path, card.exif_data)
-            self.load_json()
+            export.load_json(card.file_path, self.primary_param, self.ids['mask_editor2'])
             self.set2widget_all(self.primary_effects, self.primary_param)
             self.set_exif_data(card.exif_data)
         else:
@@ -261,23 +239,33 @@ class MainWidget(MDWidget):
     def on_select_press(self):
         macos.FileChooser(title="Select Folder", mode="dir", filters=[("Jpeg Files", "*.jpg")], on_selection=self.handle_for_dir_selection).run()
 
+    def on_export_press(self):
+        if self.imgset is not None:
+            export.save_json(self.imgset.file_path, self.primary_param, self.ids['mask_editor2'])
+
+        cards = self.ids['viewer'].get_selected_cards()
+        for x in cards:
+            exfile = export.ExportFile(x.file_path, x.exif_data)
+            exfile.wirite_to_file(".jpg", 85)
+
     def delay_set_image(self, dt):
-        self.mask_editor2.set_orientation(self.primary_param.get('rotation', 0), self.primary_param.get('rotation2', 0), self.primary_param.get('flip_mode', 0))
-        self.mask_editor2.set_image(self.imgset.img, self.texture_width, self.texture_height, self.crop_info, -1)
-        
+        self.ids['mask_editor2'].set_orientation(self.primary_param.get('rotation', 0), self.primary_param.get('rotation2', 0), self.primary_param.get('flip_mode', 0))
+        self.ids['mask_editor2'].set_image(self.imgset.img, self.texture_width, self.texture_height, self.crop_info, -1)
+        self.ids['mask_editor2'].update()
+
     def on_mask2_press(self, value):
         if value == "down":
-            self.mask_editor2.disabled = False
-            self.ids['preview_widget'].add_widget(self.mask_editor2)
+            self.ids['mask_editor2'].opacity = 1
+            self.ids['mask_editor2'].disabled = False
             Clock.schedule_once(self.delay_set_image, -1)   # editor2のサイズが未決定なので遅らせる
         else:
-            self.mask_editor2.disabled = True
-            self.ids['preview_widget'].remove_widget(self.mask_editor2)
+            self.ids['mask_editor2'].opacity = 0
+            self.ids['mask_editor2'].disabled = True
             self.ids['mask_editor2'].set_active_mask(None)
 
     def handle_for_dir_selection(self, selection):
         if selection is not None:
-            self.ids['viewer'].set_path(selection[0].decode())
+            config.set_config('import_path', selection[0].decode())
 
     def on_lut_select_folder(self):
         macos.FileChooser(title="Select LUT Folder", mode="dir", filters=[("CUBE Files", "*.cube")], on_selection=self.handle_for_lut).run()
@@ -285,8 +273,11 @@ class MainWidget(MDWidget):
     def handle_for_lut(self, selection):
         if selection is not None:
             path = selection[0].decode()
-            self.set_lut_path(path)
-            self.set_config('lut_path', path)
+            config.set_config('lut_path', path)
+
+    def on_current_tab(self, current):
+        if self.imgset is not None:
+            self.apply_effects_lv(0, "crop")
 
     def set_lut_path(self, path):
         lut_values = ['None']
@@ -300,6 +291,22 @@ class MainWidget(MDWidget):
                 lut_values.append(file_name)
                 effects.LUTEffect.file_pathes[file_name] = file_path
         self.ids['lut_spinner'].values = lut_values
+
+    def set_film_presets(self):
+        presets = ['None']
+
+        for preset in film_simulation.FilmSimulation.FILM_PRESETS:
+            presets.append(preset)
+
+        self.ids['spinner_film_preset'].values = presets
+
+    def set_lens_presets(self):
+        presets = ['None']
+
+        for preset in lens_simulator.LensSimulator.LENS_PRESETS:
+            presets.append(preset)
+
+        self.ids['spinner_lens_preset'].values = presets
 
     def set_exif_data(self, exif_data):
         self.ids['exif_file_name'].value = exif_data.get("FileName", "-")
@@ -323,6 +330,18 @@ class MainWidget(MDWidget):
     def get_scale(self):
         return self.crop_info[4]
     
+    """
+    def _keyboard_closed(self):
+        self._keyboard.unbind(on_key_down=self._on_keyboard_down)
+        self._keyboard = None
+
+    def _on_keyboard_down(self, keyboard, keycode, text, modifiers):
+        if keycode[1] == 'a':
+            self._trigger_layout()
+
+        return True
+    """
+    
 class MainApp(MDApp):
     def __init__(self, **kwargs):
         super(MainApp, self).__init__(**kwargs)
@@ -343,6 +362,9 @@ class MainApp(MDApp):
         #widget.load_image("DSCF0090.raf")
         #widget.load_image(os.getcwd() + "/picture/DSCF0002-small.tif")
         widget.ids['viewer'].set_path(os.getcwd() + "/picture")
+
+        config.set_main_widget(widget)
+        config.load_config()
 
         return widget
 

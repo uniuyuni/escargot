@@ -15,9 +15,11 @@ from scipy.ndimage import gaussian_filter
 import logging
 import math
 
+import config
 import sigmoid
 import dng_sdk
-from scipyjax import interpolate
+import crop_editor
+#from scipyjax import interpolate
 
 jax.config.update("jax_platform_name", "METAL")
 
@@ -190,7 +192,7 @@ def rotation(img, angle, flip_mode=0):
     img_affine = cv2.warpAffine(img_affine, trans, (size, size), 
                                 flags=cv2.INTER_CUBIC, 
                                 borderMode=cv2.BORDER_CONSTANT, 
-                                borderValue=(-1, -1, -1))
+                                borderValue=(0, 0, 0))
 
     return img_affine
 
@@ -288,13 +290,11 @@ def lucy_richardson_gauss(srcf, iteration):
 
 def tone_mapping(x, exposure=1.0):
     # Reinhard トーンマッピング
-    return x / (x + 1.0)
+    return x / (x + exposure)
 
 def highlight_compress(image):
 
-    x = tone_mapping(image)
-
-    return x
+    return tone_mapping(image)
 
 def correct_overexposed_areas(image_rgb: np.ndarray,
                             threshold_low=0.94,
@@ -553,7 +553,7 @@ def calc_saturation(s, sat, vib):
 def calc_point_list_to_lut(point_list, max_value=1.0):
     """
     コントロールポイントからLUTを生成する関数（垂直な傾きに対応）
-    max_value: LUTが対応する最大値（デフォルト2.0）
+    max_value: LUTが対応する最大値
     """
     # ソートとリスト内包表記をtogetherly処理
     point_list = sorted((pl[0], pl[1]) for pl in point_list)
@@ -827,6 +827,108 @@ def apply_mask(img1, msk, img2):
     return np.array(array)
 
 
+def apply_vignette(image, intensity=0, radius_percent=100, crop_info=None, original_size=None):
+    """
+    float32形式の画像に周辺光量落ち効果を適用する関数（クロップと拡大に対応）
+    
+    Parameters:
+    image: numpy.ndarray - 入力画像（float32形式、値域は0-1）
+    intensity: int - 光量落ちの強度 (-100 から 100)
+        負の値: 周辺を暗くする
+        正の値: 周辺を明るくする
+    radius_percent: float - 効果の及ぶ半径（画像の対角線の長さに対する割合、1-100）
+    crop_info: list or None - クロップ情報 [x, y, w, h, scale]
+        x: 切り出し開始x座標（元画像での位置）
+        y: 切り出し開始y座標（元画像での位置）
+        w: 切り出し幅
+        h: 切り出し高さ
+        scale: 拡大率
+    original_size: tuple or None - 元画像のサイズ (width, height)
+        crop_infoが指定された場合は必須
+    
+    Returns:
+    numpy.ndarray - 効果を適用した画像（float32形式、値域は0-1）
+    """
+    
+    # 入力値の検証
+    if image.dtype != np.float32:
+        raise ValueError("入力画像はfloat32形式である必要があります")
+    
+    if crop_info is not None:
+        if len(crop_info) != 5:
+            raise ValueError("crop_infoは[x, y, w, h, scale]の形式である必要があります")
+        if original_size is None:
+            raise ValueError("crop_infoが指定された場合、original_sizeは必須です")
+    
+    intensity = np.clip(intensity, -100, 100)
+    radius_percent = np.clip(radius_percent, 1, 100)
+    
+    # 現在の画像サイズを取得
+    current_rows, current_cols = image.shape[:2]
+    
+    if crop_info is None:
+        # クロップ情報がない場合は現在の画像中心を使用
+        center_x = current_cols / 2
+        center_y = current_rows / 2
+        max_radius = np.sqrt(current_rows**2 + current_cols**2) / 2
+    else:
+        x, y, w, h, scale = crop_info
+        original_w, original_h = original_size
+        
+        # 元画像の中心座標
+        original_center_x = original_w / 2
+        original_center_y = original_h / 2
+        
+        # クロップ領域の中心座標（元画像での座標）
+        crop_center_x = x + w / 2
+        crop_center_y = y + h / 2
+        
+        # 中心からのオフセットを計算し、スケールを適用
+        offset_x = (original_center_x - crop_center_x) * scale
+        offset_y = (original_center_y - crop_center_y) * scale
+        
+        # 現在の画像での中心座標
+        center_x = current_cols / 2 + offset_x
+        center_y = current_rows / 2 + offset_y
+        
+        # 元画像の対角線長さから最大半径を計算し、スケールを適用
+        max_radius = np.sqrt(original_w**2 + original_h**2) / 2 * scale
+    
+    # 実際に使用する半径を計算
+    radius = max_radius * (radius_percent / 100)
+    
+    # マスクを作成
+    Y, X = np.ogrid[:current_rows, :current_cols]
+    dist_from_center = np.sqrt((X - center_x)**2 + (Y - center_y)**2)
+    
+    # 正規化された距離マップを作成（0-1の範囲）
+    mask = dist_from_center / radius
+    mask = np.clip(mask, 0, 1)
+    
+    # intensity値に基づいてマスクを調整
+    if intensity < 0:
+        # 周辺を暗くする
+        mask = mask * (-intensity / 100)
+        mask = 1 - mask
+    else:
+        # 周辺を明るくする
+        mask = mask * (intensity / 100)
+    
+    # 画像が3チャンネル（カラー）の場合は、マスクを3次元に拡張
+    if len(image.shape) == 3:
+        mask = np.dstack([mask] * 3)
+    
+    # float32形式を維持したまま効果を適用
+    if intensity < 0:
+        result = image * mask
+    else:
+        # 明るくする場合
+        bright_increase = (1 - image) * mask
+        result = image + bright_increase
+    
+    # float32形式を維持
+    return result.astype(np.float32)
+
 #@partial(jit, static_argnums=(1,2,3,4,5,6))
 def crop_image(image, texture_width, texture_height, click_x, click_y, offset, is_zoomed):
     # 画像のサイズを取得
@@ -862,7 +964,7 @@ def crop_image(image, texture_width, texture_height, click_x, click_y, offset, i
 
         # リサイズした画像を中央に配置
         #result[offset_y:offset_y+new_height, offset_x:offset_x+new_width] = resized_img
-        result = np.pad(resized_img, ((offset_y, texture_height-(offset_y+new_height)), (offset_x, texture_width-(offset_x+new_width)), (0, 0)), constant_values=-1)
+        result = np.pad(resized_img, ((offset_y, texture_height-(offset_y+new_height)), (offset_x, texture_width-(offset_x+new_width)), (0, 0)), constant_values=0)
 
         crop_info = (0, 0, image_width, image_height, scale)
 
@@ -962,3 +1064,98 @@ def get_multiple_mask_bbox(mask):
         bboxes.append((x_min, y_min, x_max-x_min, y_max-y_min))
     
     return bboxes
+
+def adjust_shape(img, param):
+    imax = max(img.shape[1], img.shape[0])
+
+    # イメージサイズをパラメータに入れる
+    param['original_img_size'] = (img.shape[1], img.shape[0])
+    param['img_size'] = (img.shape[1], img.shape[0])
+    param['crop_info'] = crop_editor.CropEditor.get_initial_crop_info(img.shape[1], img.shape[0], config.get_config('preview_size')/imax)
+    
+    # イメージを正方形にする
+    offset_y = (imax-img.shape[0])//2
+    offset_x = (imax-img.shape[1])//2
+    img = np.pad(img, ((offset_y, imax-(offset_y+img.shape[0])), (offset_x, imax-(offset_x+img.shape[1])), (0, 0)), constant_values=0)
+
+    return img
+
+def adjust_tone(img, highlights=0, shadows=0, midtone=0, white_level=0, black_level=0):
+    """
+    Lightroom風のシャドウ、ハイライト、白レベル、黒レベル調整を行う関数。
+    
+    Parameters:
+        img (np.ndarray): 入力画像 (float32, RGB)
+        shadows (float): シャドウの調整 (-100～100)
+        highlights (float): ハイライトの調整 (-100～100)
+        midtone (float): 中間調の調整 (-100～100)
+        white_level (float): 白レベルの調整 (-100～100)
+        black_level (float): 黒レベルの調整 (-100～100)
+    
+    Returns:
+        np.ndarray: 調整後の画像（クリッピングなし）
+    """
+
+    # 中間調の調整
+    if midtone > 0:
+        C = midtone / 100 * 4
+        img = np.log(1 + img * C) / math.log(1 + C)
+
+    elif midtone < 0:
+        C = -midtone / 100 * 4
+        img = (np.exp(img * math.log(1 + C)) - 1) / C
+
+    # シャドウ（暗部）の調整
+    if shadows > 0:
+        factor = shadows / 100
+        scale = 1.0
+        influence = np.exp(-5 * img)
+        img = img * (1 + factor * scale * influence)
+    
+    elif shadows < 0:
+        factor = shadows / 100
+        scale = 1.0
+        influence = np.exp(-5 * img)
+        min_val = img * 0.1;  # 最小でも元の値の10%は維持
+        raw_result = img * (1 + factor * scale * influence)
+        img = np.maximum(raw_result, min_val)
+    
+    # ハイライト（明部）の調整
+    if highlights > 0:
+        factor = highlights / 100 * 4
+        max_val = np.max(img)
+        base = img / max_val  # 0-1に正規化
+        expansion = 1 + factor * (np.log1p(np.log1p(base)) / math.log1p(math.log1p(max(max_val, 2))))
+        img = img * expansion
+
+    elif highlights < 0:
+        """
+        max_val = np.max(img)
+        n = np.round((np.log2(0.5 / max_val) + np.log2(1.0 / max_val)) / 2)
+        img = img * (2 ** n)
+        """
+        factor = -highlights / 100
+        max_val = np.max(img)
+        target = np.log1p(np.log1p(img)) / math.log1p(math.log1p(max(max_val, 2)))
+        img = img * (1-factor) + target * factor
+
+    # 白レベル（全体の明るい部分の引き上げ）
+    """
+    if white_level < 0:
+        factor = -white_level / 100 + 2
+        img = tone_mapping(img, factor)
+    elif white_level > 0:
+        factor = white_level / 100
+        weight = np.clip(img, 0, 1)  # 0.0で最大、1.0で0に
+        img += img * weight * factor    
+    """
+
+    # 黒レベル（全体の暗い部分の引き下げ）
+    """
+    if black_level != 0:
+        factor = black_level / 100
+        mask = img < 0.4
+        weight = 1 - np.clip(img, 0, 0.4) * 2.5  # 0.0で最大、0.4で0に
+        img[mask] += img[mask] * weight[mask] * factor
+    """
+    return img  # クリッピングなし
