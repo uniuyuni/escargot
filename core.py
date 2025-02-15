@@ -52,25 +52,6 @@ def calculate_correction_value(ev_histogram, ev_setting):
 
     return correction_value
 
-# 色飽和の復元
-def restore_saturated_colors(image):
-    # Detect saturated channels
-    threshold = 0.98  # threshold to detect saturation in 8-bit images
-    mask_r = (image[:, :, 2] >= threshold)
-    mask_g = (image[:, :, 1] >= threshold)
-    mask_b = (image[:, :, 0] >= threshold)
-    
-    # Create a combined mask for pixels with one or two channels saturated
-    saturation_mask = (mask_r + mask_g + mask_b) >= 1
-
-    # Restore values using neighboring pixel information
-    restored_image = image.copy()
-    for channel in range(3):
-        mask = (image[:, :, channel] >= threshold)
-        restored_image[:, :, channel][mask] = np.median(image[:, :, channel][~saturation_mask])
-    
-    return restored_image
-
 # RGBからグレイスケールへの変換
 @jit
 def __cvtToGrayColor(rgb):
@@ -241,11 +222,6 @@ def gaussian_blur(src, ksize=(3, 3), sigma=0.0):
 
     return np.array(array)
 
-def __lensblur_filter(image, radius):
-    result = lensblur_filter_jax(image, radius)
-    result.block_until_ready()
-
-    return np.array(result)
 
 def lensblur_filter(image, radius):
     # カーネルを生成
@@ -453,30 +429,6 @@ def apply_curve(image, control_points, control_values):
     #return np.array(corrected_image).astype(np.float32)
 
     return corrected_image.astype(np.float32)
-
-def adjust_shadow(img, black):
-    f = -black/100.0*5.0
-
-    if f == 0.0:
-        adjust_img = img.copy()
-    elif f > 0.0:
-        adjust_img = sigmoid.scaled_sigmoid(img, f, 0.80)
-    else:
-        adjust_img = sigmoid.scaled_inverse_sigmoid(img, f, 0.80)
-
-    return adjust_img
-
-def adjust_highlight(img, white):
-    f = white/100.0*5.0
-
-    if f == 0.0:
-        adjust_img = img.copy()
-    elif f > 0.0:
-        adjust_img = sigmoid.scaled_sigmoid(img, f, 0.2)
-    else:
-        adjust_img = sigmoid.scaled_inverse_sigmoid(img, f, 0.2)
-
-    return adjust_img
 
 # レベル補正
 def apply_level_adjustment(image, black_level, midtone_level, white_level):
@@ -781,34 +733,6 @@ def adjust_hls_magenta(hls_img, magenta_adjust):
     hls_img = __adjust_hls(hls_img, magenta_mask, magenta_adjust)
 
     return hls_img
-
-def adjust_shadow_highlight(image, highlight_adjustment=0, shadow_adjustment=0):
-    # 調整パラメータを [-1, 1] の範囲にスケーリング
-    highlight_adjustment = np.clip(highlight_adjustment / 300, -1, 1)
-    shadow_adjustment = np.clip(shadow_adjustment / 300, -1, 1)
-    
-    # ハイライト補正：山を押しつぶすようにトーンを変化
-    def highlight_function(x):
-        center, spread = 0.65, 0.22  # ハイライトの中心と広がり
-        compression_effect = 1 - highlight_adjustment * np.exp(-((x - center) / spread) ** 2)
-        adjusted_x = x * compression_effect + highlight_adjustment * np.exp(-((x - center) / (spread * 2)) ** 2)
-        return np.where((x >= 2.0) | (x <= 0.0), x, adjusted_x)  # 完全な黒と白には影響を与えない
-
-    # シャドウ補正：山を押しつぶすようにトーンを変化
-    def shadow_function(x):
-        center, spread = 0.35, 0.22  # シャドウの中心と広がり
-        compression_effect = 1 + shadow_adjustment * np.exp(-((x - center) / spread) ** 2)
-        adjusted_x = x * compression_effect + shadow_adjustment * np.exp(-((x - center) / (spread * 2)) ** 2)
-        return np.where((x >= 2.0) | (x <= 0.0), x, adjusted_x)  # 完全な黒と白には影響を与えない
-    
-    # ハイライトとシャドウの範囲ごとに補正を適用
-    highlights_adjusted = highlight_function(image)
-    shadows_adjusted = shadow_function(image)
-    
-    # 両方の補正を平均して自然なトーンに調整
-    adjusted_image = (highlights_adjusted + shadows_adjusted) / 2
-    
-    return adjusted_image
 
 
 # マスクイメージの適用

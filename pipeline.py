@@ -53,8 +53,8 @@ def export_pipeline(img, primary_effects, primary_param, mask_editor2):
 
     img2 = pipeline_last(img2, (0, 0, imgc.shape[1], imgc.shape[0]),  primary_effects, primary_param)
 
-    img = core.apply_gamma(img, 1.0/2.222)
-    img = np.clip(img, 0, 1)
+    img2 = core.apply_gamma(img2, 1.0/2.222)
+    img2 = np.clip(img2, 0, 1)
     
     return img2
 

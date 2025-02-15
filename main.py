@@ -8,6 +8,7 @@ from kivy.graphics.texture import Texture as KVTexture
 from kivy.clock import Clock, mainthread
 from kivy.metrics import Metrics, dp
 from functools import partial
+import re
 
 import core
 import imageset
@@ -26,38 +27,8 @@ import film_simulation
 import lens_simulator
 import config
 import export
+from export_dialog import ExportDialog, ExportConfirmDialog
 
-class RedrawableLayout(MDBoxLayout):
-    def force_full_redraw(self):
-       
-        # 方法3: 全ての子ウィジェットを再帰的に処理
-        self._redraw_children(self)
-        
-    
-    def _redraw_children(self, widget):
-        """再帰的に全ての子ウィジェットを処理"""
-        # ウィジェットの再描画をトリガー
-        if hasattr(widget, 'canvas'):
-            widget.canvas.ask_update()
-
-        if hasattr(widget, 'do_layout'):
-            widget.do_layout()
-        
-        # プロパティの更新を強制
-        widget.property('pos').dispatch(widget)
-        widget.property('size').dispatch(widget)
-        
-        # 子ウィジェットを再帰的に処理
-        for child in widget.children:
-            self._redraw_children(child)
-
-    """
-    def on_size(self, *args):
-        self.force_full_redraw()
-    
-    def on_pos(self, *args):
-        self.force_full_redraw()
-    """
 
 class MainWidget(MDBoxLayout):
 
@@ -243,10 +214,58 @@ class MainWidget(MDBoxLayout):
         if self.imgset is not None:
             export.save_json(self.imgset.file_path, self.primary_param, self.ids['mask_editor2'])
 
+        dialog = ExportDialog(callback=self.handle_export_dialog)
+        dialog.open()
+
+    def handle_export_dialog(self, preset):
+        # 保存先ファイルの存在チェック
         cards = self.ids['viewer'].get_selected_cards()
+        isfile = False
         for x in cards:
-            exfile = export.ExportFile(x.file_path, x.exif_data)
-            exfile.wirite_to_file(".jpg", 85)
+            ex_path = self._make_export_path(x.file_path, preset)
+            if os.path.isfile(ex_path):
+                isfile = True
+                break
+
+        if isfile == True:
+            dialog = ExportConfirmDialog(preset=preset, callback=self.handle_confirm_dialog)
+            dialog.open()
+
+        elif len(cards) > 0:
+            self.handle_confirm_dialog('Overwrite', preset)            
+
+    def handle_confirm_dialog(self, select, preset):
+        if select in ['Overwrite', 'Rename']:
+            cards = self.ids['viewer'].get_selected_cards()
+            for x in cards:
+                ex_path = self._make_export_path(x.file_path, preset)
+                if select == 'Rename':
+                    ex_path = self._find_not_duplicate_filename(ex_path)
+
+                exfile = export.ExportFile(x.file_path, x.exif_data)
+                exfile.write_to_file(ex_path, 85)
+
+    def _make_export_path(seslf, path, preset):
+        dirname, basename = os.path.split(path)
+        basename_with_out_ext, ext = os.path.splitext(basename)
+        if len(preset['output_path']) > 0:
+            if preset['output_path'] != '/':
+                ex_path = os.path.join(dirname, preset['output_path'], basename_with_out_ext) + preset['format']
+            else:
+                ex_path = os.path.join(preset['output_path'], basename_with_out_ext) + preset['format']
+        else:
+            ex_path = os.path.join(dirname, basename_with_out_ext) + preset['format']
+        return ex_path
+
+    def _find_not_duplicate_filename(self, path):
+        addnum = -1
+        while os.path.isfile(path) == True:
+            path_with_out_ext, ext = os.path.splitext(path)
+            path_with_out_ext = re.split('-[0-9]+$', path_with_out_ext)
+            path = path_with_out_ext[0] + str(addnum) + ext
+            addnum -= 1
+
+        return path
 
     def delay_set_image(self, dt):
         self.ids['mask_editor2'].set_orientation(self.primary_param.get('rotation', 0), self.primary_param.get('rotation2', 0), self.primary_param.get('flip_mode', 0))

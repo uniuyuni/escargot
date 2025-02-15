@@ -49,31 +49,44 @@ def load_json(file_path, param, mask_editor2):
             pass
 
 class ExportFile():
-    file_path = None
-    exif_data = None
-    target_ext = None
-    quality = 100
-    imgset = None
-    effects = effects.create_effects()
-    param = {}
-    mask_editor2 = mask_editor2.MaskEditor2()
+
+    FORMAT = {
+        '.JPG': 'JPEG',
+        '.TIFF': 'TIFF',
+        '.HEIC': 'HEIC',
+    }
 
     def __init__(self, file_path, exif_data):
         self.file_path = str(file_path)
         self.exif_data = exif_data.copy()
 
-    def wirite_to_file(self, target_ext, quality):
-        self.target_ext = target_ext
+        self.ex_path = None
+        self.quality = 100
+        self.imgset = None
+        self.effects = effects.create_effects()
+        self.param = {}
+        self.mask_editor2 = mask_editor2.MaskEditor2()
+
+    def write_to_file(self, ex_path, quality):
         self.quality = quality
+        self.ex_path = ex_path
         self.imgset = ImageSet()
         self.imgset.load(self.file_path, self.exif_data, self.param, self._start_pipeline)
 
     def _start_pipeline(self, imgset):
         load_json(self.file_path, self.param, self.mask_editor2)
-        img = pipeline.export_pipeline(self.imgset.img, self.effects, self.param, self.mask_editor2)
+        img = pipeline.export_pipeline(imgset.img, self.effects, self.param, self.mask_editor2)
+
+        ex_ext = os.path.splitext(self.ex_path)[1]
+        try:
+            format = ExportFile.FORMAT[ex_ext]
+        except KeyError:
+            return
         
-        save_path = os.path.splitext(self.file_path)[0] + self.target_ext
+        ex_dir = os.path.dirname(self.ex_path)
+        os.makedirs(ex_dir, exist_ok=True)
 
         with WandImage.from_array(img) as wi:
             wi.compression_quality = self.quality 
-            wi.save(filename=save_path)
+            wi.format = format
+            wi.save(filename=self.ex_path)
