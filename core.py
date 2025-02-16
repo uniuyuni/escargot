@@ -393,14 +393,13 @@ def calc_exposure(img, ev):
 
     return (2.0**ev)
 
-
 # コントラスト補正
 def adjust_contrast(img, cf, c):
     # img: 変換元画像
     # cf: コントラストファクター -100.0〜100.0
     # c: 中心値 0〜1.0
-
-    f = cf/100.0*10.0  #-10.0〜10.0に変換
+    """
+    f = cf / 100.0 * 10.0  #-10.0〜10.0に変換
 
     if f == 0.0:
         adjust_img = img.copy()
@@ -409,10 +408,13 @@ def adjust_contrast(img, cf, c):
         adjust_img = sigmoid.scaled_sigmoid(img/mm, f, c/mm)*mm
     else:
         mm = max(1.0, np.max(img))
-        adjust_img = sigmoid.scaled_inverse_sigmoid(img/mm, f, c/mm)*mm
-
+        adjust_img = sigmoid.scaled_inverse_sigmoid(img/mm, -f, c/mm)*mm
+        
     return adjust_img
+    """
+    adjust = adjust_tone(img, cf, -cf)
 
+    return adjust
 
 # 画像の明るさを制御点を元に補正する
 def apply_curve(image, control_points, control_values):    
@@ -1021,32 +1023,32 @@ def adjust_tone(img, highlights=0, shadows=0, midtone=0, white_level=0, black_le
     """
 
     # 中間調の調整
+    midtone_scale = 4
     if midtone > 0:
-        C = midtone / 100 * 4
+        C = midtone / 100 * midtone_scale
         img = np.log(1 + img * C) / math.log(1 + C)
 
     elif midtone < 0:
-        C = -midtone / 100 * 4
+        C = -midtone / 100 * midtone_scale
         img = (np.exp(img * math.log(1 + C)) - 1) / C
 
     # シャドウ（暗部）の調整
     if shadows > 0:
         factor = shadows / 100
-        scale = 1.0
         influence = np.exp(-5 * img)
-        img = img * (1 + factor * scale * influence)
+        img = img * (1 + factor * influence)
     
     elif shadows < 0:
         factor = shadows / 100
-        scale = 1.0
         influence = np.exp(-5 * img)
         min_val = img * 0.1;  # 最小でも元の値の10%は維持
-        raw_result = img * (1 + factor * scale * influence)
+        raw_result = img * (1 + factor * influence)
         img = np.maximum(raw_result, min_val)
     
     # ハイライト（明部）の調整
+    highlight_scale = 4
     if highlights > 0:
-        factor = highlights / 100 * 4
+        factor = highlights / 100 * highlight_scale
         max_val = np.max(img)
         base = img / max_val  # 0-1に正規化
         expansion = 1 + factor * (np.log1p(np.log1p(base)) / math.log1p(math.log1p(max(max_val, 2))))
@@ -1063,23 +1065,33 @@ def adjust_tone(img, highlights=0, shadows=0, midtone=0, white_level=0, black_le
         target = np.log1p(np.log1p(img)) / math.log1p(math.log1p(max(max_val, 2)))
         img = img * (1-factor) + target * factor
 
-    # 白レベル（全体の明るい部分の引き上げ）
-    """
-    if white_level < 0:
-        factor = -white_level / 100 + 2
-        img = tone_mapping(img, factor)
-    elif white_level > 0:
-        factor = white_level / 100
-        weight = np.clip(img, 0, 1)  # 0.0で最大、1.0で0に
-        img += img * weight * factor    
-    """
-
     # 黒レベル（全体の暗い部分の引き下げ）
-    """
-    if black_level != 0:
+    black_level_const = -1
+    if black_level > 0:
         factor = black_level / 100
-        mask = img < 0.4
-        weight = 1 - np.clip(img, 0, 0.4) * 2.5  # 0.0で最大、0.4で0に
-        img[mask] += img[mask] * weight[mask] * factor
-    """
+        influence = np.exp(black_level_const * img)
+        img = img * (1 + factor * influence)
+    
+    elif black_level < 0:
+        factor = black_level / 100
+        influence = np.exp(black_level_const * img)
+        min_val = img * 0.05;  # 最小でも元の値の5%は維持
+        raw_result = img * (1 + factor * influence)
+        img = np.maximum(raw_result, min_val)
+
+    # 白レベル（全体の明るい部分の引き上げ）
+    white_level_scale = 4
+    if white_level > 0:
+        factor = white_level / 100 * white_level_scale
+        max_val = np.max(img)
+        base = img / max_val  # 0-1に正規化
+        expansion = 1 + factor * (np.log1p(np.log1p(np.log1p(base))) / math.log1p(math.log1p(math.log1p(max(max_val, 2)))))
+        img = img * expansion
+
+    elif white_level < 0:
+        factor = -white_level / 100
+        max_val = np.max(img)
+        target = np.log1p(np.log1p(np.log1p(img))) / math.log1p(math.log1p(math.log1p(max(max_val, 2))))
+        img = img * (1-factor) + target * factor
+
     return img  # クリッピングなし

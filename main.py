@@ -72,8 +72,8 @@ class MainWidget(MDBoxLayout):
         self.click_y = 0
         self.is_zoomed = False
         self.crop_image = None
-        _, self.crop_info = core.crop_image(self.imgset.img, self.texture_width, self.texture_height, self.click_x, self.click_y, (0, 0), self.is_zoomed)
-        self.start_draw_image()
+        #_, self.crop_info = core.crop_image(self.imgset.img, self.texture_width, self.texture_height, self.click_x, self.click_y, (0, 0), self.is_zoomed)
+        #self.start_draw_image()
     
     def start_draw_image_and_crop(self, imgset, offset=(0, 0)):
         if self.is_draw_image == False:
@@ -98,7 +98,7 @@ class MainWidget(MDBoxLayout):
         self.ids["histogram"].draw_histogram(img)
 
     def draw_image(self, offset, dt):
-        if self.imgset is not None:
+        if (self.imgset is not None) and (self.imgset.img is not None):
             img, self.crop_image, self.crop_info = pipeline.process_pipeline(self.imgset.img, self.crop_info, offset, self.crop_image, self.is_zoomed, self.texture_width, self.texture_height, self.click_x, self.click_y, self.primary_effects, self.primary_param, self.ids['mask_editor2'])
             util.print_nan_inf(img)
             
@@ -314,8 +314,12 @@ class MainWidget(MDBoxLayout):
     def set_film_presets(self):
         presets = ['None']
 
-        for preset in film_simulation.FilmSimulation.FILM_PRESETS:
+        film_presets = film_simulation.simulator.get_presets()
+        for preset in film_presets:
             presets.append(preset)
+
+        #for preset in film_simulation.FilmSimulation.FILM_PRESETS:
+        #    presets.append(preset)
 
         self.ids['spinner_film_preset'].values = presets
 

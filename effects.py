@@ -492,7 +492,8 @@ class FilmSimulationEffect(Effect):
         return self.diff
     
     def apply_diff(self, rgb):
-        film = film_simulation.apply_film_simulation(rgb, self.diff[0])
+        #film = film_simulation.apply_film_simulation(rgb, self.diff[0])
+        film = film_simulation.simulator.apply_simulation(rgb, self.diff[0])
         per = self.diff[1] / 100.0
         return film * per + rgb * (1-per)
 

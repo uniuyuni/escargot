@@ -470,6 +470,7 @@ import json
 from scipy.ndimage import gaussian_filter
 
 class AdvancedFilmSimulation:
+
     def __init__(self, params_file=None):
         """
         パラメータファイルから設定を読み込むか、デフォルトパラメータを使用
@@ -491,6 +492,9 @@ class AdvancedFilmSimulation:
         with open(params_file, 'r') as f:
             loaded_params = json.load(f)
             self.params.update(loaded_params)
+
+    def get_presets(self):
+        return self.params
 
     def _create_tone_curve(self, points_x, points_y):
         """トーンカーブを生成"""
@@ -707,7 +711,7 @@ class AdvancedFilmSimulation:
                 params['grain']['size']
             )
         
-        return np.clip(result, 0, 1)
+        return result.astype(np.float32)
 
     def add_simulation(self, name, params):
         """新しいシミュレーションパラメータを追加"""
@@ -745,6 +749,8 @@ def process_raw_image(raw_image, simulation_name, params_file=None):
     """
     simulator = AdvancedFilmSimulation(params_file)
     return simulator.apply_simulation(raw_image, simulation_name)
+
+simulator = AdvancedFilmSimulation("film_presets.json")
 
 # 使用例
 if __name__ == "__main__":
