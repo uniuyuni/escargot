@@ -46,6 +46,9 @@ class Effect():
     def apply_diff(self, img):
         pass
 
+    def finalize(self, param, widget):
+        pass
+
 # 画像回転、反転
 class RotationEffect(Effect):
 
@@ -54,7 +57,7 @@ class RotationEffect(Effect):
 
     def set2param(self, param, widget):
         param['rotation'] = widget.ids["slider_rotation"].value
-
+        
     def set2param2(self, param, arg):
         if arg == 'hflip':
             param['flip_mode'] = param.get('flip_mode', 0) ^ 1
@@ -103,61 +106,72 @@ class CropEffect(Effect):
         self.crop_editor = None
 
     def set2widget(self, widget, param):
-        #widget.ids["switch_crop"].active = False if param.get('crop', 0) == 0 else True
         widget.ids["spinner_acpect_ratio"].text = param.get('aspect_ratio', "None")
 
     def set2param(self, param, widget):
-        #param['crop'] = 0 if widget.ids["switch_crop"].active == False else 1
-        param['crop'] = 0 if widget.ids["effects"].current_tab.text != "Geometry" else 1
+        param['crop_enable'] = False if widget.ids["effects"].current_tab.text != "Geometry" else True
         param['aspect_ratio'] = widget.ids["spinner_acpect_ratio"].text
-        param['crop_info'] = param.get('crop_info', (0, 0, 0, 0, 1))
 
-        if param['crop'] > 0:
-            if self.crop_editor is None:
-                input_width, input_height = param['original_img_size']
-                cx, cy, cw, ch, scale = param['crop_info']
-                self.crop_editor = crop_editor.CropEditor(input_width=input_width, input_height=input_height, scale=scale, crop_rect=[cx, cy, cx+cw, cy+ch])
-                widget.ids["preview_widget"].add_widget(self.crop_editor)
+        # crop_info がないのはマスク
+        if param.get('crop_rect', None) is not None:
 
-            if widget.ids["button_crop_reset"].state == "down":
-                self.crop_editor.set_crop_rect([0, 0, 0, 0])
-                self.crop_editor.update_crop_size()
-            
-        if param['crop'] <= 0:
+            # クロップエディタを開く
+            if param['crop_enable'] == True:
+                self._open_crop_editor(param, widget)
+
+            # クロップエディタを閉じる
+            elif param['crop_enable'] == False:
+                self._close_crop_editor(param, widget)
+
+            # クロップ範囲をリセット
             if self.crop_editor is not None:
-                param['crop_info'] = self.crop_editor.get_crop_info()
+                if widget.ids["button_crop_reset"].state == "down":
+                    self.crop_editor.set_to_local_crop_rect([0, 0, 0, 0])
+                    self.crop_editor.update_crop_size()
 
-                widget.ids["preview_widget"].remove_widget(self.crop_editor)
-                self.crop_editor = None
+                self.crop_editor.input_angle = param.get('rotation', 0) + param.get('rotation2', 0)
+
 
     def make_diff(self, img, param):
-        if self.crop_editor is not None:
-            ang = param.get('rotation', 0)
-            ang2 = param.get('rotation2', 0)
-            self.crop_editor.input_angle = ang + ang2
-            ar = param.get('aspect_ratio', "None")
-            self.crop_editor.aspect_ratio = 0 if ar == "None" else eval(ar)
-    
-        cr = param.get('crop', 0)
+        ce = param.get('crop_enable', False)
         crop_info = param.get('crop_info', (0, 0, 0, 0, 1))
-        if cr > 0 or crop_info == (0, 0, 0, 0, 1):
+        if ce == True or crop_info == (0, 0, 0, 0, 1):
             self.diff = None
             self.hash = None
+            param['img_size'] = (param['original_img_size'][0], param['original_img_size'][1])
         else:
-            param_hash = hash((cr))
+            param_hash = hash((ce))
             if self.hash != param_hash:
                 self.diff = crop_info
                 self.hash = param_hash
                 param['img_size'] = (crop_info[2], crop_info[3])
-
         return self.diff
     
     def apply_diff(self, img):
-        if self.diff is not None:
-            cx, cy, cw, ch, scale = self.diff
-            
-            return img[cy:cy+ch, cx:cx+cw]
         return img
+
+    def _open_crop_editor(self, param, widget):
+        if self.crop_editor is None:
+            input_width, input_height = param['original_img_size']
+            x1, y1, x2, y2 = param['crop_rect']
+            scale = config.get_config('preview_size')/max(input_width, input_height)
+            self.crop_editor = crop_editor.CropEditor(input_width=input_width, input_height=input_height, scale=scale, crop_rect=(x1, y1, x2, y2))
+            widget.ids["preview_widget"].add_widget(self.crop_editor)
+
+            # 編集中は一時的に変更
+            param['crop_info'] = crop_editor.CropEditor.get_initial_crop_info(input_width, input_height, scale)
+
+    def _close_crop_editor(self, param, widget):
+        if self.crop_editor is not None:
+            param['crop_rect'] = self.crop_editor.get_crop_rect()
+            param['crop_info'] = self.crop_editor.get_crop_info()
+
+            widget.ids["preview_widget"].remove_widget(self.crop_editor)
+            self.crop_editor = None
+
+    def finalize(self, param, widget):
+        self._close_crop_editor(param, widget)
+
 
 class LensModifierEffect(Effect):
 
@@ -322,19 +336,11 @@ class InpaintEffect(Effect):
                 self.mask_editor.zoom = widget.get_scale()
                 self.mask_editor.pos = [0, 0]
                 widget.ids["preview_widget"].add_widget(self.mask_editor)
-
-            if self.crop_editor is None:
-                self.crop_editor = crop_editor.CropEditor(input_width=param['img_size'][0], input_height=param['img_size'][1], scale=widget.get_scale())
-                widget.ids["preview_widget"].add_widget(self.crop_editor)
             
         if param['inpaint'] <= 0:
             if self.mask_editor is not None:
                 widget.ids["preview_widget"].remove_widget(self.mask_editor)
                 self.mask_editor = None
-
-            if self.crop_editor is not None:
-                widget.ids["preview_widget"].remove_widget(self.crop_editor)
-                self.crop_editor = None
 
     def make_diff(self, img, param):
         self.crop_info_list = param.get('inpaint_crop_info_list', [])
@@ -344,12 +350,10 @@ class InpaintEffect(Effect):
             if InpaintEffect.__iopaint is None:
                 InpaintEffect.__iopaint = importlib.import_module('iopaint.predict')
 
-            cx, cy, cw, ch, sc = self.crop_editor.get_crop_info()
-            mask = cv2.GaussianBlur(self.mask_editor.get_mask()[cy:cy+ch, cx:cx+cw], (63, 63), 0)
-            img = img[cy:cy+ch, cx:cx+cw] #* param.get('white_balance', [1, 1, 1])
+            mask = cv2.GaussianBlur(self.mask_editor.get_mask(), (63, 63), 0)
             img2 = InpaintEffect.__iopaint.predict(img, mask, model=config.get_config('iopaint_model'), resize_limit=config.get_config('iopaint_resize_limit'), use_realesrgan=config.get_config('iopaint_use_realesrgan'))
             img2 = img2 #/ param.get('white_balance', [1, 1, 1])
-            bboxes = core.get_multiple_mask_bbox(self.mask_editor.get_mask()[cy:cy+ch, cx:cx+cw])
+            bboxes = core.get_multiple_mask_bbox(self.mask_editor.get_mask())
             for bbox in bboxes:
                 self.crop_info_list.append(InpaintDiff(crop_info=bbox, image=img2[bbox[1]:bbox[1]+bbox[3], bbox[0]:bbox[0]+bbox[2]]))
             param['inpaint_crop_info_list'] = self.crop_info_list
@@ -492,7 +496,6 @@ class FilmSimulationEffect(Effect):
         return self.diff
     
     def apply_diff(self, rgb):
-        #film = film_simulation.apply_film_simulation(rgb, self.diff[0])
         film = film_simulation.simulator.apply_simulation(rgb, self.diff[0])
         per = self.diff[1] / 100.0
         return film * per + rgb * (1-per)
@@ -595,13 +598,18 @@ class ColorTemperatureEffect(Effect):
         param['color_tint'] = widget.ids["slider_color_tint"].value
 
     def make_diff(self, rgb, param):
-        temp = param.get('color_temperature', 5000)
-        tint = param.get('color_tint', 0)
+        sw = param.get('color_temperature_switch', True)
+        temp = param.get('color_temperature', param.get('color_temperature_reset', 5000))
+        tint = param.get('color_tint', param.get('color_tint_reset', 0))
         Y = param.get('color_Y', 1.0)
-        param_hash = hash((temp, tint))
-        if self.hash != param_hash:
-            self.diff = core.invert_TempTint2RGB(temp, tint, Y, 5000)
-            self.hash = param_hash
+        if sw == False:
+            self.diff = None
+            self.hash = None
+        else:
+            param_hash = hash((temp, tint))
+            if self.hash != param_hash:
+                self.diff = core.invert_TempTint2RGB(temp, tint, Y, 5000)
+                self.hash = param_hash
 
         return self.diff
     
@@ -867,7 +875,7 @@ class TonecurveRedEffect(Effect):
         else:
             param_hash = hash(np.sum(pl))
             if self.hash != param_hash:
-                self.diff = core.calc_point_list_to_lut(rgb_r, pl)
+                self.diff = core.calc_point_list_to_lut(pl)
                 self.hash = param_hash
 
         return self.diff
@@ -959,7 +967,7 @@ class GradingEffect(Effect):
                 if GradingEffect.__colorsys is None:
                     GradingEffect.__colorsys = importlib.import_module('colorsys')
 
-                blend = core.calc_point_list_to_lut(rgb, pl)
+                blend = core.calc_point_list_to_lut(pl)
                 rgbs = np.array(GradingEffect.__colorsys.hls_to_rgb(gh/360.0, gl/100.0, gs/100.0), dtype=np.float32)
                 self.diff = (blend, rgbs)
                 self.hash = param_hash
@@ -1637,7 +1645,19 @@ def create_effects():
 
     return effects
 
+def set2widget_all(widget, effects, param):
+    for dict in effects:
+        for l in dict.values():
+            l.set2widget(widget, param)
+            #l.set2param(param, self)
+            l.reeffect()
+
 def reeffect_all(effects):
     for dict in effects:
         for l in dict.values():
             l.reeffect()
+
+def finalize_all(effects, param, widget):
+    for dict in effects:
+        for l in dict.values():
+            l.finalize(param, widget)

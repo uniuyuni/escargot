@@ -3,21 +3,32 @@ import cv2
 import numpy as np
 
 import core
-from mask_editor2 import MaskEditor2
+import export
+import config
+import crop_editor
 
-def process_pipeline(img, crop_info, offset, crop_image, is_zoomed, texture_width, texture_height, click_x, click_y, primary_effects, primary_param, mask_editor2):
+def process_pipeline(img, offset, crop_image, is_zoomed, texture_width, texture_height, click_x, click_y, primary_effects, primary_param, mask_editor2):
 
+    # クロップ情報を得る、ない場合元のクロップ情報から展開
+    crop_info = primary_param.get('crop_info', None)
+    if crop_info is None:
+        crop_info = primary_param['crop_info'] = crop_editor.CropEditor.convert_rect_to_info(primary_param['crop_rect'], config.get_config('preview_size')/max(primary_param['original_img_size']))
+    
     # 背景レイヤー
     img0, reset = pipeline_lv0(img, primary_effects, primary_param)
     if crop_image is None or reset == True:
+        imgc, crop_info2 = core.crop_image(img0, crop_info, texture_width, texture_height, click_x, click_y, offset, is_zoomed)
+        """
         if is_zoomed:
             if crop_info is None:
                 _, crop_info = core.crop_image(img0, texture_width, texture_height, click_x, click_y, (0, 0), is_zoomed)
             imgc, crop_info2 = core.crop_image_info(img0, crop_info, offset)
         else:
             imgc, crop_info2 = core.crop_image(img0, texture_width, texture_height, click_x, click_y, offset, is_zoomed)
+        """
         mask_editor2.set_orientation(primary_param.get('rotation', 0), primary_param.get('rotation2', 0), primary_param.get('flip_mode', 0))
-        mask_editor2.set_image(img0, texture_width, texture_height, crop_info2, -1)
+        mask_editor2.set_image(primary_param['original_img_size'], texture_width, texture_height, crop_info2, -1)
+        primary_param['crop_info'] = crop_info2
     else:
         imgc = crop_image
         crop_info2 = crop_info
@@ -34,27 +45,27 @@ def process_pipeline(img, crop_info, offset, crop_image, is_zoomed, texture_widt
     #img2 = np.vstack(result_img)        
     img2 = pipeline2(imgc, 0, 1024, crop_info2, primary_effects, primary_param, mask_editor2)
 
-    img2 = pipeline_last(img2, crop_info,  primary_effects, primary_param)
+    img2 = pipeline_last(img2, crop_info2,  primary_effects, primary_param)
 
     #img2 = lens_simulator.process_image(img2, "helios_44_2")
 
-    return img2, imgc, crop_info2
+    return img2, imgc
 
 def export_pipeline(img, primary_effects, primary_param, mask_editor2):
- 
+    
     # 背景レイヤー
-    img0, _ = pipeline_lv0(img, primary_effects, primary_param)    
-    imgc = img0
-
+    img0, _ = pipeline_lv0(img, primary_effects, primary_param)
+    x1, y1, x2, y2 = primary_param.get('crop_rect')
+    imgc = img0[y1:y2, x1:x2] # ただのクロップ
+    #imgc, crop_info2 = core.crop_image(img0, crop_info, *primary_param['original_img_size'], 0, 0, (0, 0), False)
+    mask_editor2.set_orientation(primary_param.get('rotation', 0), primary_param.get('rotation2', 0), primary_param.get('flip_mode', 0))
+    mask_editor2.set_image(primary_param['original_img_size'], imgc.shape[1], imgc.shape[0], crop_editor.CropEditor.convert_rect_to_info(primary_param.get('crop_rect'), 1), -1)
     mask_editor2.set_crop_image(imgc)
     mask_editor2.update()
 
     img2 = pipeline2(imgc, 0, imgc.shape[0], None, primary_effects, primary_param, mask_editor2)
 
     img2 = pipeline_last(img2, (0, 0, imgc.shape[1], imgc.shape[0]),  primary_effects, primary_param)
-
-    img2 = core.apply_gamma(img2, 1.0/2.222)
-    img2 = np.clip(img2, 0, 1)
     
     return img2
 
@@ -64,15 +75,14 @@ def pipeline2(imgc, slice_y, slice_h, crop_info, primary_effects, primary_param,
     img3 = pipeline_lv3(img2, primary_effects, primary_param)
 
     # マスクレイヤー
-    img2 = img3
     mask_list = mask_editor2.get_layers_list()
     for mask in mask_list:
-        img1 = pipeline_lv1(img2, mask.effects, mask.effects_param)
-        img2 = pipeline_lv2(img1, mask.effects, mask.effects_param)
+        img2 = pipeline_lv1(img3, mask.effects, mask.effects_param)
+        img2 = pipeline_lv2(img2, mask.effects, mask.effects_param)
 
-        img2 = core.apply_mask(img2, mask.get_mask_image()[slice_y:slice_y+slice_h, :], img3)
+        img3 = core.apply_mask(img2, mask.get_mask_image()[slice_y:slice_y+slice_h, :], img3)
 
-    return img2
+    return img3
 
 def pipeline_lv0(img, effects, param):
     lv0 = effects[0]

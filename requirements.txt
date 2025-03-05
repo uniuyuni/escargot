@@ -12,6 +12,4 @@ setuptools
 wheel
 torch
 torchvision
-joblib
-colour-demosaicing
 wand

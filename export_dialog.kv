@@ -122,6 +122,24 @@
 
             VSpacer:
                 height: dp(5)
+
+            # プロファイル
+            BoxLayout:
+                orientation: 'horizontal'
+                size_hint_y: None
+                height: dp(20)
+                spacing: dp(5)
+
+                ParamLabel:
+                    text: 'Color Space'
+
+                Spinner:
+                    text: root.color_space
+                    values: ['sRGB', 'Adobe RGB', 'ProPhoto RGB', 'Wide Gamut RGB']
+                    on_text: root.color_space = self.text
+
+            VSpacer:
+                height: dp(5)
             HSeparator:
             VSpacer:
                 height: dp(5)

@@ -5,9 +5,7 @@
 #:include histogram_widget.kv
 #:include metainfo.kv
 #:include color_picker.kv
-#:include export_dialog.kv
-
-MainWidget:   
+#:include export_dialog.kv  
 
 <MainSpinnerOption@SpinnerOption>:
     height: dp(20)
@@ -1468,6 +1466,7 @@ MainWidget:
                                 max: 45.0
                                 value: 0
                                 step: 0.1
+                                on_slider: root.apply_effects_lv(0, 'crop')
                                 on_slider: root.apply_effects_lv(0, 'rotation')
 
                             HSpacer:
@@ -1484,24 +1483,28 @@ MainWidget:
                                     size: 0, dp(20)
                                     size_hint: 1, None
                                     text: "L"
+                                    on_press: root.apply_effects_lv(0, 'crop')
                                     on_press: root.set_effect_param(0, 'rotation', 90)
                                 Button:
                                     pos_hint: {'center_x': .5, 'center_y': .5}
                                     size: 0, dp(20)
                                     size_hint: 1, None
                                     text: "R"
+                                    on_press: root.apply_effects_lv(0, 'crop')
                                     on_press: root.set_effect_param(0, 'rotation', -90)
                                 Button:
                                     pos_hint: {'center_x': .5, 'center_y': .5}
                                     size: 0, dp(20)
                                     size_hint: 1, None
                                     text: "H"
+                                    on_press: root.apply_effects_lv(0, 'crop')
                                     on_press: root.set_effect_param(0, 'rotation', 'hflip')
                                 Button:
                                     pos_hint: {'center_x': .5, 'center_y': .5}
                                     size: 0, dp(20)
                                     size_hint: 1, None
                                     text: "V"
+                                    on_press: root.apply_effects_lv(0, 'crop')
                                     on_press: root.set_effect_param(0, 'rotation', 'vflip')
 
                             VSpacer:

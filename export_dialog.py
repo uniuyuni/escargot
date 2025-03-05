@@ -80,6 +80,9 @@ class ExportDialog(ModalView):
     # Output path
     output_path = StringProperty('')
 
+    # Color Space
+    color_space = StringProperty('sRGB')
+
     # Presets
     presets = DictProperty()
 
@@ -119,7 +122,8 @@ class ExportDialog(ModalView):
             'size_value': '',
             'sharpen': 50,
             'metadata': True,
-            'output_path': ''
+            'output_path': '',
+            'color_space': 'sRGB',
         }
         if self.presets.get('Default', None) is None:
             self.presets['Default'] = default_settings
@@ -146,6 +150,7 @@ class ExportDialog(ModalView):
         print(f"Sharpen: {self.sharpen_value}")
         print(f"Metadata: {self.include_metadata}")
         print(f"Output: {self.output_path}")
+        print(f"Color Space: {self.color_space}")
 
         self.dismiss()
         if self.callback is not None:
@@ -156,7 +161,8 @@ class ExportDialog(ModalView):
                 'size_value': self.size_value,
                 'sharpen': self.sharpen_value,
                 'metadata': self.include_metadata,
-                'output_path': self.output_path
+                'output_path': self.output_path,
+                'color_space': self.color_space,
             }            
             self.callback(preset)
 
@@ -179,7 +185,8 @@ class ExportDialog(ModalView):
                 'size_value': self.size_value,
                 'sharpen': self.sharpen_value,
                 'metadata': self.include_metadata,
-                'output_path': self.output_path
+                'output_path': self.output_path,
+                'color_space': self.color_space,
             }
             # Spinnerの値を更新
             preset_spinner = self.ids['preset_spinner']
@@ -206,6 +213,7 @@ class ExportDialog(ModalView):
             self.ids['slider_sharpen'].set_slider_value(self.sharpen_value)
             self.include_metadata = settings['metadata']
             self.output_path = settings['output_path']
+            self.color_space = settings['color_space']
             self.current_preset = preset_name
 
 

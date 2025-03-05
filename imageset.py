@@ -8,10 +8,14 @@ import base64
 import logging
 import os
 import threading
-from dcp_profile import DCPReader, DCPProcessor
+from wand.image import Image as WandImage
 
+#from dcp_profile import DCPReader, DCPProcessor
+import config
 import util
 import viewer_widget
+import color
+
 
 class ImageSet:
 
@@ -19,8 +23,9 @@ class ImageSet:
         super().__init__(**kwargs)
 
         self.file_path = None
-        self.src = None     # デモザイク後画像 uint16
         self.img = None     # 加工元画像 float32
+        self.param = None
+        self.loaded_json = None
 
     def _get_image_size(self, exif_data):
         top, left = exif_data.get("RawImageCropTopLeft", "0 0").split()
@@ -98,112 +103,166 @@ class ImageSet:
         return recovered
     
 
-    def _load_raw(self, file_path, exif_data, param, callback):
+    def _load_raw_preview(self, file_path, exif_data, param):
         try:
             # RAWで読み込んでみる
-            with rawpy.imread(file_path) as raw:
-                            
-                self.src = raw.postprocess( output_color=rawpy.ColorSpace.XYZ,
-                                            demosaic_algorithm=rawpy.DemosaicAlgorithm.LINEAR,
-                                            output_bps=16,
-                                            no_auto_scale=False,
-                                            use_camera_wb=True,
-                                            user_wb = [1.0, 1.0, 1.0, 0.0],
-                                            gamma=(1.0, 0.0),
-                                            four_color_rgb=True,
-                                            #user_black=0,
-                                            no_auto_bright=True,
-                                            highlight_mode=5,
-                                            auto_bright_thr=0.0005)
-                """
-                # ブラックレベル補正
-                raw_image = self.__black(raw.raw_image_visible, raw.black_level_per_channel[0])
+            raw = rawpy.imread(file_path)
 
-                # float32へ
-                raw_image = raw_image.astype(np.float32) / ((1<<exif_data.get('BitsPerSample', 14))-1)
-                """
-                self.img = self.src
-
-                # float32へ
-                self.img = self.img.astype(np.float32)/65535.0
+            # プレビューを読む
+            thumb = raw.extract_thumb()
+            if thumb.format == rawpy.ThumbFormat.JPEG:
+                # JPEGフォーマットの場合
+                # バイナリデータをNumPy配列に変換
+                img_array = np.frombuffer(thumb.data, dtype=np.uint8)
+                # OpenCVで画像としてデコード
+                img_array = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+                img_array= cv2.cvtColor(img_array, cv2.COLOR_BGR2RGB)
                 
-                # デモザイク直後表示
-                callback(self)
+            elif thumb.format == rawpy.ThumbFormat.BITMAP:
+                # BITMAPフォーマットの場合
+                img_array = thumb.data                    
+            else:
+                raise ValueError(f"Unsupported thumbnail format: {thumb.format}")
+            
+            # RGB画像初期設定
+            img_array = img_array.astype(np.float32)/255.0
+            img_array = color.rgb_to_xyz(img_array, "sRGB", True)
+            temp, tint, Y, = core.invert_RGB2TempTint((1.0, 1.0, 1.0), 5000.0)
+            self._set_temperature(param, temp, tint, Y)
 
-                # 飽和ピクセル復元
-                self.img = self._recover_saturated_colors(self.img)
+            # RAW画像のサイズに合わせてリサイズ
+            _, _, width, height = self._get_image_size(exif_data)
+            img_array = cv2.resize(img_array, (width, height))
 
-                # クロップとexifデータの回転
-                rad, flip = util.split_orientation(util.str_to_orientation(exif_data.get("Orientation", "")))
-                top, left, width, height = self._get_image_size(exif_data)
-                if rad < 0.0:
-                    top, left = left, top
-                    width, height = height, width
-                    self._set_image_size(exif_data, top, left, width, height)
-                self.img = self.img[top:top+height, left:left+width]
-                exif_data["Orientation"] = ""
+            # イメージサイズを設定し、正方形にする
+            img_array = core.adjust_shape(img_array, param)
 
-                # プロファイルを適用
-                #dcp_path = os.getcwd() + "/dcp/Fujifilm X-Pro3 Adobe Standard velvia.dcp"
-                #reader = DCPReader(dcp_path)
-                #profile = reader.read()
-                #processor = DCPProcessor(profile)
-                #self.img = processor.process(self.img, illuminant='1', use_look_table=True).astype(np.float32)
-                
-                # ホワイトバランス定義
-                wb = raw.camera_whitebalance
-                wb = np.array([wb[0], wb[1], wb[2]]).astype(np.float32)/1024.0
-                wb[1] = np.sqrt(wb[1])
-                self.img /= wb
-                temp, tint, Y, = core.invert_RGB2TempTint(wb, 5000.0)
-                self._set_temperature(param, temp, tint, Y)
+            self.img = img_array
 
-                # 明るさ補正
-                source_ev, _ = core.calculate_ev_from_image(core.normalize_image(self.img))
-                Av = exif_data.get('ApertureValue', 1.0)
-                _, Tv = exif_data.get('ShutterSpeedValue', "1/100").split('/')
-                Tv = float(_) / float(Tv)
-                Ev = math.log2((Av**2)/Tv)
-                Sv = math.log2(exif_data.get('ISO', 100)/100.0)
-                Ev = Ev + Sv
-                self.img = self.img * core.calc_exposure(self.img, core.calculate_correction_value(source_ev, Ev))
-
-                # イメージサイズを設定し、正方形にする
-                self.img = core.adjust_shape(self.img, param)
-                if self.img.shape[1] != width or self.img.shape[0] != height:
-                    logging.error("ImageSize is not ndarray.shape")
-                
         except (rawpy.LibRawFileUnsupportedError, rawpy.LibRawIOError):
             logging.warning("file is not supported " + file_path)
             return False
         
-        callback(self)
+        return raw
+                             
+    def _load_raw(self, raw, file_path, exif_data, param):
+        try:
+            img_array = raw.postprocess(output_color=rawpy.ColorSpace.Adobe,
+                                        demosaic_algorithm=rawpy.DemosaicAlgorithm.LINEAR,
+                                        output_bps=16,
+                                        no_auto_scale=False,
+                                        use_camera_wb=True,
+                                        user_wb = [1.0, 1.0, 1.0, 0.0],
+                                        gamma=(1.0, 1.0),
+                                        four_color_rgb=True,
+                                        #user_black=0,
+                                        no_auto_bright=True,
+                                        highlight_mode=5,
+                                        auto_bright_thr=0.0005)
+            """
+            # ブラックレベル補正
+            raw_image = self.__black(raw.raw_image_visible, raw.black_level_per_channel[0])
+
+            # float32へ
+            raw_image = raw_image.astype(np.float32) / ((1<<exif_data.get('BitsPerSample', 14))-1)
+            """
+
+            # float32へ
+            img_array = img_array.astype(np.float32)/65535.0
+            
+            # 色空間変換
+            img_array= color.rgb_to_xyz(img_array, "Adobe RGB")
+            #img_array = color.d50_to_d65(img_array)
+
+            # 飽和ピクセル復元
+            wb = raw.camera_whitebalance
+            wb = np.array([wb[0], wb[1], wb[2]]).astype(np.float32)/1024.0
+            _, Tv = exif_data.get('ShutterSpeedValue', "1/100").split('/')
+            Tv = float(_) / float(Tv)
+            ISO = exif_data.get('ISO', 100)                
+            #img_array = self._recover_saturated_colors(img_array)
+            #img_array = core.recover_saturated_pixels(img_array, Tv, ISO, wb)
+            
+            # クロップとexifデータの回転
+            rad, flip = util.split_orientation(util.str_to_orientation(exif_data.get("Orientation", "")))
+            top, left, width, height = self._get_image_size(exif_data)
+            if rad < 0.0:
+                top, left = left, top
+                width, height = height, width
+                self._set_image_size(exif_data, top, left, width, height)
+            img_array = img_array[top:top+height, left:left+width]
+            if "Orientation" in exif_data:
+                del exif_data["Orientation"]
+
+            # プロファイルを適用
+            #dcp_path = os.getcwd() + "/dcp/Fujifilm X-Pro3 Adobe Standard velvia.dcp"
+            #reader = DCPReader(dcp_path)
+            #profile = reader.read()
+            #processor = DCPProcessor(profile)
+            #img_array = processor.process(img_array, illuminant='1', use_look_table=True).astype(np.float32)
+            
+            # ホワイトバランス定義
+            #wb = raw.camera_whitebalance
+            #wb = np.array([wb[0], wb[1], wb[2]]).astype(np.float32)/1024.0
+            wb[1] = np.sqrt(wb[1])
+            img_array /= wb
+            temp, tint, Y, = core.invert_RGB2TempTint(wb, 5000.0)
+            self._set_temperature(param, temp, tint, Y)
+
+            # 明るさ補正
+            if config.get_config('raw_auto_exposure') == True:
+                source_ev, _ = core.calculate_ev_from_image(core.normalize_image(img_array))
+                Av = exif_data.get('ApertureValue', 1.0)
+                #_, Tv = exif_data.get('ShutterSpeedValue', "1/100").split('/')
+                #Tv = float(_) / float(Tv)
+                Ev = math.log2((Av**2)/Tv)
+                #Sv = math.log2(exif_data.get('ISO', 100)/100.0)
+                Sv = math.log2(ISO/100.0)
+                Ev = Ev + Sv
+                img_array = img_array * core.calc_exposure(img_array, core.calculate_correction_value(source_ev, Ev))
+
+            # イメージサイズを設定し、正方形にする
+            img_array = core.adjust_shape(img_array, param)
+            if img_array.shape[1] != width or img_array.shape[0] != height:
+                logging.error("ImageSize is not ndarray.shape")
+                
+            self.img = img_array
+
+        except (rawpy.LibRawFileUnsupportedError, rawpy.LibRawIOError):
+            logging.warning("file is not supported " + file_path)
+            return False
+        
+        finally:
+            raw.close()
+
+        
         return True
 
-    def _load_rgb(self, file_path, exif_data, param, callback):
+    def _load_rgb(self, file_path, exif_data, param):
         # RGB画像で読み込んでみる
-        self.src = cv2.imread(file_path, cv2.IMREAD_UNCHANGED)
-        if self.src is not None:
-            if self.src.dtype == np.uint8:
-                self.src = self.src.astype(np.uint16)
-                self.src = self.src*256
-            self.img = cv2.cvtColor(self.src, cv2.COLOR_BGR2RGB).astype(np.float32)/65535.0
-            self.img = core.apply_gamma(self.img, 2.222)
+        with WandImage(filename=file_path) as img:
+            img_array = np.array(img)
+            if img_array.dtype == np.uint8:
+                img_array = img_array.astype(np.uint16)
+                img_array = img_array*256
+            img_array = img_array.astype(np.float32)/65535.0
+            img_array = color.rgb_to_xyz(img_array, "sRGB", True)
 
             # 画像からホワイトバランスパラメータ取得
             temp, tint, Y, = core.invert_RGB2TempTint((1.0, 1.0, 1.0), 5000.0)
             self._set_temperature(param, temp, tint, Y)
             
             top, left, width, height = self._get_image_size(exif_data)
-            if self.img.shape[1] != width or self.img.shape[0] != height:
+            if img_array.shape[1] != width or img_array.shape[0] != height:
                 logging.error("ImageSize is not ndarray.shape")
-            self.img = core.adjust_shape(self.img, param)
+            img_array = core.adjust_shape(img_array, param)
             
-        else:
-            logging.warning("file is not supported " + file_path)
-            return False
+        #else:
+        #    logging.warning("file is not supported " + file_path)
+        #    return False
         
-        callback(self)
+        self.img = img_array
+        
         return True
     
     def _load_thumb(self, exif_data, param):
@@ -213,32 +272,36 @@ class ImageSet:
             thumb = cv2.imdecode(thumb, 1)
             thumb = cv2.cvtColor(thumb, cv2.COLOR_BGR2RGB)
             thumb = thumb.astype(np.float32)/255
-            thumb = core.apply_gamma(thumb, 2.222)
+            thumb = color.rgb_to_xyz(thumb, "sRGB", True)
             temp, tint, Y, = core.invert_RGB2TempTint((1.0, 1.0, 1.0), 5000.0)
             self._set_temperature(param, temp, tint, Y)
-            self.img = thumb
 
             top, left, width, height = self._get_image_size(exif_data)
-            self.img = cv2.resize(self.img, dsize=(width, height))
+            img_array = cv2.resize(img_array, dsize=(width, height))
             param['img_size'] = [width, height]
             param['original_img_size'] = [width, height]
-    
-    def load(self, file_path, exif_data, param, callback):
+
+            self.img = thumb
+
+    def load(self, file_path, exif_data, param, raw=None):
+        self.file_path = file_path
+        self.param = param
+
         if file_path.lower().endswith(viewer_widget.supported_formats_raw):
             #self._load_thumb(exif_data, param)
-            thread = threading.Thread(target=self._load_raw, args=[file_path, exif_data, param, callback], daemon=True)
-            thread.start()
+            if raw is None:
+                return self._load_raw_preview(file_path, exif_data, param)            
+            else:
+                return self._load_raw(raw, file_path, exif_data, param)
+
+            #thread = threading.Thread(target=self._load_raw, args=[file_path, exif_data, param], daemon=True)
+            #thread.start()
 
         elif file_path.lower().endswith(viewer_widget.supported_formats_rgb):
             #self._load_thumb(exif_data, param)
-            thread = threading.Thread(target=self._load_rgb, args=[file_path, exif_data, param, callback], daemon=True)
-            thread.start()
+            return self._load_rgb(file_path, exif_data, param)
+            #thread = threading.Thread(target=self._load_rgb, args=[file_path, exif_data, param], daemon=True)
+            #thread.start()
             
-        else:
-            logging.warning("file is not supported " + file_path)
-            return False
-            
-        self.file_path = file_path
-        logging.info("loading file " + file_path)
-
-        return True
+        logging.warning("file is not supported " + file_path)
+        return False

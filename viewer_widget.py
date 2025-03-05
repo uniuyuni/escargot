@@ -152,6 +152,8 @@ class ViewerWidget(MDBoxLayout):
                 thumb = thumb_data_list[i]
                 file_path_dict[file_path].set_image(exif_data_list[i], thumb)
 
+            #self._request_current_view_cards(None, None)
+
             """
             if len(self.selected_cards) == 0 and len(file_path_dict) > 0:
                 card = list(file_path_dict.values())[0]
@@ -282,6 +284,18 @@ class ViewerWidget(MDBoxLayout):
     def get_selected_cards(self):
         return self.selected_cards
     
+    def set_cache_system(self, cache_system):
+        self.cache_system = cache_system
+        #self.ids['scroll'].bind(scroll_x=self._request_current_view_cards)
+    
+    @mainthread
+    def _request_current_view_cards(self, instance, value):
+        for card in self.cards:
+            x, y = card.to_window(*card.pos)
+            x, y = x + card.width/2, y + card.height/2
+            ok = self.collide_point(x, y)
+            if ok == True and card.exif_data is not None:
+                self.cache_system.register_for_preload(card.file_path, card.exif_data)
 
 # テストアプリケーション
 class Viewer_WidgetApp(MDApp):

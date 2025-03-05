@@ -67,11 +67,6 @@ def cvtToGrayColor(rgb):
 
     return np.array(array)
 
-# ガンマ補正
-def apply_gamma(img, gamma):
-
-    return img**gamma
-
 def convert_RGB2TempTint(rgb):
 
     xyz = colour.RGB_to_XYZ(rgb, 'sRGB')
@@ -742,7 +737,8 @@ def adjust_hls_magenta(hls_img, magenta_adjust):
 def __apply_mask(img1, msk, img2):
 
     if msk is not None:
-        img = msk[:, :, jnp.newaxis] * img1 + (1.0 - msk[:, :, jnp.newaxis]) * img2
+        _msk = msk[:, :, jnp.newaxis]
+        img = img1 * _msk + img2 * (1.0 - _msk)
 
     return img
 
@@ -751,7 +747,6 @@ def apply_mask(img1, msk, img2):
     array.block_until_ready()
 
     return np.array(array)
-
 
 def apply_vignette(image, intensity=0, radius_percent=100, crop_info=None, original_size=None):
     """
@@ -855,44 +850,51 @@ def apply_vignette(image, intensity=0, radius_percent=100, crop_info=None, origi
     # float32形式を維持
     return result.astype(np.float32)
 
-#@partial(jit, static_argnums=(1,2,3,4,5,6))
-def crop_image(image, texture_width, texture_height, click_x, click_y, offset, is_zoomed):
-    # 画像のサイズを取得
-    image_height, image_width = image.shape[:2]
+# テクスチャサイズとクロップ情報から、新しい描画サイズと余白の大きさを得る
+def crop_size_and_offset_from_texture(texture_width, texture_height, crop_info):
 
     # アスペクト比を計算
-    image_aspect = image_width / image_height
+    crop_aspect = crop_info[2] / crop_info[3]
     texture_aspect = texture_width / texture_height
 
-    if image_aspect > texture_aspect:
+    if crop_aspect > texture_aspect:
         # 画像が横長の場合
         new_width = texture_width
-        new_height = int(texture_width / image_aspect)
+        new_height = int(texture_width / crop_aspect)
     else:
         # 画像が縦長の場合
-        new_width = int(texture_height * image_aspect)
+        new_width = int(texture_height * crop_aspect)
         new_height = texture_height
 
     # 中央に配置するためのオフセットを計算
     offset_x = (texture_width - new_width) // 2
     offset_y = (texture_height - new_height) // 2
 
+    return (new_width, new_height, offset_x, offset_y)
+
+def crop_image(image, crop_info, texture_width, texture_height, click_x, click_y, offset, is_zoomed):
+
+    # 画像のサイズを取得
+    image_height, image_width = image.shape[:2]
+
+    new_width, new_height, offset_x, offset_y = crop_size_and_offset_from_texture(texture_width, texture_height, crop_info)
+
     # スケールを求める
-    if image_width >= image_height:
-        scale = texture_width/image_width
+    if crop_info[2] >= crop_info[3]:
+        scale = texture_width/crop_info[2]
     else:
-        scale = texture_height/image_height
+        scale = texture_height/crop_info[3]
 
     if not is_zoomed:
         # リサイズ
-        resized_img = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
-        #resized_img = jax.image.resize(image, (new_height, new_width, 3), method="linear")
+        cx, cy, cw, ch, _ = crop_info
+        resized_img = cv2.resize(image[cy:cy+ch, cx:cx+cw], (new_width, new_height), interpolation=cv2.INTER_LINEAR)
 
         # リサイズした画像を中央に配置
-        #result[offset_y:offset_y+new_height, offset_x:offset_x+new_width] = resized_img
         result = np.pad(resized_img, ((offset_y, texture_height-(offset_y+new_height)), (offset_x, texture_width-(offset_x+new_width)), (0, 0)), constant_values=0)
 
-        crop_info = (0, 0, image_width, image_height, scale)
+        # 再設定
+        crop_info = (cx, cy, cw, ch, scale)
 
     else:
         # クリック位置を元の画像の座標系に変換
@@ -906,22 +908,14 @@ def crop_image(image, texture_width, texture_height, click_x, click_y, offset, i
         crop_height = int(texture_height)
 
         # クリック位置を中心にする
-        crop_x = click_image_x - crop_width // 2
-        crop_y = click_image_y - crop_height // 2
+        crop_x = crop_info[0] + click_image_x - crop_width // 2
+        crop_y = crop_info[1] + click_image_y - crop_height // 2
 
         # クロップ
         result, crop_info = crop_image_info(image, (crop_x, crop_y, crop_width, crop_height, 1.0), offset)
     
     return result, crop_info
 
-"""
-def crop_image(image, texture_width, texture_height, click_x, click_y, offset, is_zoomed):
-    result, crop_info = __crop_image(image, texture_width, texture_height, click_x, click_y, offset, is_zoomed)
-    result.block_until_ready()
-
-    return np.array(result), (int(crop_info[0]), int(crop_info[1]), int(crop_info[2]), int(crop_info[3]), float(crop_info[4]))
-"""
-#@partial(jit, static_argnums=(1, 2))
 def crop_image_info(image, crop_info, offset=(0, 0)):
     
     # 情報取得
@@ -942,18 +936,6 @@ def crop_image_info(image, crop_info, offset=(0, 0)):
 
     return cropped_img, (crop_x, crop_y, crop_width, crop_height, scale)
 
-def crop_image_info2(image, crop_info, offset=(0,0)):
-    crop_image, _ = crop_image_info(image, crop_info, offset)
-
-    return cv2.resize(crop_image, (int(crop_image.shape[1] * crop_info[4]), int(crop_image.shape[0] * crop_info[4])))
-
-"""
-def crop_image_info(image, crop_info, offset=(0, 0)):
-    result, crop_info = __crop_image_info(image, crop_info, offset)
-    result.block_until_ready()
-
-    return np.array(result), (int(crop_info[0]), int(crop_info[1]), int(crop_info[2]), int(crop_info[3]), float(crop_info[4]))
-"""
 
 def get_multiple_mask_bbox(mask):
     """
@@ -997,8 +979,9 @@ def adjust_shape(img, param):
     # イメージサイズをパラメータに入れる
     param['original_img_size'] = (img.shape[1], img.shape[0])
     param['img_size'] = (img.shape[1], img.shape[0])
-    param['crop_info'] = crop_editor.CropEditor.get_initial_crop_info(img.shape[1], img.shape[0], config.get_config('preview_size')/imax)
-    
+    param['crop_rect'] = param.get('crop_rect', crop_editor.CropEditor.get_initial_crop_rect(img.shape[1], img.shape[0]))
+    param['crop_info'] = crop_editor.CropEditor.convert_rect_to_info(param['crop_rect'], config.get_config('preview_size')/max(param['original_img_size']))
+
     # イメージを正方形にする
     offset_y = (imax-img.shape[0])//2
     offset_x = (imax-img.shape[1])//2
@@ -1095,3 +1078,83 @@ def adjust_tone(img, highlights=0, shadows=0, midtone=0, white_level=0, black_le
         img = img * (1-factor) + target * factor
 
     return img  # クリッピングなし
+
+def recover_saturated_pixels(rgb_data: np.ndarray, 
+                           exposure_time: float,
+                           iso: float,
+                           wb_gains: list) -> np.ndarray:
+    """
+    飽和画素を修復する関数
+    
+    Parameters:
+    -----------
+    rgb_data : np.ndarray
+        Shape (H, W, 3) のRGB画像データ (float32)
+    exposure_time : float
+        露出時間（秒）
+    iso : float
+        ISO感度
+    wb_gains : list
+    
+    Returns:
+    --------
+    np.ndarray
+        修復されたRGB画像データ
+    """
+    # 入力チェック
+    assert rgb_data.dtype == np.float32
+    assert rgb_data.ndim == 3 and rgb_data.shape[2] == 3
+    
+    # 定数
+    SATURATION_THRESHOLD = 1.0
+    MAX_SCALING = 1.5  # 最大スケーリング係数
+    
+    # 出力用配列の準備
+    recovered = rgb_data.copy()
+    
+    # 飽和マスクの作成（チャンネルごと）
+    saturated_mask = rgb_data >= SATURATION_THRESHOLD
+    
+    # 各チャンネルのゲインを配列化
+    gains = np.array([wb_gains[0], wb_gains[1], wb_gains[2]])
+    
+    # チャンネルごとの最大理論値を計算
+    theoretical_max = exposure_time * iso * gains
+    theoretical_max = theoretical_max / np.max(theoretical_max)  # 正規化
+    
+    # 飽和ピクセルの位置を特定
+    saturated_pixels = np.any(saturated_mask, axis=2)
+    y_sat, x_sat = np.where(saturated_pixels)
+    
+    for y, x in zip(y_sat, x_sat):
+        pixel_values = rgb_data[y, x]
+        is_saturated = saturated_mask[y, x]
+        
+        # 飽和していないチャンネルの最大値を基準に補正
+        unsaturated_channels = ~is_saturated
+        if np.any(unsaturated_channels):
+            # 飽和していないチャンネルの最大値を見つける
+            max_unsaturated = np.max(pixel_values[unsaturated_channels] / 
+                                   gains[unsaturated_channels])
+            
+            # 飽和したチャンネルの補正
+            for ch in range(3):
+                if is_saturated[ch]:
+                    # 理論値に基づいて補正（必ず元の値より大きくなる）
+                    scale = theoretical_max[ch] / theoretical_max[np.argmax(pixel_values[unsaturated_channels])]
+                    corrected_value = max_unsaturated * gains[ch] * scale
+                    
+                    # 元の値より小さくならないように補正
+                    recovered[y, x, ch] = max(
+                        pixel_values[ch],
+                        min(corrected_value * MAX_SCALING, MAX_SCALING)  # 上限を設定
+                    )
+        else:
+            # すべてのチャンネルが飽和している場合
+            # 理論値の比率で補正（最大値で正規化）
+            max_value = np.max(pixel_values)
+            for ch in range(3):
+                scale = theoretical_max[ch] / np.max(theoretical_max)
+                recovered[y, x, ch] = max(pixel_values[ch], max_value * scale)
+    
+    return recovered

@@ -2,7 +2,6 @@
 import numpy as np
 import jax.numpy as jnp
 from jax import jit
-import matplotlib.pyplot as plt
 
 @jit
 def __naive_sigmoid(x, gain, mid):    
@@ -81,35 +80,3 @@ def sigmoid(x, center):
     result = (s - 1 / (1 + np.exp(k))) / (1 / (1 + np.exp(-k)) - 1 / (1 + np.exp(k)))
     
     return result
-
-def plot_sigmoid(center):
-    """シグモイド関数のプロット"""
-    x = np.linspace(0, 1, 1000)
-    y = [sigmoid(xi, center) for xi in x]
-    
-    plt.figure(figsize=(10, 6))
-    plt.plot(x, y, 'b-', label='Sigmoid curve')
-    plt.plot(center, sigmoid(center, center), 'ro', label='Center point')
-    plt.axvline(x=center, color='gray', linestyle='--', alpha=0.5)
-    
-    plt.grid(True)
-    plt.xlabel('x')
-    plt.ylabel('y')
-    plt.title(f'Sigmoid function (center = {center:.2f})')
-    plt.legend()
-    plt.axis([0, 1, 0, 1])
-    
-    # 勾配係数などの情報を表示
-    k = calculate_steepness(center)
-    center_y = sigmoid(center, center)
-    info = f'Center: ({center:.3f}, {center_y:.3f})\nSteepness: {k:.3f}'
-    plt.text(0.02, 0.98, info, transform=plt.gca().transAxes, 
-            verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-    
-    plt.show()
-
-if __name__ == '__main__':
-    # 使用例
-    centers = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
-    for center in centers:
-        plot_sigmoid(center)
