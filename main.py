@@ -1,5 +1,11 @@
-import os
+
+import cv2
 import numpy as np
+
+#img = cv2.imread('escargot.jpg')
+#cv2.imshow("escargot", img)
+
+import os
 import pyautogui as pag
 from kivymd.app import MDApp
 from kivymd.uix.boxlayout import MDBoxLayout
@@ -169,7 +175,7 @@ class MainWidget(MDBoxLayout):
         self.imgset = imgset
         self.primary_param = imgset.param
         self.reset_image()
-        self._delay_set_image(-1)
+        self._set_image_for_mask2()
         export.load_json(imgset.file_path, imgset.param, self.ids['mask_editor2'])
         self.set2widget_all(self.primary_effects, self.primary_param)
         self.apply_effects_lv(0, 'crop') # 特別あつかい
@@ -248,8 +254,18 @@ class MainWidget(MDBoxLayout):
                 if select == 'Rename':
                     ex_path = self._find_not_duplicate_filename(ex_path)
 
+                resize_str = ""
+                if preset['size_mode'] == "Long Edge":
+                    _, _, width, height = core.get_exif_image_size(x.exif_data)
+                    if width >= height:
+                        resize_str = preset['size_value'] + "x"
+                    else:
+                        resize_str = "x" + preset['size_value']
+                if preset['size_mode'] == "Pixels": resize_str = preset['size_value']
+                if preset['size_mode'] == "Percentage": resize_str = preset['size_value'] + "%"
+
                 exfile = export.ExportFile(x.file_path, x.exif_data)
-                exfile.write_to_file(ex_path, preset['quality'], preset['color_space'])
+                exfile.write_to_file(ex_path, preset['quality'], resize_str, preset['sharpen']/100, preset['color_space'], preset['metadata'])
 
     def _make_export_path(seslf, path, preset):
         dirname, basename = os.path.split(path)
@@ -273,20 +289,28 @@ class MainWidget(MDBoxLayout):
 
         return path
 
-    def _delay_set_image(self, dt):
+    def _set_image_for_mask2(self):
         self.ids['mask_editor2'].set_orientation(self.primary_param.get('rotation', 0), self.primary_param.get('rotation2', 0), self.primary_param.get('flip_mode', 0))
-        self.ids['mask_editor2'].set_image(self.primary_param['original_img_size'], self.texture_width, self.texture_height, self.primary_param.get('crop_info', None), -1)
+        self.ids['mask_editor2'].set_texture_size(self.texture_width, self.texture_height)
+        self.ids['mask_editor2'].set_image(self.primary_param['original_img_size'], self.primary_param.get('crop_info', None))
         self.ids['mask_editor2'].update()
+
+    def _enable_mask2(self):
+        self.ids['mask_editor2'].opacity = 1
+        self.ids['mask_editor2'].disabled = False
+        self._set_image_for_mask2()
+        #Clock.schedule_once(self._delay_set_image, -1)   # editor2のサイズが未決定なので遅らせる
+
+    def _disable_mask2(self):
+        self.ids['mask_editor2'].opacity = 0
+        self.ids['mask_editor2'].disabled = True
+        self.ids['mask_editor2'].set_active_mask(None)
 
     def on_mask2_press(self, value):
         if value == "down":
-            self.ids['mask_editor2'].opacity = 1
-            self.ids['mask_editor2'].disabled = False
-            Clock.schedule_once(self._delay_set_image, -1)   # editor2のサイズが未決定なので遅らせる
+            self._enable_mask2()
         else:
-            self.ids['mask_editor2'].opacity = 0
-            self.ids['mask_editor2'].disabled = True
-            self.ids['mask_editor2'].set_active_mask(None)
+            self._disable_mask2()
 
     def handle_for_dir_selection(self, selection):
         if selection is not None:
@@ -404,7 +428,7 @@ class MainApp(MDApp):
 
 if __name__ == '__main__':
     multiprocessing.freeze_support()
-
+    
     # メインプロセスでマネージャーを作成
     with multiprocessing.Manager() as manager:
         # ファイルキャッシュシステムを初期化（マネージャーを渡す）

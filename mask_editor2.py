@@ -1199,7 +1199,7 @@ class MaskEditor2(FloatLayout):
         self.center_rotate_rad = 0
         self.orientation = (0, 0)
         self.margin = (0, 0)
-        self.texture_size = [0, 0]
+        self.texture_size = (0, 0)
         #self._keyboard = Window.request_keyboard(self._keyboard_closed, self)
         #self._keyboard.bind(on_key_down=self._on_keyboard_down)
 
@@ -1228,16 +1228,17 @@ class MaskEditor2(FloatLayout):
         ci = np.clip(crop_image, 0, 1)
         self.crop_image_hls = cv2.cvtColor(ci, cv2.COLOR_RGB2HLS_FULL)
 
-    def set_image(self, size, tx, ty, crop_info, dt):
+    def set_texture_size(self, tx, ty):
+        self.texture_size = (tx, ty)
+
+    def set_image(self, size, crop_info):
         self.image_widget.source = None
         self.image_widget.opacity = 0
 
         self.image_size[0], self.image_size[1] = size
-        self.texture_size = [tx, ty]
         self.crop_info = crop_info
 
         self.__set_image_info()
-        return True
     
     def set_orientation(self, rotation, rotation2, flip):
         self.center_rotate_rad = math.radians(rotation)

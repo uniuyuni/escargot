@@ -1158,3 +1158,325 @@ def recover_saturated_pixels(rgb_data: np.ndarray,
                 recovered[y, x, ch] = max(pixel_values[ch], max_value * scale)
     
     return recovered
+
+
+class HazeProcessor:
+    def __init__(self):
+        self.epsilon = 0.0001
+        self.window_size = 15
+        self.omega = 0.95  # ヘイズ除去の強度パラメータ
+        
+    def get_dark_channel(self, image, window_size):
+        """ダークチャネルを計算"""
+        min_channel = np.min(image, axis=2)
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, 
+                                         (window_size, window_size))
+        dark_channel = cv2.erode(min_channel, kernel)
+        return dark_channel
+    
+    def estimate_atmospheric_light(self, image, dark_channel):
+        """大気光を推定"""
+        img_size = image.shape[0] * image.shape[1]
+        flat_image = image.reshape(img_size, 3)
+        flat_dark = dark_channel.ravel()
+        
+        # 上位0.1%の明るい画素を選択
+        search_idx = int(img_size * 0.001)
+        search_idx = max(search_idx, 1)
+        dark_val = -np.partition(-flat_dark, search_idx)[search_idx]
+        atmospheric_light = np.max(
+            flat_image[flat_dark >= dark_val], axis=0)
+            
+        return atmospheric_light
+    
+    def estimate_transmission(self, image, atmospheric_light):
+        """透過量を推定"""
+        normalized = image / (atmospheric_light + self.epsilon)
+        transmission = 1 - self.omega * self.get_dark_channel(
+            normalized, self.window_size)
+        return transmission
+    
+    def guided_filter(self, guide, transmission, radius, eps):
+        """ガイド付きフィルタでエッジを保持しながら透過量をリファイン"""
+        mean_guide = cv2.boxFilter(guide, -1, (radius, radius))
+        mean_trans = cv2.boxFilter(transmission, -1, (radius, radius))
+        mean_gt = cv2.boxFilter(guide * transmission, -1, (radius, radius))
+        cov_gt = mean_gt - mean_guide * mean_trans
+
+        mean_gg = cv2.boxFilter(guide * guide, -1, (radius, radius))
+        var_g = mean_gg - mean_guide * mean_guide
+
+        a = cov_gt / (var_g + eps)
+        b = mean_trans - a * mean_guide
+
+        mean_a = cv2.boxFilter(a, -1, (radius, radius))
+        mean_b = cv2.boxFilter(b, -1, (radius, radius))
+
+        return mean_a * guide + mean_b
+    
+    def process(self, image, strength=1.0):
+        """
+        画像のヘイズを調整（除去/追加）
+        
+        Parameters:
+        image: np.ndarray - 入力画像 (BGR形式、float32で0-1の範囲)
+        strength: float - 調整の強度
+            正の値 (0.0 ~ 1.0): ヘイズを除去
+            負の値 (-1.0 ~ 0.0): ヘイズを追加
+        
+        Returns:
+        np.ndarray - 処理された画像 (float32で0-1の範囲)
+        """
+        # 強度パラメータの範囲を制限
+        strength = np.clip(strength, -1.0, 1.0)
+        
+        # 入力画像のコピーを作成
+        normalized = image.copy()
+        
+        if strength >= 0:
+            # ===== デヘイズ処理（霞を除去）=====
+            if strength == 0:
+                # 強度0なら画像をそのまま返す
+                return normalized
+                
+            # ダークチャネルの計算
+            dark_channel = self.get_dark_channel(normalized, self.window_size)
+            
+            # 大気光の推定
+            atmospheric_light = self.estimate_atmospheric_light(
+                normalized, dark_channel)
+                
+            # 透過量の推定
+            transmission = self.estimate_transmission(
+                normalized, atmospheric_light)
+                
+            # ガイド付きフィルタで透過量をリファイン
+            gray_image = cv2.cvtColor(normalized, cv2.COLOR_BGR2GRAY)
+            transmission = self.guided_filter(
+                gray_image, transmission, 60, 0.0001)
+                
+            # 境界処理: 境界から離れるほど元の透過量に近づく重み付け
+            h, w = transmission.shape
+            boundary_width = int(min(h, w) * 0.05)  # 境界領域の幅（画像サイズの5%）
+            
+            # 境界マスクの作成
+            mask = np.ones_like(transmission)
+            
+            # 上下左右の境界に向かってグラデーションを適用
+            for i in range(boundary_width):
+                weight = i / boundary_width
+                # 上端
+                mask[i, :] = weight
+                # 下端
+                mask[h-i-1, :] = weight
+                # 左端
+                mask[:, i] *= weight
+                # 右端
+                mask[:, w-i-1] *= weight
+            
+            # 強度に応じて透過量を調整（強度が小さいほど透過量を1に近づける）
+            adjusted_transmission = transmission * strength + (1.0 - strength)
+            
+            # 境界でブレンド: mask=1の領域は調整後の透過量、mask=0の領域は1.0（原画像）
+            transmission = adjusted_transmission * mask + 1.0 * (1.0 - mask)
+            
+            # 透過量の下限を設定
+            transmission = np.maximum(transmission, 0.1)
+            
+            # デヘイズ処理の実行
+            result = np.empty_like(normalized)
+            for channel in range(3):
+                result[:, :, channel] = (
+                    (normalized[:, :, channel] - atmospheric_light[channel]) / 
+                    (transmission + self.epsilon) + atmospheric_light[channel]
+                )
+        else:
+            # ===== ヘイズ追加処理（霞を増やす）=====
+            # Simple Atmospheric Scattering Modelを使用
+            
+            haze_strength = -strength  # 強度を正の値に変換
+            
+            # 大気光の色（純粋な白）
+            atmospheric_light = np.array([1.0, 1.0, 1.0])  # BGR形式で白
+            
+            # 画像サイズを取得
+            h, w = normalized.shape[:2]
+            
+            # 強度に応じて透過量を滑らかに調整
+            # 強度0では透過量1.0（霞なし）
+            # 強度-1では最小透過量（最大霞）
+            # 二次関数的なイージングを適用して滑らかな遷移を実現
+            min_trans = 0.4  # 最小透過量（最大霞）
+            
+            # 二次関数で滑らかな遷移を作成
+            # haze_strength=0→transmission=1.0（元画像）
+            # haze_strength=1→transmission=min_trans（最大霞）
+            transmission_value = 1.0 - (1.0 - min_trans) * (haze_strength * haze_strength)
+            
+            # 均一な透過量で霞を生成
+            transmission = np.ones((h, w)) * transmission_value
+            
+            # 透過量マップを3チャンネルに拡張
+            transmission = np.stack([transmission] * 3, axis=2)
+            
+            # 散乱モデルによる霞の合成
+            result = normalized * transmission + atmospheric_light * (1 - transmission)
+
+        
+        return result.astype(np.float32)
+
+def get_exif_image_size(exif_data):
+    top, left = exif_data.get("RawImageCropTopLeft", "0 0").split()
+    top, left = int(top), int(left)
+
+    width, height = exif_data.get("RawImageCroppedSize", "0x0").split('x')
+    width, height = int(width), int(height)
+    if width == 0 and height == 0:
+        width, height = exif_data.get("ImageSize", "0x0").split('x')
+        width, height = int(width), int(height)
+        if width == 0 and height == 0:
+            raise AttributeError("Not Find image size data")
+        
+    return (top, left, width, height)
+
+def set_exif_image_size(exif_data, top, left, width, height):
+    if exif_data.get("RawImageCropTopLeft", None) is not None:
+        exif_data["RawImageCropTopLeft"] = str(top) + " " + str(left)
+
+    if exif_data.get("RawImageCroppedSize", None) is not None:
+        exif_data["RawImageCroppedSize"] = str(width) + "x" + str(height)
+
+    exif_data["ImageSize"] = str(width) + "x" + str(height)
+    
+
+def _estimate_depth_map(img, params=(0.121779, 0.959710, -0.780245), sigma=0.5):
+    """
+    色線形変換先行法（Color Attenuation Prior）を使用して深度マップを推定
+    
+    img: 入力画像（0-1の範囲のfloat32、BGR形式）
+    params: 線形モデルの係数 (β0, β1, β2)
+    sigma: ガウシアンフィルタのシグマ値
+    
+    Zhu らの論文 "Fast Single Image Haze Removal Using Color Attenuation Prior" に基づく
+    """
+    # RGB画像をHSV色空間に変換
+    hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+    h, s, v = cv2.split(hsv)
+    
+    # 彩度と明度の差分を計算
+    diff = s - v
+    
+    # 線形モデルを使用して深度を推定: d = β0 + β1 * v + β2 * s
+    beta0, beta1, beta2 = params
+    depth = beta0 + beta1 * v + beta2 * s
+    
+    # フィルタリングで深度マップを滑らかにする
+    depth = cv2.GaussianBlur(depth, (0, 0), sigma)
+    
+    # 正規化（0-1の範囲に変換）
+    depth = (depth - np.min(depth)) / (np.max(depth) - np.min(depth) + 1e-8)
+    
+    return depth
+
+def _estimate_atmospheric_light(img, depth_map, top_percent=0.001):
+    """
+    大気光を推定（最も深い点の上位N%を使用）
+    
+    img: 入力画像（BGR形式）
+    depth_map: 深度マップ（値が大きいほど霧が濃い）
+    top_percent: 使用する上位のピクセルの割合
+    """
+    # 画像サイズと上位N%のピクセル数を計算
+    h, w = depth_map.shape
+    size = h * w
+    num_pixels = int(size * top_percent)
+    
+    # 深度マップに基づいてピクセルをソート
+    indices = np.argsort(depth_map.flatten())[-num_pixels:]
+    depth_pixels = np.zeros((size), dtype=bool)
+    depth_pixels[indices] = True
+    depth_pixels = depth_pixels.reshape(depth_map.shape)
+    
+    # 最も深いN%のピクセルから大気光を計算
+    A = np.zeros(3, dtype=np.float32)
+    for i in range(3):
+        A[i] = np.mean(img[:,:,i][depth_pixels])
+    
+    return A
+
+def _estimate_transmission(depth_map, strength=0.5, lower_bound=0.1):
+    """
+    深度マップから透過率を推定
+    
+    depth_map: 深度マップ（0-1の範囲）
+    strength: 霞除去の強さ（0-1の範囲）
+    lower_bound: 透過率の最小値
+    """
+    # 深度マップから透過率を計算 (t = e^(-β*d))
+    beta = 1.0 * strength  # 散乱係数を強さパラメータに関連付け
+    transmission = np.exp(-beta * depth_map)
+    
+    # 下限値を設定
+    transmission = np.maximum(transmission, lower_bound)
+    
+    return transmission
+
+def dehaze_image(img, strength=0.5):
+    """
+    色線形変換先行法を使用した霞除去・霧追加
+    
+    img: 入力画像（0-1の範囲のfloat32、BGR形式）
+    strength: 霞除去（正の値）または霧追加（負の値）の強さ、-1から1の範囲
+    """
+    
+    # 深度マップの推定
+    depth_map = _estimate_depth_map(img)
+    
+    # 大気光の推定
+    A = _estimate_atmospheric_light(img, depth_map)
+    
+    # 強さに基づいて調整
+    if strength >= 0:
+        # 霞除去モード
+        effective_strength = strength
+        # 透過率の推定
+        transmission = _estimate_transmission(depth_map, effective_strength)
+
+        # 霞補正された画像の計算（大気散乱モデル）
+        result = np.zeros_like(img, dtype=np.float32)
+        for i in range(3):
+            result[:,:,i] = (img[:,:,i] - A[i]) / np.maximum(transmission, 0.1) + A[i]
+    
+    else:
+        # ===== ヘイズ追加処理（霞を増やす）=====
+        # Simple Atmospheric Scattering Modelを使用
+        
+        haze_strength = -strength  # 強度を正の値に変換
+        
+        # 大気光の色（純粋な白）
+        atmospheric_light = np.array([1.0, 1.0, 1.0], dtype=np.float32)  # RGB形式で白
+        
+        # 画像サイズを取得
+        h, w = img.shape[:2]
+        
+        # 強度に応じて透過量を滑らかに調整
+        # 強度0では透過量1.0（霞なし）
+        # 強度-1では最小透過量（最大霞）
+        # 二次関数的なイージングを適用して滑らかな遷移を実現
+        min_trans = 0.4  # 最小透過量（最大霞）
+        
+        # 二次関数で滑らかな遷移を作成
+        # haze_strength=0→transmission=1.0（元画像）
+        # haze_strength=1→transmission=min_trans（最大霞）
+        transmission_value = 1.0 - (1.0 - min_trans) * (haze_strength * haze_strength)
+        
+        # 均一な透過量で霞を生成
+        transmission = np.ones((h, w), dtype=np.float32) * transmission_value
+        
+        # 透過量マップを3チャンネルに拡張
+        transmission = np.stack([transmission] * 3, axis=2)
+        
+        # 散乱モデルによる霞の合成
+        result = img * transmission + atmospheric_light * (1 - transmission)
+
+    return result

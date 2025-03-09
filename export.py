@@ -121,7 +121,7 @@ class ExportFile():
         self.param = {}
         self.mask_editor2 = mask_editor2.MaskEditor2()
 
-    def write_to_file(self, ex_path, quality, color_space):
+    def write_to_file(self, ex_path, quality, resize_str, sharpen, color_space, exif_data):
         self.quality = quality
         self.ex_path = ex_path
         self.color_space = color_space
@@ -134,7 +134,8 @@ class ExportFile():
         else:
             self.imgset.load(self.file_path, self.exif_data, self.param, result)
         #self.mask_editor2.set_orientation(self.param.get('rotation', 0), self.param.get('rotation2', 0), self.param.get('flip_mode', 0))
-        self.mask_editor2.set_image(self.param['original_img_size'], self.imgset.img.shape[1], self.imgset.img.shape[0], self.param.get('crop_info', None), -1)
+        self.mask_editor2.set_texture_size(self.imgset.img.shape[1], self.imgset.img.shape[0])
+        self.mask_editor2.set_image(self.param['original_img_size'], self.param.get('crop_info', None))
         #self.mask_editor2.update()
 
         load_json(self.file_path, self.param, self.mask_editor2)
@@ -154,4 +155,6 @@ class ExportFile():
         with WandImage.from_array(img) as wi:
             wi.compression_quality = self.quality 
             wi.format = format
+            wi.sharpen(sharpen)
+            wi.transform(resize=resize_str)
             wi.save(filename=self.ex_path)

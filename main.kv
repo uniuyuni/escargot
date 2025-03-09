@@ -125,9 +125,11 @@
                     VSpacer:
                         size_hint_x: 7
                     ToggleButton:
+                        id: mask2
                         size_hint_x: 1
                         text: "mask2"
                         on_state: root.on_mask2_press(self.state)
+                        on_state: geometry.disabled = True if mask2.state == 'down' else False
                     Button:
                         size_hint_x: 1
                         text: "export"
@@ -144,6 +146,7 @@
                 padding: dp(8)
                 spacing: dp(8)
                 on_current_tab: root.on_current_tab(self.current_tab)
+                on_current_tab: mask2.disabled = self.current_tab.text == "Geometry"
 
                 TabbedPanelItem:
                     text: 'Basic'
@@ -286,10 +289,10 @@
                             ParamSlider:
                                 id: slider_dehaze
                                 text: "Dehaze"
-                                min: -1.0
-                                max: 1.0
-                                value: 0.0
-                                step: 0.01
+                                min: -100
+                                max: 100
+                                value: 0
+                                step: 1
                                 for_float: True
                                 on_slider: root.apply_effects_lv(2, 'dehaze')
 
@@ -1441,6 +1444,7 @@
                                 on_slider: root.apply_effects_lv(1, 'glow')
 
                 TabbedPanelItem:
+                    id: geometry
                     text: 'Geometry'
 
                     MDScrollView:

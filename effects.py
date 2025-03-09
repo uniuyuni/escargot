@@ -764,12 +764,6 @@ class SaturationEffect(Effect):
         return hls_s * self.diff
 
 class DehazeEffect(Effect):
-    __dehaze = None
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-        self.dehaze = None
 
     def set2widget(self, widget, param):
         widget.ids["slider_dehaze"].set_slider_value(param.get('dehaze', 0))
@@ -782,23 +776,16 @@ class DehazeEffect(Effect):
         if de == 0:
             self.diff = None
             self.hash = None
-
         else:
             param_hash = hash((de))
             if self.hash != param_hash:
-                if self.diff is None:
-                    if DehazeEffect.__dehaze is None:
-                        DehazeEffect.__dehaze = importlib.import_module('dehazing.dehaze')
-
-                    self.dehaze = DehazeEffect.__dehaze.dehaze(rgb)
-
-                self.diff = de
+                self.diff = core.dehaze_image(rgb, de/100)
                 self.hash = param_hash
 
         return self.diff
     
     def apply_diff(self, rgb):
-        return self.diff * self.dehaze + (1.0 - self.diff) * rgb
+        return self.diff
 
 class LevelEffect(Effect):
 
@@ -1435,24 +1422,6 @@ class GlowEffect(Effect):
                 self.hash = param_hash
 
         return self.diff
-    
-class AfterExposureEffect(Effect):
-
-    def make_diff(self, rgb, param):
-        ex = param.get('after_exposure', 0)
-        if ex == 0:
-            self.diff = None
-            self.hash = None
-        else:        
-            param_hash = hash((ex))
-            if self.hash != param_hash:
-                self.diff = ex
-                self.hash = param_hash
-
-        return self.diff
-    
-    def apply_diff(self, rgb):
-        return rgb * self.diff
 
 class Mask2Effect(Effect):
 
@@ -1602,26 +1571,8 @@ def create_effects():
     lv2 = effects[2]
     lv2['color_temperature'] = ColorTemperatureEffect()
     lv2['color_correct'] = ColorCorrectEffect()
-    lv2['exposure'] = ExposureEffect()
-    lv2['contrast'] = ContrastEffect()
-    lv2['microcontrast'] = MicroContrastEffect()
-    lv2['tone'] = ToneEffect()
-    lv2['saturation'] = SaturationEffect()
     lv2['dehaze'] = DehazeEffect()
-    lv2['level'] = LevelEffect()
-    lv2['tonecurve'] = TonecurveEffect()
-    lv2['tonecurve_red'] = TonecurveRedEffect()
-    lv2['tonecurve_green'] = TonecurveGreenEffect()
-    lv2['tonecurve_blue'] = TonecurveBlueEffect()
-    lv2['HuevsHue'] = HuevsHueEffect()
-    lv2['HuevsLum'] = HuevsLumEffect()
-    lv2['HuevsSat'] = HuevsSatEffect()
-    lv2['LumvsLum'] = LumvsLumEffect()
-    lv2['LumvsSat'] = LumvsSatEffect()
-    lv2['SatvsSat'] = SatvsSatEffect()
-    lv2['SatvsLum'] = SatvsLumEffect()
-    lv2['grading1'] = GradingEffect("1")
-    lv2['grading2'] = GradingEffect("2")
+
     lv2['hls_red'] = HLSRedEffect()
     lv2['hls_orange'] = HLSOrangeEffect()
     lv2['hls_yellow'] = HLSYellowEffect()
@@ -1630,13 +1581,37 @@ def create_effects():
     lv2['hls_blue'] = HLSBlueEffect()
     lv2['hls_purple'] = HLSPurpleEffect()
     lv2['hls_magenta'] = HLSMagentaEffect()
-    lv2['film_simulation'] = FilmSimulationEffect()
-    lv2['lens_simulator'] = LensSimulatorEffect()
-    lv2['lut'] = LUTEffect()
+ 
+    lv2['exposure'] = ExposureEffect()
+    lv2['contrast'] = ContrastEffect()
+    lv2['microcontrast'] = MicroContrastEffect()
+    lv2['tone'] = ToneEffect()
+
     lv2['highlight_compress'] = HighlightCompressEffect()
+    lv2['level'] = LevelEffect()
+
+    lv2['tonecurve'] = TonecurveEffect()
+    lv2['tonecurve_red'] = TonecurveRedEffect()
+    lv2['tonecurve_green'] = TonecurveGreenEffect()
+    lv2['tonecurve_blue'] = TonecurveBlueEffect()
+    lv2['grading1'] = GradingEffect("1")
+    lv2['grading2'] = GradingEffect("2")
+
+    lv2['HuevsHue'] = HuevsHueEffect()
+    lv2['HuevsLum'] = HuevsLumEffect()
+    lv2['LumvsLum'] = LumvsLumEffect()
+    lv2['SatvsLum'] = SatvsLumEffect()
+    lv2['HuevsSat'] = HuevsSatEffect()
+    lv2['LumvsSat'] = LumvsSatEffect()
+    lv2['SatvsSat'] = SatvsSatEffect()
+
+    lv2['saturation'] = SaturationEffect()
+
+    lv2['lut'] = LUTEffect()
+    lv2['lens_simulator'] = LensSimulatorEffect()
+    lv2['film_simulation'] = FilmSimulationEffect()
 
     lv3 = effects[3]
-    lv3['after_exposure'] = AfterExposureEffect()
     lv3['mask2'] = Mask2Effect()
     lv3['correct_overexposed_areas'] = CorrectOverexposedAreas()
 

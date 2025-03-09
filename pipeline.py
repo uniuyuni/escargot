@@ -27,7 +27,8 @@ def process_pipeline(img, offset, crop_image, is_zoomed, texture_width, texture_
             imgc, crop_info2 = core.crop_image(img0, texture_width, texture_height, click_x, click_y, offset, is_zoomed)
         """
         mask_editor2.set_orientation(primary_param.get('rotation', 0), primary_param.get('rotation2', 0), primary_param.get('flip_mode', 0))
-        mask_editor2.set_image(primary_param['original_img_size'], texture_width, texture_height, crop_info2, -1)
+        #mask_editor2.set_texture_size(texture_width, texture_height)
+        mask_editor2.set_image(primary_param['original_img_size'], crop_info2)
         primary_param['crop_info'] = crop_info2
     else:
         imgc = crop_image
@@ -59,7 +60,8 @@ def export_pipeline(img, primary_effects, primary_param, mask_editor2):
     imgc = img0[y1:y2, x1:x2] # ただのクロップ
     #imgc, crop_info2 = core.crop_image(img0, crop_info, *primary_param['original_img_size'], 0, 0, (0, 0), False)
     mask_editor2.set_orientation(primary_param.get('rotation', 0), primary_param.get('rotation2', 0), primary_param.get('flip_mode', 0))
-    mask_editor2.set_image(primary_param['original_img_size'], imgc.shape[1], imgc.shape[0], crop_editor.CropEditor.convert_rect_to_info(primary_param.get('crop_rect'), 1), -1)
+    mask_editor2.set_texture_size(imgc.shape[1], imgc.shape[0])
+    mask_editor2.set_image(primary_param['original_img_size'], crop_editor.CropEditor.convert_rect_to_info(primary_param.get('crop_rect'), 1))
     mask_editor2.set_crop_image(imgc)
     mask_editor2.update()
 

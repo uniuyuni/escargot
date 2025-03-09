@@ -27,29 +27,6 @@ class ImageSet:
         self.param = None
         self.loaded_json = None
 
-    def _get_image_size(self, exif_data):
-        top, left = exif_data.get("RawImageCropTopLeft", "0 0").split()
-        top, left = int(top), int(left)
-
-        width, height = exif_data.get("RawImageCroppedSize", "0x0").split('x')
-        width, height = int(width), int(height)
-        if width == 0 and height == 0:
-            width, height = exif_data.get("ImageSize", "0x0").split('x')
-            width, height = int(width), int(height)
-            if width == 0 and height == 0:
-                raise AttributeError("Not Find image size data")
-            
-        return (top, left, width, height)
-    
-    def _set_image_size(self, exif_data, top, left, width, height):
-        if exif_data.get("RawImageCropTopLeft", None) is not None:
-            exif_data["RawImageCropTopLeft"] = str(top) + " " + str(left)
-
-        if exif_data.get("RawImageCroppedSize", None) is not None:
-            exif_data["RawImageCroppedSize"] = str(width) + "x" + str(height)
-
-        exif_data["ImageSize"] = str(width) + "x" + str(height)
-
     def _set_temperature(self, param, temp, tint, Y):
         param['color_temperature_reset'] = temp
         param['color_temperature'] = param['color_temperature_reset']
@@ -123,7 +100,18 @@ class ImageSet:
                 img_array = thumb.data                    
             else:
                 raise ValueError(f"Unsupported thumbnail format: {thumb.format}")
-            
+
+            # クロップとexifデータの回転
+            rad, flip = util.split_orientation(util.str_to_orientation(exif_data.get("Orientation", "")))
+            top, left, width, height = core.get_exif_image_size(exif_data)
+            if rad < 0.0:
+                top, left = left, top
+                width, height = height, width
+                core.set_exif_image_size(exif_data, top, left, width, height)
+            img_array = img_array[top:top+height, left:left+width]
+            if "Orientation" in exif_data:
+                del exif_data["Orientation"]
+
             # RGB画像初期設定
             img_array = img_array.astype(np.float32)/255.0
             img_array = color.rgb_to_xyz(img_array, "sRGB", True)
@@ -131,7 +119,7 @@ class ImageSet:
             self._set_temperature(param, temp, tint, Y)
 
             # RAW画像のサイズに合わせてリサイズ
-            _, _, width, height = self._get_image_size(exif_data)
+            _, _, width, height = core.get_exif_image_size(exif_data)
             img_array = cv2.resize(img_array, (width, height))
 
             # イメージサイズを設定し、正方形にする
@@ -183,17 +171,6 @@ class ImageSet:
             #img_array = self._recover_saturated_colors(img_array)
             #img_array = core.recover_saturated_pixels(img_array, Tv, ISO, wb)
             
-            # クロップとexifデータの回転
-            rad, flip = util.split_orientation(util.str_to_orientation(exif_data.get("Orientation", "")))
-            top, left, width, height = self._get_image_size(exif_data)
-            if rad < 0.0:
-                top, left = left, top
-                width, height = height, width
-                self._set_image_size(exif_data, top, left, width, height)
-            img_array = img_array[top:top+height, left:left+width]
-            if "Orientation" in exif_data:
-                del exif_data["Orientation"]
-
             # プロファイルを適用
             #dcp_path = os.getcwd() + "/dcp/Fujifilm X-Pro3 Adobe Standard velvia.dcp"
             #reader = DCPReader(dcp_path)
@@ -223,9 +200,7 @@ class ImageSet:
 
             # イメージサイズを設定し、正方形にする
             img_array = core.adjust_shape(img_array, param)
-            if img_array.shape[1] != width or img_array.shape[0] != height:
-                logging.error("ImageSize is not ndarray.shape")
-                
+            
             self.img = img_array
 
         except (rawpy.LibRawFileUnsupportedError, rawpy.LibRawIOError):
@@ -252,7 +227,7 @@ class ImageSet:
             temp, tint, Y, = core.invert_RGB2TempTint((1.0, 1.0, 1.0), 5000.0)
             self._set_temperature(param, temp, tint, Y)
             
-            top, left, width, height = self._get_image_size(exif_data)
+            top, left, width, height = core.get_exif_image_size(exif_data)
             if img_array.shape[1] != width or img_array.shape[0] != height:
                 logging.error("ImageSize is not ndarray.shape")
             img_array = core.adjust_shape(img_array, param)
@@ -276,7 +251,7 @@ class ImageSet:
             temp, tint, Y, = core.invert_RGB2TempTint((1.0, 1.0, 1.0), 5000.0)
             self._set_temperature(param, temp, tint, Y)
 
-            top, left, width, height = self._get_image_size(exif_data)
+            top, left, width, height = core.get_exif_image_size(exif_data)
             img_array = cv2.resize(img_array, dsize=(width, height))
             param['img_size'] = [width, height]
             param['original_img_size'] = [width, height]
