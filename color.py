@@ -1,5 +1,8 @@
 
 import numpy as np
+import jax.numpy as jnp
+from jax import jit
+from functools import partial
 
 # RGB Working Space のデータベース
 M_RGB_WORKING_SPACES = {
@@ -54,6 +57,7 @@ M_RGB_WORKING_SPACES = {
 }
 
 # 名前からマトリクスを取得する関数
+@partial(jit, static_argnums=(0, 1,))
 def _get_matrix(space_name, direction="rgb_to_xyz"):
     """
     指定された RGB Working Space の変換行列を取得します。
@@ -72,18 +76,20 @@ def _get_matrix(space_name, direction="rgb_to_xyz"):
     
     return M_RGB_WORKING_SPACES[space_name][direction]
 
+@partial(jit, static_argnums=(1, 2))
 def rgb_to_xyz(rgb, space_name, gamma=False):
 
     if gamma == True:
         rgb = rgb_gamma_decode(rgb, space_name)
 
-    xyz = np.dot(rgb, _get_matrix(space_name, "rgb_to_xyz").T)
+    xyz = jnp.dot(rgb, _get_matrix(space_name, "rgb_to_xyz").T)
 
     return xyz
 
+@partial(jit, static_argnums=(1, 2))
 def xyz_to_rgb(xyz, space_name, gamma=False):
 
-    rgb = np.dot(xyz, _get_matrix(space_name, "xyz_to_rgb").T)
+    rgb = jnp.dot(xyz, _get_matrix(space_name, "xyz_to_rgb").T)
  
     # ガンマ補正
     if gamma == True:
@@ -142,42 +148,49 @@ def d65_to_d50(XYZ):
     ], dtype=np.float32)
     return _apply_chromatic_adaptation(XYZ, M_d65_to_d50)
 
+@jit
 def srgb_gamma_encode(linear):
     """sRGBのガンマ補正"""
-    return np.where(linear <= 0.0031308,
+    return jnp.where(linear <= 0.0031308,
                    linear * 12.92,
-                   1.055 * np.power(linear, 1/2.4) - 0.055)
+                   1.055 * jnp.power(linear, 1/2.4) - 0.055)
 
+@jit
 def srgb_gamma_decode(encoded):
     """sRGBの逆ガンマ補正"""
-    return np.where(encoded <= 0.04045,
+    return jnp.where(encoded <= 0.04045,
                    encoded / 12.92,
-                   np.power((encoded + 0.055) / 1.055, 2.4))
+                   jnp.power((encoded + 0.055) / 1.055, 2.4))
 
+@jit
 def adobe_rgb_gamma_encode(linear):
     """AdobeRGBのガンマ補正"""
-    return np.where(linear <= 0.00304,
+    return jnp.where(linear <= 0.00304,
                    linear * 12.92,
-                   1.055 * np.power(linear, 1/2.4) - 0.055)
+                   1.055 * jnp.power(linear, 1/2.4) - 0.055)
 
+@jit
 def adobe_rgb_gamma_decode(encoded):
     """AdobeRGBの逆ガンマ補正"""
-    return np.where(encoded <= 0.03928,
+    return jnp.where(encoded <= 0.03928,
                    encoded / 12.92,
-                   np.power((encoded + 0.055) / 1.055, 2.4))
+                   jnp.power((encoded + 0.055) / 1.055, 2.4))
 
+@jit
 def prophoto_rgb_gamma_encode(linear):
     """ProPhotoRGBのガンマ補正（γ = 1.8）"""
-    return np.where(linear < 1/16,
+    return jnp.where(linear < 1/16,
                    linear * 16,
-                   np.power(linear, 1/1.8))
+                   jnp.power(linear, 1/1.8))
 
+@jit
 def prophoto_rgb_gamma_decode(encoded):
     """ProPhotoRGBの逆ガンマ補正"""
-    return np.where(encoded < 1/16,
+    return jnp.where(encoded < 1/16,
                    encoded / 16,
-                   np.power(encoded, 1.8))
+                   jnp.power(encoded, 1.8))
 
+@partial(jit, static_argnums=(1,))
 def rgb_gamma_encode(linear, space_name):
     if space_name == "sRGB":
         return srgb_gamma_encode(linear)
@@ -186,8 +199,9 @@ def rgb_gamma_encode(linear, space_name):
     elif space_name == "ProPhoto RGB":
         return prophoto_rgb_gamma_encode(linear)
     
-    return np.power(linear, 1/2.2)
+    return jnp.power(linear, 1/2.2)
 
+@partial(jit, static_argnums=(1,))
 def rgb_gamma_decode(encoded, space_name):
     if space_name == "sRGB":
         return srgb_gamma_decode(encoded)
@@ -196,4 +210,4 @@ def rgb_gamma_decode(encoded, space_name):
     elif space_name == "ProPhoto RGB":
         return prophoto_rgb_gamma_decode(encoded)
     
-    return np.power(encoded, 2.2)
+    return jnp.power(encoded, 2.2)

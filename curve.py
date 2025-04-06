@@ -158,6 +158,8 @@ class CurveWidget(Widget):
             PopMatrix()
     
     def get_point_list(self):
+        if len(self.points) == 2 and self.points[0].x == self.start_x and self.points[0].y == self.start_y and self.points[1].x == self.end_x and self.points[1].y == self.end_y:
+            return None
         point_list = [(p.x, p.y) for p in self.points]
         return point_list
 

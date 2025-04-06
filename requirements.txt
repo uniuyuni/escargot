@@ -13,3 +13,4 @@ wheel
 torch
 torchvision
 wand
+watchfiles

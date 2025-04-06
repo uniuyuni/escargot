@@ -1,5 +1,6 @@
 
 import AppKit
+import fcntl
 
 #load_framework(INCLUDE.AppKit)
 #NSURL = autoclass('NSURL')
@@ -105,3 +106,11 @@ class FileChooser:
         self._handle_selection(selection)
 
         return selection
+
+def fadvice(file_path, use_cache=True):
+    with open(file_path, "rb") as fd:
+        # キャッシュの有効/無効を設定
+        fcntl.fcntl(fd, fcntl.F_NOCACHE, 0 if use_cache else 1)
+        
+        # シーケンシャルアクセスの場合、先読みを有効化
+        fcntl.fcntl(fd, 45, 1 if use_cache else 0)  # F_RDAHEAD の値は macOS でのみ有効

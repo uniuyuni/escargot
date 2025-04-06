@@ -24,14 +24,12 @@ class ImageSet:
 
         self.file_path = None
         self.img = None     # 加工元画像 float32
-        self.param = None
-        self.loaded_json = None
 
     def _set_temperature(self, param, temp, tint, Y):
         param['color_temperature_reset'] = temp
-        param['color_temperature'] = param['color_temperature_reset']
+        param['color_temperature'] = temp
         param['color_tint_reset'] = tint
-        param['color_tint'] = param['color_tint_reset']
+        param['color_tint'] = tint
         param['color_Y'] = Y
 
     def _black(self, in_img, black_level):
@@ -93,7 +91,7 @@ class ImageSet:
                 img_array = np.frombuffer(thumb.data, dtype=np.uint8)
                 # OpenCVで画像としてデコード
                 img_array = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-                img_array= cv2.cvtColor(img_array, cv2.COLOR_BGR2RGB)
+                img_array = cv2.cvtColor(img_array, cv2.COLOR_BGR2RGB)
                 
             elif thumb.format == rawpy.ThumbFormat.BITMAP:
                 # BITMAPフォーマットの場合
@@ -108,21 +106,23 @@ class ImageSet:
                 top, left = left, top
                 width, height = height, width
                 core.set_exif_image_size(exif_data, top, left, width, height)
-            img_array = img_array[top:top+height, left:left+width]
             if "Orientation" in exif_data:
                 del exif_data["Orientation"]
 
             # RGB画像初期設定
             img_array = img_array.astype(np.float32)/255.0
             img_array = color.rgb_to_xyz(img_array, "sRGB", True)
+            img_array = np.array(img_array)
             temp, tint, Y, = core.invert_RGB2TempTint((1.0, 1.0, 1.0), 5000.0)
             self._set_temperature(param, temp, tint, Y)
 
+            # 情報の設定
+            width, height = core.set_image_param(param, exif_data)
+
             # RAW画像のサイズに合わせてリサイズ
-            _, _, width, height = core.get_exif_image_size(exif_data)
             img_array = cv2.resize(img_array, (width, height))
 
-            # イメージサイズを設定し、正方形にする
+            # 正方形にする
             img_array = core.adjust_shape(img_array, param)
 
             self.img = img_array
@@ -154,6 +154,10 @@ class ImageSet:
             # float32へ
             raw_image = raw_image.astype(np.float32) / ((1<<exif_data.get('BitsPerSample', 14))-1)
             """
+
+            # サイズを整える
+            top, left, width, height = core.get_exif_image_size(exif_data)
+            img_array = img_array[top:top+height, left:left+width]
 
             # float32へ
             img_array = img_array.astype(np.float32)/65535.0
@@ -198,7 +202,10 @@ class ImageSet:
                 Ev = Ev + Sv
                 img_array = img_array * core.calc_exposure(img_array, core.calculate_correction_value(source_ev, Ev))
 
-            # イメージサイズを設定し、正方形にする
+            # 情報の設定
+            core.set_image_param(param, exif_data)
+
+            # 正方形にする
             img_array = core.adjust_shape(img_array, param)
             
             self.img = img_array
@@ -210,32 +217,38 @@ class ImageSet:
         finally:
             raw.close()
 
-        
         return True
 
     def _load_rgb(self, file_path, exif_data, param):
+        from PIL import Image as PILImage
+
         # RGB画像で読み込んでみる
-        with WandImage(filename=file_path) as img:
+        #with WandImage(filename=file_path) as img:
+            #img_array = np.array(img)
+        #    blob = np.frombuffer(img.make_blob('RGB'), dtype=np.uint8)
+        #    img_array = blob.reshape(img.height, img.width, 3)
+
+        #    if img.depth == 8:
+        #img = cv2.imread(file_path, cv2.IMREAD_UNCHANGED)
+        #img_array = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        #if img.dtype == np.uint8:
+        with PILImage.open(file_path) as img:
             img_array = np.array(img)
             if img_array.dtype == np.uint8:
-                img_array = img_array.astype(np.uint16)
-                img_array = img_array*256
-            img_array = img_array.astype(np.float32)/65535.0
+                img_array = img_array.astype(np.float32)/255
+            else:
+                img_array = img_array.astype(np.float32)/65535
             img_array = color.rgb_to_xyz(img_array, "sRGB", True)
 
             # 画像からホワイトバランスパラメータ取得
             temp, tint, Y, = core.invert_RGB2TempTint((1.0, 1.0, 1.0), 5000.0)
             self._set_temperature(param, temp, tint, Y)
             
-            top, left, width, height = core.get_exif_image_size(exif_data)
-            if img_array.shape[1] != width or img_array.shape[0] != height:
-                logging.error("ImageSize is not ndarray.shape")
+            # 情報の設定
+            core.set_image_param(param, exif_data)
+
             img_array = core.adjust_shape(img_array, param)
             
-        #else:
-        #    logging.warning("file is not supported " + file_path)
-        #    return False
-        
         self.img = img_array
         
         return True
@@ -260,7 +273,6 @@ class ImageSet:
 
     def load(self, file_path, exif_data, param, raw=None):
         self.file_path = file_path
-        self.param = param
 
         if file_path.lower().endswith(viewer_widget.supported_formats_raw):
             #self._load_thumb(exif_data, param)

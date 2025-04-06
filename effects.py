@@ -2,6 +2,7 @@
 import cv2
 import numpy as np
 import importlib
+import bz2
 
 #import colorsys
 #import skimage
@@ -22,12 +23,14 @@ import subpixel_shift
 import film_simulation
 import lens_simulator
 import config
+import pipeline
 
 # 補正基底クラス
 class Effect():
 
     def __init__(self, **kwargs):
-        self.reeffect()
+        self.diff = None
+        self.hash = None
 
     def reeffect(self):
         self.diff = None
@@ -311,20 +314,51 @@ class InpaintDiff:
         self.crop_info = kwargs.get('crop_info', None)
         self.image = kwargs.get('image', None)
 
+    def image2list(self):
+        if type(self.image) is np.ndarray:
+            self.image = (self.image.shape, list(bz2.compress(self.image.tobytes(), 1)))
+            #self.image = self.image.tolist()
+
+    def list2image(self):
+        if type(self.image) is list:
+            self.image = np.reshape(np.frombuffer(bz2.decompress(bytearray(self.image[1])), dtype=np.float32), self.image[0])
+            #self.image = np.array(self.image)
+
 class InpaintEffect(Effect):
     __iopaint = None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
-        self.crop_info_list = []
+        self.inpaint_diff_list = []
         self.mask_editor = None
         self.crop_editor = None
+
+    @staticmethod
+    def dump(param):
+        inpaint_diff_list = param.get('inpaint_diff_list', None)
+        if inpaint_diff_list is not None:
+            inpaint_diff_list_dumps = []
+            for inpaint_diff in inpaint_diff_list:
+                inpaint_diff.image2list()
+                inpaint_diff_list_dumps.append((inpaint_diff.crop_info, inpaint_diff.image))
+            param['inpaint_diff_list'] = inpaint_diff_list_dumps
+
+    @staticmethod
+    def load(param):
+        inpaint_diff_list_dumps = param.get('inpaint_diff_list', None)
+        if inpaint_diff_list_dumps is not None:
+            inpaint_diff_list = []
+            for inpaint_diff_dump in inpaint_diff_list_dumps:
+                inpaint_diff = InpaintDiff(crop_info=inpaint_diff_dump[0], image=inpaint_diff_dump[1])
+                inpaint_diff.list2image()
+                inpaint_diff_list.append(inpaint_diff)
+            param['inpaint_diff_list'] = inpaint_diff_list
 
     def set2widget(self, widget, param):
         widget.ids["switch_inpaint"].active = False if param.get('inpaint', 0) == 0 else True
         widget.ids["button_inpaint_predict"].state = "normal" if param.get('inpaint_predict', 0) == 0 else "down"
-        self.crop_info_list = param.get('inpaint_crop_info_list', [])
+        #self.inpaint_diff_list = param.get('inpaint_diff_list', [])
 
     def set2param(self, param, widget):
         param['inpaint'] = 0 if widget.ids["switch_inpaint"].active == False else 1
@@ -333,7 +367,7 @@ class InpaintEffect(Effect):
         if param['inpaint'] > 0:
             if self.mask_editor is None:
                 self.mask_editor = mask_editor.MaskEditor(param['img_size'][0], param['img_size'][1])
-                self.mask_editor.zoom = widget.get_scale()
+                self.mask_editor.zoom = param['crop_info'][4]
                 self.mask_editor.pos = [0, 0]
                 widget.ids["preview_widget"].add_widget(self.mask_editor)
             
@@ -343,7 +377,7 @@ class InpaintEffect(Effect):
                 self.mask_editor = None
 
     def make_diff(self, img, param):
-        self.crop_info_list = param.get('inpaint_crop_info_list', [])
+        self.inpaint_diff_list = param.get('inpaint_diff_list', [])
         ip = param.get('inpaint', 0)
         ipp = param.get('inpaint_predict', 0)
         if (ip > 0 and ipp > 0) is True:
@@ -351,28 +385,31 @@ class InpaintEffect(Effect):
                 InpaintEffect.__iopaint = importlib.import_module('iopaint.predict')
 
             mask = cv2.GaussianBlur(self.mask_editor.get_mask(), (63, 63), 0)
-            img2 = InpaintEffect.__iopaint.predict(img, mask, model=config.get_config('iopaint_model'), resize_limit=config.get_config('iopaint_resize_limit'), use_realesrgan=config.get_config('iopaint_use_realesrgan'))
+            w, h = param['original_img_size']
+            eh, ew = img.shape[:2]
+            x, y = (ew-w)//2, (eh-h)//2
+            img2 = InpaintEffect.__iopaint.predict(img[y:y+h, x:x+w], mask, model=config.get_config('iopaint_model'), resize_limit=config.get_config('iopaint_resize_limit'), use_realesrgan=config.get_config('iopaint_use_realesrgan'))
             img2 = img2 #/ param.get('white_balance', [1, 1, 1])
             bboxes = core.get_multiple_mask_bbox(self.mask_editor.get_mask())
             for bbox in bboxes:
-                self.crop_info_list.append(InpaintDiff(crop_info=bbox, image=img2[bbox[1]:bbox[1]+bbox[3], bbox[0]:bbox[0]+bbox[2]]))
-            param['inpaint_crop_info_list'] = self.crop_info_list
+                self.inpaint_diff_list.append(InpaintDiff(crop_info=(bbox[0] + x, bbox[1] + y, bbox[2], bbox[3]), image=img2[bbox[1]:bbox[1]+bbox[3], bbox[0]:bbox[0]+bbox[2]]))
+            param['inpaint_diff_list'] = self.inpaint_diff_list
             self.mask_editor.clear_mask()
             self.mask_editor.update_canvas()
         
-        self.diff = None if len(self.crop_info_list) <= 0 else self.crop_info_list
-        return self.diff
-    
-    def apply_diff(self, img):
-        if self.diff is self.crop_info_list:
+        if len(self.inpaint_diff_list) > 0:
             img2 = img.copy()
-            for inpaint_diff in self.crop_info_list:
+            for inpaint_diff in self.inpaint_diff_list:
                 cx, cy, cw, ch = inpaint_diff.crop_info
                 img2[cy:cy+ch, cx:cx+cw] = inpaint_diff.image
             self.diff = img2
-            
-        return self.diff
+        else:
+            self.diff = None
 
+        return self.diff
+    
+    def apply_diff(self, img):
+        return self.diff
 
 class DefocusEffect(Effect):
     __net = None
@@ -596,6 +633,13 @@ class ColorTemperatureEffect(Effect):
     def set2param(self, param, widget):
         param['color_temperature'] = widget.ids["slider_color_temperature"].value
         param['color_tint'] = widget.ids["slider_color_tint"].value
+
+    @staticmethod
+    def apply_color_temperature(rgb, param):
+        temp = param.get('color_temperature', param.get('color_temperature_reset', 5000))
+        tint = param.get('color_tint', param.get('color_tint_reset', 0))
+        Y = param.get('color_Y', 1.0)
+        return rgb * core.invert_TempTint2RGB(temp, tint, Y, 5000)
 
     def make_diff(self, rgb, param):
         sw = param.get('color_temperature_switch', True)
@@ -954,16 +998,16 @@ class GradingEffect(Effect):
                 if GradingEffect.__colorsys is None:
                     GradingEffect.__colorsys = importlib.import_module('colorsys')
 
-                blend = core.calc_point_list_to_lut(pl)
+                lut = core.calc_point_list_to_lut(pl)
                 rgbs = np.array(GradingEffect.__colorsys.hls_to_rgb(gh/360.0, gl/100.0, gs/100.0), dtype=np.float32)
-                self.diff = (blend, rgbs)
+                self.diff = (lut, rgbs)
                 self.hash = param_hash
 
         return self.diff
     
     def apply_diff(self, rgb):
-        blend, rgbs = self.diff
-        blend = core.apply_lut(rgb, blend)
+        lut, rgbs = self.diff
+        blend = core.apply_lut(rgb, lut)
         blend_inv = 1-blend
         return (rgb*blend_inv + rgb*rgbs*blend)
 
@@ -1171,7 +1215,7 @@ class HLSRedEffect(Effect):
             self.hash = None
 
         elif self.hash != param_hash:
-            self.diff = core.adjust_hls_red(hls, (hue, lum, sat)) - hls
+            self.diff = core.adjust_hls_red_smooth(hls, (hue, lum, sat)) - hls
             self.hash = param_hash
 
         return self.diff
@@ -1201,7 +1245,7 @@ class HLSOrangeEffect(Effect):
             self.hash = None
 
         elif self.hash != param_hash:
-            self.diff = core.adjust_hls_orange(hls, (hue, lum, sat)) - hls
+            self.diff = core.adjust_hls_orange_smooth(hls, (hue, lum, sat)) - hls
             self.hash = param_hash
 
         return self.diff
@@ -1231,7 +1275,7 @@ class HLSYellowEffect(Effect):
             self.hash = None
 
         elif self.hash != param_hash:
-            self.diff = core.adjust_hls_yellow(hls, (hue, lum, sat)) - hls
+            self.diff = core.adjust_hls_yellow_smooth(hls, (hue, lum, sat)) - hls
             self.hash = param_hash
 
         return self.diff
@@ -1261,7 +1305,7 @@ class HLSGreenEffect(Effect):
             self.hash = None
 
         elif self.hash != param_hash:
-            self.diff = core.adjust_hls_green(hls, (hue, lum, sat)) - hls
+            self.diff = core.adjust_hls_green_smooth(hls, (hue, lum, sat)) - hls
             self.hash = param_hash
 
         return self.diff
@@ -1291,7 +1335,7 @@ class HLSCyanEffect(Effect):
             self.hash = None
 
         elif self.hash != param_hash:
-            self.diff = core.adjust_hls_cyan(hls, (hue, lum, sat)) - hls
+            self.diff = core.adjust_hls_cyan_smooth(hls, (hue, lum, sat)) - hls
             self.hash = param_hash
 
         return self.diff
@@ -1321,7 +1365,7 @@ class HLSBlueEffect(Effect):
             self.hash = None
 
         elif self.hash != param_hash:
-            self.diff = core.adjust_hls_blue(hls, (hue, lum, sat)) - hls
+            self.diff = core.adjust_hls_blue_smooth(hls, (hue, lum, sat)) - hls
             self.hash = param_hash
 
         return self.diff
@@ -1351,7 +1395,7 @@ class HLSPurpleEffect(Effect):
             self.hash = None
 
         elif self.hash != param_hash:
-            self.diff = core.adjust_hls_purple(hls, (hue, lum, sat)) - hls
+            self.diff = core.adjust_hls_purple_smooth(hls, (hue, lum, sat)) - hls
             self.hash = param_hash
 
         return self.diff
@@ -1381,7 +1425,7 @@ class HLSMagentaEffect(Effect):
             self.hash = None
 
         elif self.hash != param_hash:
-            self.diff = core.adjust_hls_magenta(hls, (hue, lum, sat)) - hls
+            self.diff = core.adjust_hls_magenta_smooth(hls, (hue, lum, sat)) - hls
             self.hash = param_hash
 
         return self.diff
@@ -1550,6 +1594,164 @@ class VignetteEffect(Effect):
         imax = max(self.diff[2])
         return core.apply_vignette(rgb, self.diff[0], self.diff[1], crop_info, (self.diff[2][0], self.diff[2][1]))
 
+class CLAHEEffect(Effect):
+
+    def set2widget(self, widget, param):
+        widget.ids["slider_clahe_intensity"].set_slider_value(param.get('clahe_intensity', 0))
+
+    def set2param(self, param, widget):
+        param['clahe_intensity'] = widget.ids["slider_clahe_intensity"].value
+
+    def make_diff(self, img, param):
+        ci = param.get('clahe_intensity', 0)
+        if ci <= 0:
+            self.diff = None
+            self.hash = None
+        else:        
+            param_hash = hash((ci))
+            if self.hash != param_hash:
+                clahe = cv2.createCLAHE(clipLimit=40.0, tileGridSize=(8,8))
+                target = np.zeros_like(img, dtype=np.uint16)
+                img2 = (np.clip(img, 0, 1) * 65535).astype(np.uint16)
+                for i in range(3):
+                    target[..., i] = clahe.apply(img2[..., i])
+                target = target.astype(np.float32) / 65535
+                ci = ci / 100
+                self.diff = target * ci + img * (1-ci)
+                self.hash = param_hash
+
+        return self.diff
+    
+    def apply_diff(self, rgb):
+        return self.diff
+
+class RGB2HLSEffect(Effect):
+
+    def make_diff(self, rgb, param):
+        if self.diff is None:
+            self.diff = cv2.cvtColor(rgb, cv2.COLOR_RGB2HLS_FULL)
+        return self.diff
+    
+    def apply_diff(self, rgb):
+        return self.diff
+
+class HLS2RGBEffect(Effect):
+
+    def make_diff(self, hls, param):
+        if self.diff is None:
+            self.diff = cv2.cvtColor(np.array(hls), cv2.COLOR_HLS2RGB_FULL)
+        return self.diff
+    
+    def apply_diff(self, hls):
+        return self.diff
+    
+
+class HLSEffect(Effect):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        effecs = {}
+        effecs['hls_red'] = HLSRedEffect()
+        effecs['hls_orange'] = HLSOrangeEffect()
+        effecs['hls_yellow'] = HLSYellowEffect()
+        effecs['hls_green'] = HLSGreenEffect()
+        effecs['hls_cyan'] = HLSCyanEffect()
+        effecs['hls_blue'] = HLSBlueEffect()
+        effecs['hls_purple'] = HLSPurpleEffect()
+        effecs['hls_magenta'] = HLSMagentaEffect()
+        self.hls_effects = effecs
+
+    def reeffect(self):
+        for n in self.hls_effects.values():
+            n.reeffect()
+
+    def set2widget(self, widget, param):
+        for n in self.hls_effects.values():
+            n.set2widget(widget, param)
+
+    def set2param(self, param, widget):
+        for n in self.hls_effects.values():
+            n.set2param(param, widget)
+
+    def make_diff(self, hls, param):
+        self.diff = pipeline.pipeline_hls(hls, self.hls_effects, param)
+
+        return self.diff
+    
+    def apply_diff(self, hls):
+        return self.diff
+
+class CurveEffect(Effect):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        effecs = {}
+        effecs['tonecurve'] = TonecurveEffect()
+        effecs['tonecurve_red'] = TonecurveRedEffect()
+        effecs['tonecurve_green'] = TonecurveGreenEffect()
+        effecs['tonecurve_blue'] = TonecurveBlueEffect()
+        effecs['grading1'] = GradingEffect("1")
+        effecs['grading2'] = GradingEffect("2")
+        self.effects = effecs
+
+    def reeffect(self):
+        for n in self.effects.values():
+            n.reeffect()
+
+    def set2widget(self, widget, param):
+        for n in self.effects.values():
+            n.set2widget(widget, param)
+
+    def set2param(self, param, widget):
+        for n in self.effects.values():
+            n.set2param(param, widget)
+
+    def make_diff(self, rgb, param):
+        self.diff = pipeline.pipeline_curve(rgb, self.effects, param)
+
+        return self.diff
+    
+    def apply_diff(self, rgb):
+        return self.diff
+
+class VSandSaturationEffect(Effect):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        effecs = {}
+        effecs['HuevsHue'] = HuevsHueEffect()
+        effecs['HuevsLum'] = HuevsLumEffect()
+        effecs['LumvsLum'] = LumvsLumEffect()
+        effecs['SatvsLum'] = SatvsLumEffect()
+        effecs['HuevsSat'] = HuevsSatEffect()
+        effecs['LumvsSat'] = LumvsSatEffect()
+        effecs['SatvsSat'] = SatvsSatEffect()
+        effecs['saturation'] = SaturationEffect()
+        self.effects = effecs
+
+    def reeffect(self):
+        for n in self.effects.values():
+            n.reeffect()
+
+    def set2widget(self, widget, param):
+        for n in self.effects.values():
+            n.set2widget(widget, param)
+
+    def set2param(self, param, widget):
+        for n in self.effects.values():
+            n.set2param(param, widget)
+
+    def make_diff(self, hls, param):
+        self.diff = pipeline.pipeline_vs_and_saturation(hls, self.effects, param)
+
+        return self.diff
+    
+    def apply_diff(self, rgb):
+        return self.diff
+
 def create_effects():
     effects = [{}, {}, {}, {}, {}]
 
@@ -1573,14 +1775,9 @@ def create_effects():
     lv2['color_correct'] = ColorCorrectEffect()
     lv2['dehaze'] = DehazeEffect()
 
-    lv2['hls_red'] = HLSRedEffect()
-    lv2['hls_orange'] = HLSOrangeEffect()
-    lv2['hls_yellow'] = HLSYellowEffect()
-    lv2['hls_green'] = HLSGreenEffect()
-    lv2['hls_cyan'] = HLSCyanEffect()
-    lv2['hls_blue'] = HLSBlueEffect()
-    lv2['hls_purple'] = HLSPurpleEffect()
-    lv2['hls_magenta'] = HLSMagentaEffect()
+    lv2['rgb2hls1'] = RGB2HLSEffect()
+    lv2['hls'] = HLSEffect()
+    lv2['hls2rgb1'] = HLS2RGBEffect()
  
     lv2['exposure'] = ExposureEffect()
     lv2['contrast'] = ContrastEffect()
@@ -1589,23 +1786,13 @@ def create_effects():
 
     lv2['highlight_compress'] = HighlightCompressEffect()
     lv2['level'] = LevelEffect()
+    lv2['clahe'] = CLAHEEffect()
 
-    lv2['tonecurve'] = TonecurveEffect()
-    lv2['tonecurve_red'] = TonecurveRedEffect()
-    lv2['tonecurve_green'] = TonecurveGreenEffect()
-    lv2['tonecurve_blue'] = TonecurveBlueEffect()
-    lv2['grading1'] = GradingEffect("1")
-    lv2['grading2'] = GradingEffect("2")
+    lv2['curve'] = CurveEffect()
 
-    lv2['HuevsHue'] = HuevsHueEffect()
-    lv2['HuevsLum'] = HuevsLumEffect()
-    lv2['LumvsLum'] = LumvsLumEffect()
-    lv2['SatvsLum'] = SatvsLumEffect()
-    lv2['HuevsSat'] = HuevsSatEffect()
-    lv2['LumvsSat'] = LumvsSatEffect()
-    lv2['SatvsSat'] = SatvsSatEffect()
-
-    lv2['saturation'] = SaturationEffect()
+    lv2['rgb2hls2'] = RGB2HLSEffect()
+    lv2['vs_and_saturation'] = VSandSaturationEffect()
+    lv2['hls2rgb2'] = HLS2RGBEffect()
 
     lv2['lut'] = LUTEffect()
     lv2['lens_simulator'] = LensSimulatorEffect()
@@ -1615,8 +1802,8 @@ def create_effects():
     lv3['mask2'] = Mask2Effect()
     lv3['correct_overexposed_areas'] = CorrectOverexposedAreas()
 
-    lv3 = effects[4]
-    lv3['vignette'] = VignetteEffect()
+    lv4 = effects[4]
+    lv4['vignette'] = VignetteEffect()
 
     return effects
 

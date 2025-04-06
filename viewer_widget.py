@@ -6,6 +6,9 @@ import rawpy
 import exiftool
 import numpy as np
 import cv2
+import subprocess
+from watchfiles import watch
+import time
 
 from kivymd.app import MDApp
 from kivy.core.window import Window as KVWindow
@@ -24,6 +27,7 @@ from kivy.metrics import dp
 
 import core
 from spacer import HSpacer, VSpacer
+import macos
 
 supported_formats_rgb = ('.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp', '.gif')
 supported_formats_raw = ('.cr2', '.nef', '.arw', '.dng', '.orf', '.raf', '.rw2', '.sr2', '.pef', '.raw')
@@ -32,11 +36,15 @@ class ThumbnailCard(MDCard):
     file_path = KVStringProperty()
     thumb_source = KVProperty(None, force_dispatch=True)
     rating = KVNumericProperty(0)
-    exif_data = None
     grid_width = KVNumericProperty(dp(180))
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+        self.imgset = None
+        self.exif_data = None
+        self.param = None
+
         self.orientation = 'vertical'
         self.size_hint = (None, None)
         self.size = (self.grid_width, self.grid_width+dp(40))
@@ -106,8 +114,56 @@ class ViewerWidget(MDBoxLayout):
 
         self.cards = []
         self.selected_cards = set()
+
+        self.watch_directory = None
+        threading.Thread(target=self._watchfiles_thread, daemon=True).start()
         
         KVWindow.bind(on_key_down=self.on_key_down)
+
+    def _watchfiles_thread(self):
+        action_type_map = {
+            1: self._added_file,
+            2: self._modified_file,
+            3: self._deleted_file,
+        }
+
+        while True:
+            watch_directory = self.watch_directory
+            if watch_directory is not None:
+                for changes in watch(watch_directory):
+                    for action, path in changes:
+                        action_type_map.get(action)(path)
+            time.sleep(1)
+
+    @mainthread
+    def _added_file(self, file_path):
+        if self.is_supported_image(file_path):
+            # 挿入インデックスを求める
+            file_list = [card.file_path for card in self.cards]
+            file_list.append(file_path)
+            file_list.sort()
+            index = file_list.index(file_path)
+
+            card = self.add_image_to_grid(file_path, self.cols - index)
+            self.cards.insert(index, card)
+            self.load_images({file_path: card})
+            self.cols += 1
+
+    @mainthread
+    def _deleted_file(self, file_path):
+        if self.is_supported_image(file_path):
+            file_list = [card.file_path for card in self.cards]
+            try:
+                index = file_list.index(file_path)
+                card = self.cards.pop(index)
+                self.ids['grid_layout'].remove_widget(card)
+                self.cols -= 1
+            except ValueError as e:
+                pass
+
+    def _modified_file(self, file_path):
+        self._deleted_file(file_path)
+        #self._added_file(file_path)
 
     def set_path(self, directory):
         self.cards = []
@@ -115,6 +171,9 @@ class ViewerWidget(MDBoxLayout):
         self.ids['grid_layout'].clear_widgets()
         self.selected_cards.clear()
         self.last_selected = None
+
+        # キャッシュに乗せる
+        #subprocess.run(["vmtouch", "-t", "-R", directory])
 
         file_list = os.listdir(directory)
         file_list.sort()
@@ -127,6 +186,7 @@ class ViewerWidget(MDBoxLayout):
         self.cols = len(file_path_dict)
 
         self.load_images(file_path_dict)
+        self.watch_directory = directory
 
     def load_images(self, file_path_dict):
         if len(file_path_dict) > 0:
@@ -152,7 +212,7 @@ class ViewerWidget(MDBoxLayout):
                 thumb = thumb_data_list[i]
                 file_path_dict[file_path].set_image(exif_data_list[i], thumb)
 
-            #self._request_current_view_cards(None, None)
+            self._request_current_view_cards(None, None)
 
             """
             if len(self.selected_cards) == 0 and len(file_path_dict) > 0:
@@ -166,10 +226,10 @@ class ViewerWidget(MDBoxLayout):
         return file_name.lower().endswith(supported_formats_rgb) or file_name.lower().endswith(supported_formats_raw)
 
     # @mainthread
-    def add_image_to_grid(self, file_path):
+    def add_image_to_grid(self, file_path, index=0):
         card = ThumbnailCard(file_path=file_path, grid_width=self.grid_width)
         card.bind(on_touch_down=self.on_select)
-        self.ids['grid_layout'].add_widget(card)
+        self.ids['grid_layout'].add_widget(card, index=index)
         return card
 
     def process_exif_data(self, file_path_list, exif_data_list):
@@ -284,9 +344,18 @@ class ViewerWidget(MDBoxLayout):
     def get_selected_cards(self):
         return self.selected_cards
     
+    def get_card(self, file_path):
+        file_list = [card.file_path for card in self.cards]
+        try:
+            index = file_list.index(file_path)
+            return self.cards[index]
+
+        except ValueError as e:
+            return None
+
     def set_cache_system(self, cache_system):
         self.cache_system = cache_system
-        #self.ids['scroll'].bind(scroll_x=self._request_current_view_cards)
+        self.ids['scroll'].bind(scroll_x=self._request_current_view_cards)
     
     @mainthread
     def _request_current_view_cards(self, instance, value):
@@ -295,7 +364,9 @@ class ViewerWidget(MDBoxLayout):
             x, y = x + card.width/2, y + card.height/2
             ok = self.collide_point(x, y)
             if ok == True and card.exif_data is not None:
-                self.cache_system.register_for_preload(card.file_path, card.exif_data)
+                pass
+                #macos.fadvice(card.file_path, True)
+                #self.cache_system.register_for_preload(card.file_path, card.exif_data)
 
 # テストアプリケーション
 class Viewer_WidgetApp(MDApp):

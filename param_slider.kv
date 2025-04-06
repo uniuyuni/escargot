@@ -1,23 +1,20 @@
-
 <HeadLabel@MDLabel>:
-    text_size: self.size
-    size: 0, dp(20)
     size_hint_y: None
+    height: dp(20)
     font_size: '10pt'
     halign: 'left'
     valign: 'center'
 
 <ParamLabel@MDLabel>:
-    size: dp(100), 0
-    size_hint_x: None
+    size_hint_x: 0.2
     halign: 'right'
     font_size: '9pt'
     color: 'b0b0b0' 
 
 <ParamSlider>:
     orientation: 'horizontal'
-    size: dp(350), dp(20)
-    size_hint: None, None
+    size_hint_y: None
+    height: dp(20)
     text: 'Label'
     on_text: root.on_label_text()
 
@@ -25,7 +22,7 @@
         id: label
         
     MDSlider:
-        size_hint_x: 5
+        size_hint_x: 0.6
         id: slider
         hint: False
         on_value: root.on_slider_value()
@@ -33,18 +30,18 @@
 
     TextInput:
         id: input
-        size: dp(35), dp(20)
-        size_hint: None, None
+        size_hint_x: 0.1
         halign: 'right'
         font_size: '9pt'
         multiline: False
         on_text_validate: root.on_input_text_validate()
 
     BoxLayout:
-        size: dp(25), dp(20)
-        size_hint: None, None
+        size_hint_x: 0.05
         orientation: 'vertical'
         Button:
+            size_hint_y: 0.5
             on_press: root.on_button_press(root.ids['slider'].step)
         Button:
+            size_hint_y: 0.5
             on_press: root.on_button_press(-root.ids['slider'].step)

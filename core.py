@@ -501,93 +501,73 @@ def calc_saturation(s, sat, vib):
 
 def calc_point_list_to_lut(point_list, max_value=1.0):
     """
-    コントロールポイントからLUTを生成する関数（垂直な傾きに対応）
-    max_value: LUTが対応する最大値
+    スプライン補間を使った基本的なLUT生成関数
+    
+    Parameters:
+    -----------
+    point_list : list of tuples
+        (x, y)形式のコントロールポイントのリスト
+    max_value : float
+        LUTが対応する最大値（デフォルト1.0）
+        
+    Returns:
+    --------
+    ndarray
+        65536エントリーのLUT
     """
-    # ソートとリスト内包表記をtogetherly処理
+    # ポイントをソート
     point_list = sorted((pl[0], pl[1]) for pl in point_list)
     
-    # unzip and convert to numpy arrays
-    x, y = map(np.array, zip(*point_list))
+    # ポイントからx, y配列を取得
+    x, y = zip(*point_list)
+    x, y = np.array(x), np.array(y)
     
-    # スプライン補間の計算
-    tck, u = splprep([x, y], k=min(3, len(x)-1), s=0)
-    unew = np.linspace(0, 1.0, 1024*3, dtype=np.float32)
-    out = splev(unew, tck)
-    
-    # Generate the tone curve mapping for 0-1 range
-    x, y = out
-    
-    # 最後の点での傾きを計算
-    last_point = point_list[-1]
-    second_last_point = point_list[-2]
-    dx = last_point[0] - second_last_point[0]
-    dy = last_point[1] - second_last_point[1]
-    
-    # 傾きの計算（垂直な場合の処理を含む）
-    if abs(dx) < 1e-6:  # 実質的に垂直な場合
-        is_vertical = True
-        y_at_1 = last_point[1]
-        vertical_x = last_point[0]  # 垂直線のx座標
-    else:
-        is_vertical = False
-        slope = dy / dx
-        y_at_1 = np.interp(1.0, x, y)
-    
-    # 拡張されたレンジでLUTを生成
-    lut_size = 65536
-    extended_range = np.linspace(0, max_value, lut_size)
-    
-    # 結果を格納する配列
-    lut = np.zeros(lut_size, dtype=np.float32)
-    
-    if is_vertical:
-        # 垂直な場合の処理
-        # vertical_xより左側は通常の補間
-        mask_before_vertical = extended_range <= vertical_x
-        lut[mask_before_vertical] = np.interp(
-            extended_range[mask_before_vertical],
-            x,
-            y,
-            left=y[0]
-        ).astype(np.float32)
+    # 3点以上ある場合はスプライン補間を使用
+    if len(x) >= 3:
+        # スプライン補間のパラメータ（次数は点の数-1か3の小さい方）
+        k = min(3, len(x) - 1)
+        # スプライン補間の計算
+        tck, u = splprep([x, y], k=k, s=0)
         
-        # vertical_xより右側は最大値
-        lut[~mask_before_vertical] = y_at_1
-    else:
-        # 通常の処理（非垂直の場合）
-        mask_below_1 = extended_range <= 1.0
+        # [0, 1]の範囲で細かい点を生成
+        fine_u = np.linspace(0, 1, 1000)
+        fine_points = splev(fine_u, tck)
         
-        # 1以下の値には通常の補間を適用
-        lut[mask_below_1] = np.interp(
-            extended_range[mask_below_1],
-            x,
-            y,
-            left=y[0]
-        ).astype(np.float32)
+        # 生成された点を取得
+        fine_x, fine_y = fine_points
         
-        if max_value > 1.0:
-            x_above_1 = extended_range[~mask_below_1]
+        # この点を使って通常の線形補間でLUTを生成
+        lut_size = 65536
+        input_range = np.linspace(0, max_value, lut_size)
+        
+        # max_valueを超える部分は直線で外挿
+        mask_in_range = input_range <= max(fine_x)
+        lut = np.zeros(lut_size, dtype=np.float32)
+        
+        # 範囲内は補間
+        lut[mask_in_range] = np.interp(
+            input_range[mask_in_range], 
+            fine_x, 
+            fine_y
+        )
+        
+        # 範囲外は直線外挿（最後の2点から傾きを計算）
+        if np.any(~mask_in_range):
+            # 最後の2点から傾きを計算
+            last_idx = len(fine_x) - 1
+            second_last_idx = last_idx - 1
+            slope = (fine_y[last_idx] - fine_y[second_last_idx]) / (fine_x[last_idx] - fine_x[second_last_idx])
             
-            if abs(slope) > 10:  # 急な傾き（ただし垂直でない）の場合
-                # 対数関数ベースの外挿
-                log_scale = np.log(slope + 1)
-                rel_x = x_above_1 - 1.0
-                lut[~mask_below_1] = y_at_1 + log_scale * np.log1p(rel_x * slope)
-            else:  # 緩やかな傾きの場合
-                # 有理関数による外挿
-                scale_factor = min(5.0, max(1.0, abs(slope)))
-                a = y_at_1 * scale_factor
-                b = scale_factor - 1
-                lut[~mask_below_1] = y_at_1 + (a * (x_above_1 - 1.0)) / (b + (x_above_1 - 1.0))
-    
-    # 最終的な値の範囲を確認し、必要に応じて調整
-    if np.any(np.isnan(lut)) or np.any(np.isinf(lut)):
-        problematic_mask = np.isnan(lut) | np.isinf(lut)
-        if is_vertical:
-            lut[problematic_mask] = y_at_1
-        else:
-            lut[problematic_mask] = y_at_1 + slope * (extended_range[problematic_mask] - 1.0)
+            # 直線外挿
+            x_out = input_range[~mask_in_range]
+            y_last = fine_y[last_idx]
+            x_last = fine_x[last_idx]
+            lut[~mask_in_range] = y_last + slope * (x_out - x_last)
+    else:
+        # 点が少ない場合は単純な線形補間
+        lut_size = 65536
+        input_range = np.linspace(0, max_value, lut_size)
+        lut = np.interp(input_range, x, y).astype(np.float32)
     
     return lut
 
@@ -597,30 +577,33 @@ def apply_lut(img, lut, max_value=1.0):
     max_value: LUTが対応する最大値（デフォルト1.0）
     """
     # スケーリングしてLUTのインデックスに変換
-    lut_indices = ((img * 65535) / max_value).clip(0, 65535).astype(np.uint16)
-    
+    scale_factor = 65535 / max_value
+    lut_indices = np.clip(np.round(img * scale_factor), 0, 65535).astype(np.uint16)
+
     # LUTを適用
-    result = lut[lut_indices]
+    result = np.take(lut, lut_indices)
     
     return result
 
 def apply_lut_mul(img, lut, max_value=1.0):
 
     # スケーリングしてLUTのインデックスに変換
-    lut_indices = ((img * 65535) / max_value).clip(0, 65535).astype(np.uint16)
+    scale_factor = 65535 / max_value
+    lut_indices = np.clip(np.round(img * scale_factor), 0, 65535).astype(np.uint16)
     
     # LUTを適用
-    result = lut[lut_indices] * img
+    result = np.take(lut, lut_indices) * img
     
     return result
 
 def apply_lut_add(img, lut, max_value=1.0):
 
     # スケーリングしてLUTのインデックスに変換
-    lut_indices = ((img * 65535) / max_value).clip(0, 65535).astype(np.uint16)
+    scale_factor = 65535 / max_value
+    lut_indices = np.clip(np.round(img * scale_factor), 0, 65535).astype(np.uint16)
     
     # LUTを適用
-    result = lut[lut_indices] + img
+    result = np.take(lut, lut_indices) + img
     
     return result
 
@@ -657,12 +640,12 @@ def adjust_hls_red(hls_img, red_adjust):
         hls_img: HLS形式の画像配列
         red_adjust: 赤色の調整値 [色相, 明度, 彩度]
     """
-    hue = hls_img[..., 0]
+    hue_img = hls_img[..., 0]
     
     # 赤色の条件式
     red_condition = jnp.logical_or(
-        jnp.logical_and(hue >= 0, hue < 22.5),
-        jnp.logical_and(hue >= 337.5, hue < 360)
+        jnp.logical_and(hue_img >= 0, hue_img < 22.5),
+        jnp.logical_and(hue_img >= 337.5, hue_img < 360)
     )
     
     return __adjust_hls(hls_img, red_condition, red_adjust)
@@ -672,8 +655,8 @@ def adjust_hls_orange(hls_img, orange_adjust):
     hue_img = hls_img[:, :, 0]
 
     # オレンジ
-    orange_mask = (hue_img >= 22.5) & (hue_img < 45)
-    hls_img = __adjust_hls(hls_img, orange_mask, orange_adjust)
+    orange_condition = jnp.logical_and(hue_img >= 22.5, hue_img < 45)
+    hls_img = __adjust_hls(hls_img, orange_condition, orange_adjust)
 
     return hls_img
 
@@ -681,8 +664,8 @@ def adjust_hls_yellow(hls_img, yellow_adjust):
     hue_img = hls_img[:, :, 0]
 
     # 黄色
-    yellow_mask = (hue_img >= 45) & (hue_img < 75)
-    hls_img = __adjust_hls(hls_img, yellow_mask, yellow_adjust)
+    yellow_condition = jnp.logical_and(hue_img >= 45, hue_img < 75)
+    hls_img = __adjust_hls(hls_img, yellow_condition, yellow_adjust)
 
     return hls_img
 
@@ -690,8 +673,8 @@ def adjust_hls_green(hls_img, green_adjust):
     hue_img = hls_img[:, :, 0]
 
     # 緑
-    green_mask = (hue_img >= 75) & (hue_img < 150)
-    hls_img = __adjust_hls(hls_img, green_mask, green_adjust)
+    green_condition = jnp.logical_and(hue_img >= 75, hue_img < 150)
+    hls_img = __adjust_hls(hls_img, green_condition, green_adjust)
 
     return hls_img
 
@@ -699,8 +682,8 @@ def adjust_hls_cyan(hls_img, cyan_adjust):
     hue_img = hls_img[:, :, 0]
 
     # シアン
-    cyan_mask = (hue_img >= 150) & (hue_img < 210)
-    hls_img = __adjust_hls(hls_img, cyan_mask, cyan_adjust)
+    cyan_condition = jnp.logical_and(hue_img >= 150, hue_img < 210)
+    hls_img = __adjust_hls(hls_img, cyan_condition, cyan_adjust)
 
     return hls_img
 
@@ -708,8 +691,8 @@ def adjust_hls_blue(hls_img, blue_adjust):
     hue_img = hls_img[:, :, 0]
 
     # 青
-    blue_mask = (hue_img >= 210) & (hue_img < 270)
-    hls_img = __adjust_hls(hls_img, blue_mask, blue_adjust)
+    blue_condition = jnp.logical_and(hue_img >= 210, hue_img < 270)
+    hls_img = __adjust_hls(hls_img, blue_condition, blue_adjust)
 
     return hls_img
 
@@ -717,8 +700,8 @@ def adjust_hls_purple(hls_img, purple_adjust):
     hue_img = hls_img[:, :, 0]
 
     # 紫
-    purple_mask = (hue_img >= 270) & (hue_img < 300)
-    hls_img = __adjust_hls(hls_img, purple_mask, purple_adjust)
+    purple_condition = jnp.logical_and(hue_img >= 270, hue_img < 300)
+    hls_img = __adjust_hls(hls_img, purple_condition, purple_adjust)
 
     return hls_img
 
@@ -726,10 +709,230 @@ def adjust_hls_magenta(hls_img, magenta_adjust):
     hue_img = hls_img[:, :, 0]
 
     # マゼンタ
-    magenta_mask = (hue_img >= 300) & (hue_img < 337.5)
-    hls_img = __adjust_hls(hls_img, magenta_mask, magenta_adjust)
+    magenta_condition = jnp.logical_and(hue_img >= 300, hue_img < 337.5)
+    hls_img = __adjust_hls(hls_img, magenta_condition, magenta_adjust)
 
     return hls_img
+
+
+@partial(jit, static_argnums=(3,))
+def create_smooth_weight(hue_img, center, width, transition=15.0):
+    """
+    滑らかな重み付け関数を作成（GPU対応版）
+    
+    Args:
+        hue_img: 色相画像
+        center: 中心となる色相値
+        width: 色相の範囲の幅
+        transition: 境界のぼかし幅（大きいほど滑らかに）
+    
+    Returns:
+        0〜1の間の重み値の配列
+    """
+    # 中心からの距離を計算
+    half_width = width / 2.0
+    
+    # 中心から上下half_width離れた点を境界とする
+    lower = (center - half_width) % 360
+    upper = (center + half_width) % 360
+    
+    # GPU対応：条件分岐を使わず、マスクと重みを計算
+    
+    # 通常ケース用の計算（lower < upper）
+    # コア領域（完全に含まれる領域）のマスク
+    normal_core = (hue_img >= lower) & (hue_img <= upper)
+    
+    # 下側の遷移領域のマスクと重み
+    normal_lower_mask = (hue_img >= (lower - transition)) & (hue_img < lower)
+    normal_lower_weight = (hue_img - (lower - transition)) / transition
+    
+    # 上側の遷移領域のマスクと重み
+    normal_upper_mask = (hue_img > upper) & (hue_img <= (upper + transition))
+    normal_upper_weight = ((upper + transition) - hue_img) / transition
+    
+    # 赤色など0/360度をまたぐケース用の計算（lower > upper）
+    # コア領域が2つに分かれる
+    wrap_core = (hue_img >= lower) | (hue_img <= upper)
+    
+    # 下側の遷移領域のマスクと重み
+    wrap_lower_mask = (hue_img >= ((lower - transition) % 360)) & (hue_img < lower)
+    wrap_lower_weight = (hue_img - ((lower - transition) % 360)) / transition
+    
+    # 上側の遷移領域のマスクと重み
+    wrap_upper_mask = (hue_img > upper) & (hue_img <= ((upper + transition) % 360))
+    wrap_upper_weight = (((upper + transition) % 360) - hue_img) / transition
+    
+    # 通常ケースと0/360度をまたぐケースの選択
+    # lower < upperの場合、use_normal=1.0、それ以外は0.0
+    use_normal = jnp.where(lower < upper, 1.0, 0.0)
+    
+    # コア領域のマスク
+    core_mask = normal_core * use_normal + wrap_core * (1.0 - use_normal)
+    
+    # 下側遷移領域のマスクと重み
+    lower_mask = normal_lower_mask * use_normal + wrap_lower_mask * (1.0 - use_normal)
+    lower_weight = normal_lower_weight * normal_lower_mask * use_normal + \
+                   wrap_lower_weight * wrap_lower_mask * (1.0 - use_normal)
+    
+    # 上側遷移領域のマスクと重み
+    upper_mask = normal_upper_mask * use_normal + wrap_upper_mask * (1.0 - use_normal)
+    upper_weight = normal_upper_weight * normal_upper_mask * use_normal + \
+                   wrap_upper_weight * wrap_upper_mask * (1.0 - use_normal)
+    
+    # 最終的な重み計算
+    weight = core_mask * 1.0 + lower_weight + upper_weight
+    
+    # 0〜1の範囲に収める
+    return jnp.clip(weight, 0.0, 1.0)
+
+@jit
+def adjust_hls_smooth(hls_img, weight, adjust):
+    """
+    HLS色空間での色調整を滑らかな重みを使って実装（GPU対応版）
+    
+    Args:
+        hls_img: HLS形式の画像配列
+        weight: 各ピクセルの調整重み（0〜1）
+        adjust: 調整値の配列 [色相, 明度, 彩度]
+    """
+    # 3次元の重みを計算（チャンネル数に合わせる）
+    weight_3d = weight[..., jnp.newaxis]
+    
+    # 各チャンネルの抽出
+    h = hls_img[..., 0:1]  # 色相
+    l = hls_img[..., 1:2]  # 明度
+    s = hls_img[..., 2:3]  # 彩度
+    
+    # 彩度が低い部分（グレースケールに近い）で色相変更を抑制
+    # 彩度が低いほど、色相の変化が目立たなくなるため、彩度に比例して色相調整を適用
+    saturation_factor = s  # 彩度がそのまま係数になる（0〜1）
+    
+    # 極端な明度（非常に暗いor明るい）でも色相/彩度変更を抑制
+    # 明度0.5を中心にした二次関数で、L=0またはL=1で0になる係数
+    luminance_factor = 1.0 - 4.0 * (l - 0.5) ** 2
+    luminance_factor = jnp.clip(luminance_factor, 0.0, 1.0)
+    
+    # 彩度と明度の両方の要素を考慮した最終的な保護係数
+    # この係数が低いほど、ハイライトやシャドウ、無彩色部分が保護される
+    protection_factor = saturation_factor * luminance_factor
+    
+    # 各チャンネルの調整（保護係数を適用）
+    # 色相調整：保護係数と重みの両方を適用
+    h_adjusted = h + adjust[0] * 1.8 * weight_3d * protection_factor
+    
+    # 明度調整：明度の調整は通常通り適用
+    l_adjusted = l * (1.0 + (2.0**adjust[1] - 1.0) * weight_3d * jnp.sqrt(luminance_factor))
+    
+    # 彩度調整：保護係数に反比例して抑制
+    # これにより、元々彩度が低い部分では彩度上昇が抑えられる
+    s_adjusted = s * (1.0 + (2.0**adjust[2] - 1.0) * weight_3d * jnp.sqrt(protection_factor))
+    
+    # 結果を結合
+    return jnp.concatenate([h_adjusted, l_adjusted, s_adjusted], axis=-1)
+
+# 各色の調整関数（JITで事前コンパイル）
+@partial(jit, static_argnums=(2,))
+def adjust_hls_red_smooth(hls_img, red_adjust, transition=15.0):
+    """
+    赤色領域の調整を滑らかに実装（GPU対応版）
+    
+    Args:
+        hls_img: HLS形式の画像配列
+        red_adjust: 赤色の調整値 [色相, 明度, 彩度]
+        transition: 境界のぼかし幅（度数）
+    """
+    hue_img = hls_img[..., 0]
+    
+    # 赤色は0度を中心とし、幅45度の範囲
+    red_weight = create_smooth_weight(hue_img, 0, 45, transition)
+    
+    return adjust_hls_smooth(hls_img, red_weight, jnp.array(red_adjust))
+
+@partial(jit, static_argnums=(2,))
+def adjust_hls_orange_smooth(hls_img, orange_adjust, transition=15.0):
+    """
+    オレンジ色領域の調整を滑らかに実装（GPU対応版）
+    """
+    hue_img = hls_img[..., 0]
+    
+    # オレンジは33.75度を中心とし、幅22.5度の範囲
+    orange_weight = create_smooth_weight(hue_img, 33.75, 22.5, transition)
+    
+    return adjust_hls_smooth(hls_img, orange_weight, jnp.array(orange_adjust))
+
+@partial(jit, static_argnums=(2,))
+def adjust_hls_yellow_smooth(hls_img, yellow_adjust, transition=15.0):
+    """
+    黄色領域の調整を滑らかに実装（GPU対応版）
+    """
+    hue_img = hls_img[..., 0]
+    
+    # 黄色は60度を中心とし、幅30度の範囲
+    yellow_weight = create_smooth_weight(hue_img, 60, 30, transition)
+    
+    return adjust_hls_smooth(hls_img, yellow_weight, jnp.array(yellow_adjust))
+
+@partial(jit, static_argnums=(2,))
+def adjust_hls_green_smooth(hls_img, green_adjust, transition=15.0):
+    """
+    緑色領域の調整を滑らかに実装（GPU対応版）
+    """
+    hue_img = hls_img[..., 0]
+    
+    # 緑は112.5度を中心とし、幅75度の範囲
+    green_weight = create_smooth_weight(hue_img, 112.5, 75, transition)
+    
+    return adjust_hls_smooth(hls_img, green_weight, jnp.array(green_adjust))
+
+@partial(jit, static_argnums=(2,))
+def adjust_hls_cyan_smooth(hls_img, cyan_adjust, transition=15.0):
+    """
+    シアン色領域の調整を滑らかに実装（GPU対応版）
+    """
+    hue_img = hls_img[..., 0]
+    
+    # シアンは180度を中心とし、幅60度の範囲
+    cyan_weight = create_smooth_weight(hue_img, 180, 60, transition)
+    
+    return adjust_hls_smooth(hls_img, cyan_weight, jnp.array(cyan_adjust))
+
+@partial(jit, static_argnums=(2,))
+def adjust_hls_blue_smooth(hls_img, blue_adjust, transition=15.0):
+    """
+    青色領域の調整を滑らかに実装（GPU対応版）
+    """
+    hue_img = hls_img[..., 0]
+    
+    # 青は240度を中心とし、幅60度の範囲
+    blue_weight = create_smooth_weight(hue_img, 240, 60, transition)
+    
+    return adjust_hls_smooth(hls_img, blue_weight, jnp.array(blue_adjust))
+
+@partial(jit, static_argnums=(2,))
+def adjust_hls_purple_smooth(hls_img, purple_adjust, transition=15.0):
+    """
+    紫色領域の調整を滑らかに実装（GPU対応版）
+    """
+    hue_img = hls_img[..., 0]
+    
+    # 紫は285度を中心とし、幅30度の範囲
+    purple_weight = create_smooth_weight(hue_img, 285, 30, transition)
+    
+    return adjust_hls_smooth(hls_img, purple_weight, jnp.array(purple_adjust))
+
+@partial(jit, static_argnums=(2,))
+def adjust_hls_magenta_smooth(hls_img, magenta_adjust, transition=15.0):
+    """
+    マゼンタ色領域の調整を滑らかに実装（GPU対応版）
+    """
+    hue_img = hls_img[..., 0]
+    
+    # マゼンタは318.75度を中心とし、幅37.5度の範囲
+    magenta_weight = create_smooth_weight(hue_img, 318.75, 37.5, transition)
+    
+    return adjust_hls_smooth(hls_img, magenta_weight, jnp.array(magenta_adjust))
+
+
 
 
 # マスクイメージの適用
@@ -916,6 +1119,7 @@ def crop_image(image, crop_info, texture_width, texture_height, click_x, click_y
     
     return result, crop_info
 
+
 def crop_image_info(image, crop_info, offset=(0, 0)):
     
     # 情報取得
@@ -969,18 +1173,25 @@ def get_multiple_mask_bbox(mask):
         y_min, y_max = np.where(rows)[0][[0, -1]]
         x_min, x_max = np.where(cols)[0][[0, -1]]
         
-        bboxes.append((x_min, y_min, x_max-x_min, y_max-y_min))
+        bboxes.append((int(x_min), int(y_min), int(x_max-x_min), int(y_max-y_min)))
     
     return bboxes
 
-def adjust_shape(img, param):
-    imax = max(img.shape[1], img.shape[0])
+# EXIFから画像の初期設定を設定する
+def set_image_param(param, exif_data):
+    _, _, width, height = get_exif_image_size(exif_data)
 
     # イメージサイズをパラメータに入れる
-    param['original_img_size'] = (img.shape[1], img.shape[0])
-    param['img_size'] = (img.shape[1], img.shape[0])
-    param['crop_rect'] = param.get('crop_rect', crop_editor.CropEditor.get_initial_crop_rect(img.shape[1], img.shape[0]))
+    param['original_img_size'] = (width, height)
+    param['img_size'] = (width, height)
+    param['crop_rect'] = param.get('crop_rect', crop_editor.CropEditor.get_initial_crop_rect(width, height))
     param['crop_info'] = crop_editor.CropEditor.convert_rect_to_info(param['crop_rect'], config.get_config('preview_size')/max(param['original_img_size']))
+
+    return width, height
+
+# 上下または左右の余白を追加
+def adjust_shape(img, param):
+    imax = max(img.shape[1], img.shape[0])
 
     # イメージを正方形にする
     offset_y = (imax-img.shape[0])//2
@@ -1480,3 +1691,232 @@ def dehaze_image(img, strength=0.5):
         result = img * transmission + atmospheric_light * (1 - transmission)
 
     return result
+
+import numpy as np
+
+def bicubic_kernel_vectorized(x, a=-0.5):
+    """
+    バイキュービック補間カーネル関数（ベクトル化版）
+    
+    Parameters:
+    -----------
+    x : numpy.ndarray
+        距離値
+    a : float
+        バイキュービックパラメータ (デフォルト: -0.5)
+        
+    Returns:
+    --------
+    numpy.ndarray
+        カーネルの重み
+    """
+    x = np.abs(x)
+    result = np.zeros_like(x, dtype=np.float32)
+    
+    # |x| <= 1 の場合
+    mask1 = x <= 1
+    result[mask1] = ((a + 2) * x[mask1]**3 - (a + 3) * x[mask1]**2 + 1)
+    
+    # 1 < |x| < 2 の場合
+    mask2 = np.logical_and(x > 1, x < 2)
+    result[mask2] = (a * x[mask2]**3 - 5 * a * x[mask2]**2 + 8 * a * x[mask2] - 4 * a)
+    
+    return result
+
+def resize_bicubic_vectorized(image, target_height, target_width):
+    """
+    ベクトル化されたバイキュービック補間による画像リサイズ
+    
+    Parameters:
+    -----------
+    image : numpy.ndarray
+        入力画像、float32型のNumPy配列 (height, width) または (height, width, channels)
+    target_height : int
+        目標の高さ
+    target_width : int
+        目標の幅
+        
+    Returns:
+    --------
+    numpy.ndarray
+        リサイズされた画像、float32型のNumPy配列
+    """
+    # float32型に変換
+    image = image.astype(np.float32)
+    
+    # 画像の寸法を取得
+    original_height, original_width = image.shape[:2]
+    
+    # グレースケール画像の処理
+    is_grayscale = len(image.shape) == 2
+    if is_grayscale:
+        # 処理を統一するためチャンネル次元を追加
+        image = image[:, :, np.newaxis]
+    
+    channels = image.shape[2]
+    
+    # スケーリング係数の計算
+    if target_height > 1:
+        scale_y = float(original_height - 1) / (target_height - 1)
+    else:
+        scale_y = 0.0
+        
+    if target_width > 1:
+        scale_x = float(original_width - 1) / (target_width - 1)
+    else:
+        scale_x = 0.0
+    
+    # 出力ピクセル座標のグリッドを作成
+    y_coords = np.arange(target_height, dtype=np.float32)
+    x_coords = np.arange(target_width, dtype=np.float32)
+    
+    # 元画像の対応座標を計算
+    y_coords = y_coords * scale_y
+    x_coords = x_coords * scale_x
+    
+    # 整数部分と小数部分に分解
+    y_floor = np.floor(y_coords).astype(np.int32)
+    x_floor = np.floor(x_coords).astype(np.int32)
+    
+    y_frac = y_coords - y_floor
+    x_frac = x_coords - x_floor
+    
+    # 範囲外アクセスを防ぐためのインデックス調整
+    y_indices = np.zeros((target_height, 4), dtype=np.int32)
+    x_indices = np.zeros((target_width, 4), dtype=np.int32)
+    
+    for i in range(-1, 3):
+        y_idx = np.clip(y_floor + i, 0, original_height - 1)
+        x_idx = np.clip(x_floor + i, 0, original_width - 1)
+        y_indices[:, i+1] = y_idx
+        x_indices[:, i+1] = x_idx
+    
+    # バイキュービックカーネルの重みを計算
+    y_weights = np.zeros((target_height, 4), dtype=np.float32)
+    x_weights = np.zeros((target_width, 4), dtype=np.float32)
+    
+    for i in range(-1, 3):
+        y_dist = y_frac[:, np.newaxis] - i
+        x_dist = x_frac[:, np.newaxis] - i
+        y_weights[:, i+1] = bicubic_kernel_vectorized(y_dist).reshape(-1)
+        x_weights[:, i+1] = bicubic_kernel_vectorized(x_dist).reshape(-1)
+    
+    # 出力画像の初期化
+    output = np.zeros((target_height, target_width, channels), dtype=np.float32)
+    
+    # バイキュービック補間を適用
+    for c in range(channels):
+        for i in range(4):
+            for j in range(4):
+                # 元画像から必要な位置のピクセルを取得
+                pixel_values = image[y_indices[:, i][:, np.newaxis], x_indices[:, j][np.newaxis, :], c]
+                
+                # 重みの行列積を計算
+                weights = y_weights[:, i][:, np.newaxis] * x_weights[:, j][np.newaxis, :]
+                
+                # 重み付きピクセル値を出力に加算
+                output[:, :, c] += pixel_values * weights
+    
+    # 元がグレースケールの場合、チャンネル次元を削除
+    if is_grayscale:
+        output = output[:, :, 0]
+    
+    return output
+
+def resize_bicubic_fully_vectorized(image, target_height, target_width):
+    """
+    完全ベクトル化されたバイキュービック補間による画像リサイズ
+    大きな画像でのメモリ使用量に注意
+    
+    Parameters:
+    -----------
+    image : numpy.ndarray
+        入力画像、float32型のNumPy配列 (height, width) または (height, width, channels)
+    target_height : int
+        目標の高さ
+    target_width : int
+        目標の幅
+        
+    Returns:
+    --------
+    numpy.ndarray
+        リサイズされた画像、float32型のNumPy配列
+    """
+    # float32型に変換
+    image = image.astype(np.float32)
+    
+    # 画像の寸法を取得
+    original_height, original_width = image.shape[:2]
+    
+    # グレースケール画像の処理
+    is_grayscale = len(image.shape) == 2
+    if is_grayscale:
+        # 処理を統一するためチャンネル次元を追加
+        image = image[:, :, np.newaxis]
+    
+    channels = image.shape[2]
+    
+    # スケーリング係数の計算
+    if target_height > 1:
+        scale_y = float(original_height - 1) / (target_height - 1)
+    else:
+        scale_y = 0.0
+        
+    if target_width > 1:
+        scale_x = float(original_width - 1) / (target_width - 1)
+    else:
+        scale_x = 0.0
+    
+    # 出力ピクセル座標のグリッドを作成
+    y_grid, x_grid = np.meshgrid(np.arange(target_height, dtype=np.float32),
+                                 np.arange(target_width, dtype=np.float32),
+                                 indexing='ij')
+    
+    # 元画像の対応座標を計算
+    y_original = y_grid * scale_y
+    x_original = x_grid * scale_x
+    
+    # 整数部分と小数部分に分解
+    y_floor = np.floor(y_original).astype(np.int32)
+    x_floor = np.floor(x_original).astype(np.int32)
+    
+    y_frac = y_original - y_floor
+    x_frac = x_original - x_floor
+    
+    # 出力画像の初期化
+    output = np.zeros((target_height, target_width, channels), dtype=np.float32)
+    
+    # 各チャンネルに対して補間を計算
+    for c in range(channels):
+        channel_sum = np.zeros((target_height, target_width), dtype=np.float32)
+        
+        # 16個の近傍点に対して重みを計算し適用
+        for i in range(-1, 3):
+            # y方向のインデックスとカーネル重み
+            y_idx = np.clip(y_floor + i, 0, original_height - 1)
+            y_dist = np.abs(y_frac - i)
+            y_weight = bicubic_kernel_vectorized(y_dist)
+            
+            for j in range(-1, 3):
+                # x方向のインデックスとカーネル重み
+                x_idx = np.clip(x_floor + j, 0, original_width - 1)
+                x_dist = np.abs(x_frac - j)
+                x_weight = bicubic_kernel_vectorized(x_dist)
+                
+                # 重みの計算（ブロードキャスト）
+                weight = y_weight * x_weight
+                
+                # 対応するピクセル値を取得
+                pixel_value = image[y_idx, x_idx, c]
+                
+                # 重み付きピクセル値を加算
+                channel_sum += pixel_value * weight
+        
+        output[:, :, c] = channel_sum
+    
+    # 元がグレースケールの場合、チャンネル次元を削除
+    if is_grayscale:
+        output = output[:, :, 0]
+    
+    return output
+

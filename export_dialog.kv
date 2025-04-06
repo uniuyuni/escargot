@@ -1,29 +1,26 @@
-
 #:include param_slider.kv
 #:include spacer.kv
 #:include separator.kv
 
 <ExportDialog>:
-    size_hint: None, None
-    size: dp(600), dp(400)
+    size_hint: 0.8, 0.8
 
     BoxLayout:
         orientation: 'vertical'
-        padding: dp(5)
-        spacing: dp(5)
+        padding: 0.01 * root.width
+        spacing: 0.01 * root.width
 
         GridLayout:
-            size_hint_y: None
-            height: self.minimum_height
+            size_hint_y: 0.9
             cols: 1
-            spacing: dp(5)
-            padding: dp(5)
+            spacing: 0.01 * root.width
+            padding: 0.01 * root.width
 
             # プリセットセクション
             BoxLayout:
                 size_hint_y: None
-                height: dp(20)
-                spacing: dp(5)
+                height: 0.05 * root.height
+                spacing: 0.01 * root.width
                 
                 ParamLabel:
                     text: 'Preset'
@@ -36,17 +33,17 @@
                     on_text: root.load_preset(self.text)
 
             VSpacer:
-                height: dp(5)
+                size_hint_y: 0.01
             HSeparator:
             VSpacer:
-                height: dp(5)
+                size_hint_y: 0.01
 
             # 出力形式セクション
             BoxLayout:
                 orientation: 'horizontal'
                 size_hint_y: None
-                height: dp(20)
-                spacing: dp(5)
+                height: 0.05 * root.height
+                spacing: 0.01 * root.width
 
                 ParamLabel:
                     text: 'Output Format'
@@ -69,22 +66,21 @@
                     on_slider: root.quality_value = int(self.value)
 
             VSpacer:
-                height: dp(5)
+                size_hint_y: 0.01
 
             # 出力先設定
             BoxLayout:
                 orientation: 'horizontal'
                 size_hint_y: None
-                height: dp(25)
-                spacing: dp(5)
+                height: 0.06 * root.height
+                spacing: 0.01 * root.width
 
                 ParamLabel:
                     text: 'Output Location'
 
                 BoxLayout:
-                    size_hint_y: None
-                    height: dp(25)
-                    spacing: dp(5)
+                    size_hint_y: 1
+                    spacing: 0.01 * root.width
 
                     TextInput:
                         text: root.output_path
@@ -97,14 +93,14 @@
                         on_press: root.browse_output()
 
             VSpacer:
-                height: dp(5)
+                size_hint_y: 0.01
         
             # サイズ設定セクション
             BoxLayout:
                 orientation: 'horizontal'
                 size_hint_y: None
-                height: dp(20)
-                spacing: dp(5)
+                height: 0.05 * root.height
+                spacing: 0.01 * root.width
 
                 ParamLabel:
                     text: 'Output Size'
@@ -121,14 +117,14 @@
                     on_text: root.size_value = self.text
 
             VSpacer:
-                height: dp(5)
+                size_hint_y: 0.01
 
             # プロファイル
             BoxLayout:
                 orientation: 'horizontal'
                 size_hint_y: None
-                height: dp(20)
-                spacing: dp(5)
+                height: 0.05 * root.height
+                spacing: 0.01 * root.width
 
                 ParamLabel:
                     text: 'Color Space'
@@ -139,10 +135,10 @@
                     on_text: root.color_space = self.text
 
             VSpacer:
-                height: dp(5)
+                size_hint_y: 0.01
             HSeparator:
             VSpacer:
-                height: dp(5)
+                size_hint_y: 0.01
 
             ParamSlider:
                 id: slider_sharpen
@@ -157,8 +153,8 @@
             # メタデータ設定
             BoxLayout:
                 size_hint_y: None
-                height: dp(20)
-                spacing: dp(5)
+                height: 0.05 * root.height
+                spacing: 0.01 * root.width
 
                 ParamLabel:
                     text: "Metadata"
@@ -169,16 +165,16 @@
                     on_active: root.include_metadata = self.active
 
             VSpacer:
-                height: dp(5)
+                size_hint_y: 0.01
             HSeparator:
             VSpacer:
-                height: dp(5)
+                size_hint_y: 0.01
 
             # プリセット管理ボタン
             BoxLayout:
                 size_hint_y: None
-                height: dp(20)
-                spacing: dp(5)
+                height: 0.05 * root.height
+                spacing: 0.01 * root.width
 
                 Button:
                     text: 'Save Preset'
@@ -191,20 +187,19 @@
 
         BoxLayout:
             orientation: 'horizontal'
+            size_hint_y: 0.1
 
             VSpacer:
-                size_hint_x: 6
+                size_hint_x: 0.6
 
             # キャンセルボタン
             Button:
                 text: 'Cancel'
-                size_hint: 2, None
-                height: dp(30)
+                size_hint_x: 0.2
                 on_press: root.cancel()
 
             # エクスポートボタン
             Button:
                 text: 'Export'
-                size_hint: 2, None
-                height: dp(30)
+                size_hint_x: 0.2
                 on_press: root.export()

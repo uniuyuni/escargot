@@ -6,8 +6,10 @@
 #:include metainfo.kv
 #:include color_picker.kv
 #:include export_dialog.kv  
+#:include mask_editor2.kv
 
 <MainSpinnerOption@SpinnerOption>:
+    size_hint_y: None
     height: dp(20)
 
 <MainWidget>:
@@ -18,20 +20,20 @@
 
         BoxLayout:
             orientation: 'horizontal'
-            size_hint_y: 9
+            size_hint_y: 0.9
 
             BoxLayout:
                 orientation: 'vertical'
-                size_hint_x: 3
+                size_hint_x: 0.3
                 margin: dp(8)
                 spacing: dp(8)
 
                 HistogramWidget:
                     id: histogram
-                    size_hint: None, None
-                    size: dp(256), dp(100)
+                    size_hint: 1, 0.1
 
                 MDScrollView:
+                    size_hint: 1, 0.9
 
                     BoxLayout:
                         size_hint_y: None
@@ -89,11 +91,11 @@
                             
             BoxLayout:
                 orientation: 'vertical'
-                size_hint_x: 7
+                size_hint_x: 0.7
 
                 FloatLayout:
                     id: preview_widget
-                    size_hint_y: 9.5
+                    size_hint_y: 0.95
                     pos_hint: {'x':0, 'top': 1}
                     on_touch_down: root.on_image_touch_down(args[1])
                     on_touch_move: root.on_image_touch_move(args[1])
@@ -116,35 +118,32 @@
 
                 BoxLayout:
                     orientation: 'horizontal'
-                    size_hint_y: 0.5
+                    size_hint_y: 0.05
 
                     Button:
-                        size_hint_x: 1
+                        size_hint_x: 0.1
                         text: "select"
                         on_press: root.on_select_press()
                     VSpacer:
-                        size_hint_x: 7
+                        size_hint_x: 0.7
                     ToggleButton:
                         id: mask2
-                        size_hint_x: 1
+                        size_hint_x: 0.1
                         text: "mask2"
                         on_state: root.on_mask2_press(self.state)
                         on_state: geometry.disabled = True if mask2.state == 'down' else False
                     Button:
-                        size_hint_x: 1
+                        size_hint_x: 0.1
                         text: "export"
                         on_press: root.on_export_press()
 
 
             TabbedPanel:
                 id: effects
-                size: dp(350+16), 0
-                size_hint_x: None
+                size_hint_x: 0.4
                 do_default_tab: False
-                tab_width: dp(80)
-                tab_height: dp(30)
-                padding: dp(8)
-                spacing: dp(8)
+                tab_width: self.width * 0.2
+                tab_height: self.height * 0.05
                 on_current_tab: root.on_current_tab(self.current_tab)
                 on_current_tab: mask2.disabled = self.current_tab.text == "Geometry"
 
@@ -296,6 +295,15 @@
                                 for_float: True
                                 on_slider: root.apply_effects_lv(2, 'dehaze')
 
+                            ParamSlider:
+                                id: slider_clahe_intensity
+                                text: "CLAHE"
+                                min: 0
+                                max: 100
+                                value: 0
+                                step: 1
+                                on_slider: root.apply_effects_lv(2, 'clahe')
+
                             HSeparator:
                                 height: dp(20)
                             
@@ -306,7 +314,7 @@
                                 max: 100
                                 value: 0
                                 step: 1
-                                on_slider: root.apply_effects_lv(2, 'saturation')
+                                on_slider: root.apply_effects_lv(2, 'vs_and_saturation')
 
                             ParamSlider:
                                 text: "Vibrance"
@@ -315,7 +323,7 @@
                                 max: 100
                                 value: 0
                                 step: 1
-                                on_slider: root.apply_effects_lv(2, 'saturation')
+                                on_slider: root.apply_effects_lv(2, 'vs_and_saturation')
 
                             HSeparator:
                                 height: dp(15)
@@ -359,7 +367,7 @@
                                             max: 100.0
                                             value: 0.0
                                             step: 1.0
-                                            on_slider: root.apply_effects_lv(2, 'hls_red')
+                                            on_slider: root.apply_effects_lv(2, 'hls')
                                         ParamSlider:
                                             id: slider_hls_red_sat
                                             text: "Saturation"
@@ -367,7 +375,7 @@
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_slider: root.apply_effects_lv(2, 'hls_red')
+                                            on_slider: root.apply_effects_lv(2, 'hls')
                                         ParamSlider:
                                             id: slider_hls_red_lum
                                             text: "Luminance"
@@ -375,7 +383,7 @@
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_slider: root.apply_effects_lv(2, 'hls_red')
+                                            on_slider: root.apply_effects_lv(2, 'hls')
                     
                                 TabbedPanelItem:
                                     text: 'Orange'
@@ -399,7 +407,7 @@
                                             max: 100.0
                                             value: 0.0
                                             step: 1.0
-                                            on_slider: root.apply_effects_lv(2, 'hls_orange')
+                                            on_slider: root.apply_effects_lv(2, 'hls')
                                         ParamSlider:
                                             id: slider_hls_orange_sat
                                             text: "Saturation"
@@ -407,7 +415,7 @@
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_slider: root.apply_effects_lv(2, 'hls_orange')
+                                            on_slider: root.apply_effects_lv(2, 'hls')
                                         ParamSlider:
                                             id: slider_hls_orange_lum
                                             text: "Luminance"
@@ -415,7 +423,7 @@
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_slider: root.apply_effects_lv(2, 'hls_orange')
+                                            on_slider: root.apply_effects_lv(2, 'hls')
 
                                 TabbedPanelItem:
                                     text: 'Yellow'
@@ -439,7 +447,7 @@
                                             max: 100.0
                                             value: 0.0
                                             step: 1.0
-                                            on_slider: root.apply_effects_lv(2, 'hls_yellow')
+                                            on_slider: root.apply_effects_lv(2, 'hls')
                                         ParamSlider:
                                             id: slider_hls_yellow_sat
                                             text: "Saturation"
@@ -447,7 +455,7 @@
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_slider: root.apply_effects_lv(2, 'hls_yellow')
+                                            on_slider: root.apply_effects_lv(2, 'hls')
                                         ParamSlider:
                                             id: slider_hls_yellow_lum
                                             text: "Luminance"
@@ -455,7 +463,7 @@
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_slider: root.apply_effects_lv(2, 'hls_yellow')
+                                            on_slider: root.apply_effects_lv(2, 'hls')
 
                                 TabbedPanelItem:
                                     text: 'Green'
@@ -479,7 +487,7 @@
                                             max: 100.0
                                             value: 0.0
                                             step: 1.0
-                                            on_slider: root.apply_effects_lv(2, 'hls_green')
+                                            on_slider: root.apply_effects_lv(2, 'hls')
                                         ParamSlider:
                                             id: slider_hls_green_sat
                                             text: "Saturation"
@@ -487,7 +495,7 @@
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_slider: root.apply_effects_lv(2, 'hls_green')
+                                            on_slider: root.apply_effects_lv(2, 'hls')
                                         ParamSlider:
                                             id: slider_hls_green_lum
                                             text: "Luminance"
@@ -495,7 +503,7 @@
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_slider: root.apply_effects_lv(2, 'hls_green')
+                                            on_slider: root.apply_effects_lv(2, 'hls')
 
                                 TabbedPanelItem:
                                     text: 'Cyan'
@@ -519,7 +527,7 @@
                                             max: 100.0
                                             value: 0.0
                                             step: 1.0
-                                            on_slider: root.apply_effects_lv(2, 'hls_cyan')
+                                            on_slider: root.apply_effects_lv(2, 'hls')
                                         ParamSlider:
                                             id: slider_hls_cyan_sat
                                             text: "Saturation"
@@ -527,7 +535,7 @@
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_slider: root.apply_effects_lv(2, 'hls_cyan')
+                                            on_slider: root.apply_effects_lv(2, 'hls')
                                         ParamSlider:
                                             id: slider_hls_cyan_lum
                                             text: "Luminance"
@@ -535,7 +543,7 @@
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_slider: root.apply_effects_lv(2, 'hls_cyan')
+                                            on_slider: root.apply_effects_lv(2, 'hls')
 
                                 TabbedPanelItem:
                                     text: 'Blue'
@@ -559,7 +567,7 @@
                                             max: 100.0
                                             value: 0.0
                                             step: 1.0
-                                            on_slider: root.apply_effects_lv(2, 'hls_blue')
+                                            on_slider: root.apply_effects_lv(2, 'hls')
                                         ParamSlider:
                                             id: slider_hls_blue_sat
                                             text: "Saturation"
@@ -567,7 +575,7 @@
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_slider: root.apply_effects_lv(2, 'hls_blue')
+                                            on_slider: root.apply_effects_lv(2, 'hls')
                                         ParamSlider:
                                             id: slider_hls_blue_lum
                                             text: "Luminance"
@@ -575,7 +583,7 @@
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_slider: root.apply_effects_lv(2, 'hls_blue')
+                                            on_slider: root.apply_effects_lv(2, 'hls')
 
                                 TabbedPanelItem:
                                     text: 'Purple'
@@ -599,7 +607,7 @@
                                             max: 100.0
                                             value: 0.0
                                             step: 1.0
-                                            on_slider: root.apply_effects_lv(2, 'hls_purple')
+                                            on_slider: root.apply_effects_lv(2, 'hls')
                                         ParamSlider:
                                             id: slider_hls_purple_sat
                                             text: "Saturation"
@@ -607,7 +615,7 @@
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_slider: root.apply_effects_lv(2, 'hls_purple')
+                                            on_slider: root.apply_effects_lv(2, 'hls')
                                         ParamSlider:
                                             id: slider_hls_purple_lum
                                             text: "Luminance"
@@ -615,7 +623,7 @@
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_slider: root.apply_effects_lv(2, 'hls_purple')
+                                            on_slider: root.apply_effects_lv(2, 'hls')
 
                                 TabbedPanelItem:
                                     text: 'Magenta'
@@ -639,7 +647,7 @@
                                             max: 100.0
                                             value: 0.0
                                             step: 1.0
-                                            on_slider: root.apply_effects_lv(2, 'hls_magenta')
+                                            on_slider: root.apply_effects_lv(2, 'hls')
                                         ParamSlider:
                                             id: slider_hls_magenta_sat
                                             text: "Saturation"
@@ -647,7 +655,7 @@
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_slider: root.apply_effects_lv(2, 'hls_magenta')
+                                            on_slider: root.apply_effects_lv(2, 'hls')
                                         ParamSlider:
                                             id: slider_hls_magenta_lum
                                             text: "Luminance"
@@ -655,7 +663,7 @@
                                             max: 1.0
                                             value: 0.0
                                             step: 0.05
-                                            on_slider: root.apply_effects_lv(2, 'hls_magenta')
+                                            on_slider: root.apply_effects_lv(2, 'hls')
 
                             HSeparator:
                                 height: 30
@@ -796,7 +804,7 @@
                                         id: tonecurve
                                         start_y: 0.0
                                         end_y: 1.0
-                                        on_curve: root.apply_effects_lv(2, 'tonecurve')
+                                        on_curve: root.apply_effects_lv(2, 'curve')
 
                                 TabbedPanelItem:
                                     text: 'Red'
@@ -805,7 +813,7 @@
                                         id: tonecurve_red
                                         start_y: 0.0
                                         end_y: 1.0
-                                        on_curve: root.apply_effects_lv(2, 'tonecurve_red')
+                                        on_curve: root.apply_effects_lv(2, 'curve')
 
                                 TabbedPanelItem:
                                     text: 'Green'
@@ -814,7 +822,7 @@
                                         id: tonecurve_green
                                         start_y: 0.0
                                         end_y: 1.0
-                                        on_curve: root.apply_effects_lv(2, 'tonecurve_green')
+                                        on_curve: root.apply_effects_lv(2, 'curve')
 
                                 TabbedPanelItem:
                                     text: 'Blue'
@@ -823,7 +831,7 @@
                                         id: tonecurve_blue
                                         start_y: 0.0
                                         end_y: 1.0
-                                        on_curve: root.apply_effects_lv(2, 'tonecurve_blue')
+                                        on_curve: root.apply_effects_lv(2, 'curve')
 
                             HSeparator:
                                 height: 30
@@ -858,11 +866,11 @@
                                             size_hint: None, None
                                             start_y: 1.0
                                             end_y: 0.0
-                                            on_curve: root.apply_effects_lv(2, 'grading1')
+                                            on_curve: root.apply_effects_lv(2, 'curve')
 
                                         CWColorPicker:
                                             id: grading1_color_picker
-                                            on_current_color: root.apply_effects_lv(2, 'grading1')
+                                            on_current_color: root.apply_effects_lv(2, 'curve')
 
 
                                 TabbedPanelItem:
@@ -879,11 +887,11 @@
                                             size_hint: None, None
                                             start_y: 0.0
                                             end_y: 1.0
-                                            on_curve: root.apply_effects_lv(2, 'grading2')
+                                            on_curve: root.apply_effects_lv(2, 'curve')
 
                                         CWColorPicker:
                                             id: grading2_color_picker
-                                            on_current_color: root.apply_effects_lv(2, 'grading2')
+                                            on_current_color: root.apply_effects_lv(2, 'curve')
 
                             HSeparator:
                                 height: dp(15)
@@ -912,7 +920,7 @@
                                         size_hint: None, None
                                         start_y: 0.5
                                         end_y: 0.5
-                                        on_curve: root.apply_effects_lv(2, 'LumvsLum')
+                                        on_curve: root.apply_effects_lv(2, 'vs_and_saturation')
 
                                 TabbedPanelItem:
                                     text: 'Hue vs Hue'
@@ -931,7 +939,7 @@
                                         size_hint: None, None
                                         start_y: 0.5
                                         end_y: 0.5
-                                        on_curve: root.apply_effects_lv(2, 'HuevsHue')
+                                        on_curve: root.apply_effects_lv(2, 'vs_and_saturation')
 
                                 TabbedPanelItem:
                                     text: 'Hue vs Sat'
@@ -950,7 +958,7 @@
                                         size_hint: None, None
                                         start_y: 0.5
                                         end_y: 0.5
-                                        on_curve: root.apply_effects_lv(2, 'HuevsSat')
+                                        on_curve: root.apply_effects_lv(2, 'vs_and_saturation')
 
                                 TabbedPanelItem:
                                     text: 'Hue vs Lum'
@@ -969,7 +977,7 @@
                                         size_hint: None, None
                                         start_y: 0.5
                                         end_y: 0.5
-                                        on_curve: root.apply_effects_lv(2, 'HuevsLum')
+                                        on_curve: root.apply_effects_lv(2, 'vs_and_saturation')
 
                                 TabbedPanelItem:
                                     text: 'Lum vs Sat'
@@ -988,7 +996,7 @@
                                         size_hint: None, None
                                         start_y: 0.5
                                         end_y: 0.5
-                                        on_curve: root.apply_effects_lv(2, 'LumvsSat')
+                                        on_curve: root.apply_effects_lv(2, 'vs_and_saturation')
 
                                 TabbedPanelItem:
                                     text: 'Sat vs Sat'
@@ -1007,7 +1015,7 @@
                                         size_hint: None, None
                                         start_y: 0.5
                                         end_y: 0.5
-                                        on_curve: root.apply_effects_lv(2, 'SatvsSat')
+                                        on_curve: root.apply_effects_lv(2, 'vs_and_saturation')
 
                                 TabbedPanelItem:
                                     text: 'Sat vs Lum'
@@ -1026,7 +1034,7 @@
                                         size_hint: None, None
                                         start_y: 0.5
                                         end_y: 0.5
-                                        on_curve: root.apply_effects_lv(2, 'SatvsLum')                            
+                                        on_curve: root.apply_effects_lv(2, 'vs_and_saturation')                            
 
                 TabbedPanelItem:
                     text: 'Extra'

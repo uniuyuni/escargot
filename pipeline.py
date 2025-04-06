@@ -6,6 +6,7 @@ import core
 import export
 import config
 import crop_editor
+import effects
 
 def process_pipeline(img, offset, crop_image, is_zoomed, texture_width, texture_height, click_x, click_y, primary_effects, primary_param, mask_editor2):
 
@@ -18,14 +19,6 @@ def process_pipeline(img, offset, crop_image, is_zoomed, texture_width, texture_
     img0, reset = pipeline_lv0(img, primary_effects, primary_param)
     if crop_image is None or reset == True:
         imgc, crop_info2 = core.crop_image(img0, crop_info, texture_width, texture_height, click_x, click_y, offset, is_zoomed)
-        """
-        if is_zoomed:
-            if crop_info is None:
-                _, crop_info = core.crop_image(img0, texture_width, texture_height, click_x, click_y, (0, 0), is_zoomed)
-            imgc, crop_info2 = core.crop_image_info(img0, crop_info, offset)
-        else:
-            imgc, crop_info2 = core.crop_image(img0, texture_width, texture_height, click_x, click_y, offset, is_zoomed)
-        """
         mask_editor2.set_orientation(primary_param.get('rotation', 0), primary_param.get('rotation2', 0), primary_param.get('flip_mode', 0))
         #mask_editor2.set_texture_size(texture_width, texture_height)
         mask_editor2.set_image(primary_param['original_img_size'], crop_info2)
@@ -33,7 +26,9 @@ def process_pipeline(img, offset, crop_image, is_zoomed, texture_width, texture_
     else:
         imgc = crop_image
         crop_info2 = crop_info
-    mask_editor2.set_crop_image(imgc)
+    #mask_editor2.set_ref_image(effects.ColorTemperatureEffect.apply_color_temperature(imgc, primary_param),
+    #                           effects.ColorTemperatureEffect.apply_color_temperature(img0, primary_param))
+    mask_editor2.set_ref_image(imgc, img0)
     mask_editor2.update()
 
     # 並列処理
@@ -60,9 +55,12 @@ def export_pipeline(img, primary_effects, primary_param, mask_editor2):
     imgc = img0[y1:y2, x1:x2] # ただのクロップ
     #imgc, crop_info2 = core.crop_image(img0, crop_info, *primary_param['original_img_size'], 0, 0, (0, 0), False)
     mask_editor2.set_orientation(primary_param.get('rotation', 0), primary_param.get('rotation2', 0), primary_param.get('flip_mode', 0))
-    mask_editor2.set_texture_size(imgc.shape[1], imgc.shape[0])
+    imax = max(imgc.shape[1], imgc.shape[0])
+    mask_editor2.set_texture_size(imax, imax)
     mask_editor2.set_image(primary_param['original_img_size'], crop_editor.CropEditor.convert_rect_to_info(primary_param.get('crop_rect'), 1))
-    mask_editor2.set_crop_image(imgc)
+    #mask_editor2.set_ref_image(effects.ColorTemperatureEffect.apply_color_temperature(imgc, primary_param),
+    #                           effects.ColorTemperatureEffect.apply_color_temperature(img0, primary_param))
+    mask_editor2.set_ref_image(imgc, img0)
     mask_editor2.update()
 
     img2 = pipeline2(imgc, 0, imgc.shape[0], None, primary_effects, primary_param, mask_editor2)
@@ -108,6 +106,10 @@ def pipeline_lv0(img, effects, param):
             v.reeffect()
         for v in effects[2].values():
             v.reeffect()
+        for v in effects[3].values():
+            v.reeffect()
+        for v in effects[4].values():
+            v.reeffect()
 
     return rgb, lv1reset
 
@@ -131,12 +133,38 @@ def pipeline_lv1(img, effects, param):
     if lv2reset == True:
         for l in effects[2].values():
             l.reeffect()
+        for l in effects[3].values():
+            l.reeffect()
+        for l in effects[4].values():
+            l.reeffect()
 
     return rgb
 
 
 def pipeline_lv2(rgb, effects, param):
     lv2 = effects[2]
+
+    lv1reset = False
+
+    for i, n in enumerate(lv2):
+        if lv1reset == True:
+            lv2[n].reeffect()
+            
+        pre_diff = lv2[n].diff
+        diff = lv2[n].make_diff(rgb, param)
+        if diff is not None:
+            rgb = lv2[n].apply_diff(rgb)
+
+        if pre_diff is not diff:
+            lv1reset = True
+
+    if lv1reset == True:
+        for v in effects[3].values():
+            v.reeffect()
+        for v in effects[4].values():
+            v.reeffect()
+
+    return rgb
 
     # 色補正
     diff = lv2['color_temperature'].make_diff(rgb, param)
@@ -147,25 +175,15 @@ def pipeline_lv2(rgb, effects, param):
     if diff is not None: rgb = lv2['dehaze'].apply_diff(rgb)
 
     # HLS
-    hls = cv2.cvtColor(rgb, cv2.COLOR_RGB2HLS_FULL)
-    hls2 = hls.copy()
-    diff = lv2['hls_red'].make_diff(hls, param)
-    if diff is not None: hls2 = lv2['hls_red'].apply_diff(hls2)
-    diff = lv2['hls_orange'].make_diff(hls, param)
-    if diff is not None: hls2 = lv2['hls_orange'].apply_diff(hls2)
-    diff = lv2['hls_yellow'].make_diff(hls, param)
-    if diff is not None: hls2 = lv2['hls_yellow'].apply_diff(hls2)
-    diff = lv2['hls_green'].make_diff(hls, param)
-    if diff is not None: hls2 = lv2['hls_green'].apply_diff(hls2)
-    diff = lv2['hls_cyan'].make_diff(hls, param)
-    if diff is not None: hls2 = lv2['hls_cyan'].apply_diff(hls2)
-    diff = lv2['hls_blue'].make_diff(hls, param)
-    if diff is not None: hls2 = lv2['hls_blue'].apply_diff(hls2)
-    diff = lv2['hls_purple'].make_diff(hls, param)
-    if diff is not None: hls2 = lv2['hls_purple'].apply_diff(hls2)
-    diff = lv2['hls_magenta'].make_diff(hls, param)
-    if diff is not None: hls2 = lv2['hls_magenta'].apply_diff(hls2)
-    rgb = cv2.cvtColor(np.array(hls2), cv2.COLOR_HLS2RGB_FULL)
+    diff = lv2['rgb2hls1'].make_diff(rgb, param)
+    if diff is not None: hls = lv2['rgb2hls1'].apply_diff(rgb)
+    pre_diff = lv2['hls'].diff
+    diff = lv2['hls'].make_diff(hls, param)
+    if diff is not None: hls = lv2['hls'].apply_diff(hls)
+    if pre_diff is not diff:
+        lv2['hls2rgb1'].reeffect()
+    diff = lv2['hls2rgb1'].make_diff(hls, param)
+    if diff is not None: rgb = lv2['hls2rgb1'].apply_diff(hls)
 
     #　明るさ補正
     diff = lv2['exposure'].make_diff(rgb, param)
@@ -182,61 +200,21 @@ def pipeline_lv2(rgb, effects, param):
     if diff is not None: rgb = lv2['highlight_compress'].apply_diff(rgb)
     diff = lv2['level'].make_diff(rgb, param)
     if diff is not None: rgb = lv2['level'].apply_diff(rgb)
-    #rgb = np.clip(rgb, 0, 1)
+    diff = lv2['clahe'].make_diff(rgb, param)
+    if diff is not None: rgb = lv2['clahe'].apply_diff(rgb)
 
-    # トーンカーブ
-    rgb2 = rgb.copy()
-    diff = lv2['tonecurve'].make_diff(rgb, param)
-    if diff is not None: rgb2 = lv2['tonecurve'].apply_diff(rgb2)
-    diff = lv2['tonecurve_red'].make_diff(rgb, param)
-    if diff is not None: rgb2[:,:,0] = lv2['tonecurve_red'].apply_diff(rgb2[:,:,0])
-    diff = lv2['tonecurve_green'].make_diff(rgb, param)
-    if diff is not None: rgb2[:,:,1] = lv2['tonecurve_green'].apply_diff(rgb2[:,:,1])
-    diff = lv2['tonecurve_blue'].make_diff(rgb, param)
-    if diff is not None: rgb2[:,:,2] = lv2['tonecurve_blue'].apply_diff(rgb2[:,:,2])
-
-    # グレーディング
-    diff = lv2['grading1'].make_diff(rgb, param)
-    if diff is not None: rgb2 = lv2['grading1'].apply_diff(rgb2)
-    diff = lv2['grading2'].make_diff(rgb, param)
-    if diff is not None: rgb2 = lv2['grading2'].apply_diff(rgb2)
-    rgb = rgb2
-
-    hls = cv2.cvtColor(rgb, cv2.COLOR_RGB2HLS_FULL)
-
-    # Hのみ
-    hls_h = hls[:, :, 0]
-    hls2_h = hls_h.copy()
-    diff = lv2['HuevsHue'].make_diff(hls_h, param)
-    if diff is not None: hls2_h = lv2['HuevsHue'].apply_diff(hls2_h)
-    hls[:, :, 0] = hls2_h
-
-    #　Lのみ
-    hls_l = hls[:, :, 1]
-    hls2_l = hls_l.copy()
-    diff = lv2['HuevsLum'].make_diff(hls_l, param)
-    if diff is not None: hls2_l = lv2['HuevsLum'].apply_diff(hls2_l)
-    diff = lv2['LumvsLum'].make_diff(hls_l, param)
-    if diff is not None: hls2_l = lv2['LumvsLum'].apply_diff(hls2_l)
-    diff = lv2['SatvsLum'].make_diff(hls_l, param)
-    if diff is not None: hls2_l = lv2['SatvsLum'].apply_diff(hls2_l)
-    hls[:, :, 1] = hls2_l
-
-    # Sのみ
-    hls_s = hls[:, :, 2]
-    hls2_s = hls_s.copy()
-    diff = lv2['HuevsSat'].make_diff(hls_s, param)
-    if diff is not None: hls2_s = lv2['HuevsSat'].apply_diff(hls2_s)
-    diff = lv2['LumvsSat'].make_diff(hls_s, param)
-    if diff is not None: hls2_s = lv2['LumvsSat'].apply_diff(hls2_s)
-    diff = lv2['SatvsSat'].make_diff(hls_s, param)
-    if diff is not None: hls2_s = lv2['SatvsSat'].apply_diff(hls2_s)
-    diff = lv2['saturation'].make_diff(hls2_s, param)
-    if diff is not None: hls2_s = lv2['saturation'].apply_diff(hls2_s)
-    hls[:, :, 2] = hls2_s
-
-    # 以降RGB
-    rgb = cv2.cvtColor(hls, cv2.COLOR_HLS2RGB_FULL)
+    diff = lv2['curve'].make_diff(rgb, param)
+    if diff is not None: rgb = lv2['curve'].apply_diff(rgb)
+    
+    diff = lv2['rgb2hls2'].make_diff(rgb, param)
+    if diff is not None: hls = lv2['rgb2hls2'].apply_diff(rgb)
+    pre_diff = lv2['vs'].diff
+    diff = lv2['vs'].make_diff(hls, param)
+    if diff is not None: hls = lv2['vs'].apply_diff(hls)
+    if pre_diff is not diff:
+        lv2['hls2rgb2'].reeffect()
+    diff = lv2['hls2rgb2'].make_diff(hls, param)
+    if diff is not None: rgb = lv2['hls2rgb2'].apply_diff(hls)
 
     diff = lv2['lut'].make_diff(rgb, param)
     if diff is not None: rgb = lv2['lut'].apply_diff(rgb)
@@ -266,3 +244,65 @@ def pipeline_last(rgb, crop_info, effects, param):
             rgb = lv4[n].apply_diff(rgb, crop_info)
 
     return rgb
+
+def pipeline_hls(hls, effects, param):
+    hls2 = hls.copy()
+    for i, n in enumerate(effects):
+        diff = effects[n].make_diff(hls2, param)
+        if diff is not None:
+            hls = effects[n].apply_diff(hls)
+
+    return hls
+
+def pipeline_curve(rgb, effects, param):
+    rgb2 = rgb.copy()
+
+    # トーンカーブ
+    diff = effects['tonecurve'].make_diff(rgb, param)
+    if diff is not None: rgb2 = effects['tonecurve'].apply_diff(rgb2)
+    diff = effects['tonecurve_red'].make_diff(rgb, param)
+    if diff is not None: rgb2[..., 0:1] = effects['tonecurve_red'].apply_diff(rgb2[..., 0:1])
+    diff = effects['tonecurve_green'].make_diff(rgb, param)
+    if diff is not None: rgb2[..., 1:2] = effects['tonecurve_green'].apply_diff(rgb2[..., 1:2])
+    diff = effects['tonecurve_blue'].make_diff(rgb, param)
+    if diff is not None: rgb2[..., 2:3] = effects['tonecurve_blue'].apply_diff(rgb2[..., 2:3])
+
+    # グレーディング
+    diff = effects['grading1'].make_diff(rgb, param)
+    if diff is not None: rgb2 = effects['grading1'].apply_diff(rgb2)
+    diff = effects['grading2'].make_diff(rgb, param)
+    if diff is not None: rgb2 = effects['grading2'].apply_diff(rgb2)
+
+    return rgb2
+
+def pipeline_vs_and_saturation(hls, effects, param):
+
+    # Hのみ
+    hls_h = hls[..., 0]
+    hls2_h = hls_h
+    diff = effects['HuevsHue'].make_diff(hls_h, param)
+    if diff is not None: hls2_h = effects['HuevsHue'].apply_diff(hls_h)
+
+    #　Lのみ
+    hls_l = hls[..., 1]
+    hls2_l = hls_l.copy()
+    diff = effects['HuevsLum'].make_diff(hls_l, param)
+    if diff is not None: hls2_l = effects['HuevsLum'].apply_diff(hls2_l)
+    diff = effects['LumvsLum'].make_diff(hls_l, param)
+    if diff is not None: hls2_l = effects['LumvsLum'].apply_diff(hls2_l)
+    diff = effects['SatvsLum'].make_diff(hls_l, param)
+    if diff is not None: hls2_l = effects['SatvsLum'].apply_diff(hls2_l)
+
+    # Sのみ
+    hls_s = hls[..., 2]
+    hls2_s = hls_s.copy()
+    diff = effects['HuevsSat'].make_diff(hls_s, param)
+    if diff is not None: hls2_s = effects['HuevsSat'].apply_diff(hls2_s)
+    diff = effects['LumvsSat'].make_diff(hls_s, param)
+    if diff is not None: hls2_s = effects['LumvsSat'].apply_diff(hls2_s)
+    diff = effects['SatvsSat'].make_diff(hls_s, param)
+    if diff is not None: hls2_s = effects['SatvsSat'].apply_diff(hls2_s)
+    diff = effects['saturation'].make_diff(hls_s, param)
+    if diff is not None: hls2_s = effects['saturation'].apply_diff(hls2_s)
+
+    return np.stack([hls2_h, hls2_l, hls2_s], axis=-1)

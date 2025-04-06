@@ -8,6 +8,8 @@ import os
 import logging
 from enum import Enum
 import pickle
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 
 from imageset import ImageSet
 
@@ -17,7 +19,7 @@ class CallbackFlag(Enum):
     FINISH = 2
 
 # ヘルパー関数（プロセス間で共有）
-def _load_file_process(shared_resources, file_path, exif_data, param):
+def _load_file_process(shared_resources, file_path, exif_data, param, imgset):
     """
     ファイル読み込みプロセス
     
@@ -36,7 +38,8 @@ def _load_file_process(shared_resources, file_path, exif_data, param):
         callback_flags = shared_resources['callback_flags']
         
         logging.info(f"Loading process started for {file_path}")
-        imgset = ImageSet()
+        if imgset is None:
+            imgset = ImageSet()
         result = imgset.load(file_path, exif_data, param)
         # 失敗？
         if result == False:
@@ -45,18 +48,18 @@ def _load_file_process(shared_resources, file_path, exif_data, param):
         # 成功？
         elif result == True:
             # キャッシュに登録
-            copy_to_cache(cache, file_path, (imgset, exif_data))
+            copy_to_cache(cache, file_path, (imgset, exif_data, param))
 
         else:
             # 中間結果をキャッシュに登録
-            copy_to_cache(cache, file_path, (imgset, exif_data))
+            copy_to_cache(cache, file_path, (imgset, exif_data, param))
             callback_flags[file_path] = CallbackFlag.CONTINUE   # 中間結果を表示
 
             # 続きの実行
             imgset.load(file_path, exif_data, param, result)
 
             # キャッシュに登録
-            copy_to_cache(cache, file_path, (imgset, exif_data))
+            copy_to_cache(cache, file_path, (imgset, exif_data, param))
         
         # 先行読み込み登録から削除
         if file_path in preload_registry:
@@ -122,7 +125,8 @@ class FileCacheSystem:
         self.monitor_thread.start()
 
         # Pool
-        self.p = multiprocessing.Pool(max_concurrent_loads)
+        #self.p = multiprocessing.Pool(max_concurrent_loads)
+        self.p = ThreadPoolExecutor(max_workers=max_concurrent_loads)
      
     def _monitor_processes(self):
         """プロセスと完了フラグを監視するスレッド"""
@@ -134,7 +138,7 @@ class FileCacheSystem:
                     if callback_flags[file_path] != CallbackFlag.NONE:
                         if file_path in self.cache:
                             # キャッシュからデータを取得
-                            imgset, exif_data = copy_from_cache(self.cache, file_path)
+                            imgset, exif_data, param = copy_from_cache(self.cache, file_path)
 
                             elapsed_time = time.time() - self.active_processes[file_path]
                             if callback_flags[file_path] == CallbackFlag.CONTINUE:
@@ -145,7 +149,7 @@ class FileCacheSystem:
                             if file_path in self.file_callbacks:
                                 # コールバックを実行
                                 callback = self.file_callbacks[file_path]
-                                callback(file_path, imgset, exif_data)
+                                callback(file_path, imgset, exif_data, param)
                         
                         # 進行中のプロセスから削除
                         if callback_flags[file_path] == CallbackFlag.FINISH and file_path in self.active_processes:
@@ -186,24 +190,24 @@ class FileCacheSystem:
         # キャッシュにある場合
         if file_path in self.cache:
             logging.info(f"Cache hit: {file_path}")
-            imgset, exif_data = copy_from_cache(self.cache, file_path)
+            imgset, exif_data, param = copy_from_cache(self.cache, file_path)
             
             # コールバックが指定されていればすぐに呼び出す
             if callback:
-                callback(file_path, imgset, exif_data)
+                callback(file_path, imgset, exif_data, param)
                 
-            return imgset, exif_data
+            return exif_data, imgset
                 
         # 先行読み込み登録がある場合
         elif file_path in self.preload_registry:
             logging.info(f"Preload registry hit: {file_path}")
-            exif_data, param = self.preload_registry[file_path]
+            exif_data, param, imgset = self.preload_registry[file_path]
             
             # まだ読み込みプロセスが開始されていなければ開始
             if file_path not in self.active_processes:
-                self._start_loading_process(file_path, exif_data, param, True)
+                self._start_loading_process(file_path, exif_data, param, imgset, True)
                 
-            return None, exif_data  # imgsetはまだ利用不可
+            return exif_data, imgset  # imgsetはまだ利用不可
         
         # どちらにもない場合
         else:
@@ -233,18 +237,23 @@ class FileCacheSystem:
             #print(f"File {file_path} is already registered for preload")
             return
         
+        # 高速化のためここで作っとく
+        imgset = ImageSet()
+        imgset.file_path = file_path
+        imgset.param = param
+        
         # 先行読み込み登録
-        self.preload_registry[file_path] = (exif_data, param)
+        self.preload_registry[file_path] = (exif_data, param, imgset)
         logging.info(f"Registered {file_path} for preload")
         
         # 優先度が高い場合はすぐに読み込みを開始
         if high_priority:
-            self._start_loading_process(file_path, exif_data, param, True)
+            self._start_loading_process(file_path, exif_data, param, imgset, True)
         else:
             # 優先度が低い場合は自動的にキューを処理
             self.process_preload_queue(max_concurrent_loads=self.max_concurrent_loads)
 
-    def _start_loading_process(self, file_path: str, exif_data: Dict[str, Any], param: Dict[str, Any] = None, thread_flag=False):
+    def _start_loading_process(self, file_path: str, exif_data: Dict[str, Any], param: Dict[str, Any] = None, imgset: ImageSet = None, thread_flag=False):
         """読み込みプロセスを開始する内部関数"""
         if param is None:
             param = {}
@@ -253,6 +262,8 @@ class FileCacheSystem:
             #print(f"Loading process for {file_path} is already running")
             return
         
+        self.active_processes[file_path] = time.time()  # プロセスIDのみ保存
+
         # プロセスを起動（self自体は渡さない）
         if thread_flag == True:
             """
@@ -262,12 +273,13 @@ class FileCacheSystem:
             )
             process.start()
             """
-            thread = threading.Thread(target=_load_file_process, args=[self.shared_resources, file_path, exif_data, param], daemon=True)
+            thread = threading.Thread(target=_load_file_process, args=[self.shared_resources, file_path, exif_data, param, imgset], daemon=True)
             thread.start()
         else:
-            process = self.p.apply_async(_load_file_process, args=(self.shared_resources, file_path, exif_data, param))
+            future = self.p.submit(_load_file_process, self.shared_resources, file_path, exif_data, param, imgset)
 
-        self.active_processes[file_path] = time.time()  # プロセスIDのみ保存
+            #process = self.p.apply_async(_load_file_process, args=(self.shared_resources, file_path, exif_data, param))
+
         logging.info(f"Started loading process for {file_path}")
             
     def clear_cache(self, keep_files=None):
@@ -341,8 +353,8 @@ class FileCacheSystem:
         
         for file_path in files_to_load:
             if file_path not in self.active_processes:  # 既に進行中でないことを確認
-                exif_data, param = self.preload_registry[file_path]
-                self._start_loading_process(file_path, exif_data, param)
+                exif_data, param, imgset = self.preload_registry[file_path]
+                self._start_loading_process(file_path, exif_data, param, imgset)
                 print(f"Starting loading processes for {file_path}")
         
     def shutdown(self):
@@ -357,6 +369,6 @@ class FileCacheSystem:
         if self.own_manager:
             self.manager.shutdown()
         
-        self.p.close()
+        self.p.shutdown()
         
         logging.info("Cache system shutdown complete")

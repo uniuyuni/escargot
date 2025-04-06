@@ -2,9 +2,6 @@
 import cv2
 import numpy as np
 
-#img = cv2.imread('escargot.jpg')
-#cv2.imshow("escargot", img)
-
 import os
 import pyautogui as pag
 from kivymd.app import MDApp
@@ -70,15 +67,18 @@ class MainWidget(MDBoxLayout):
         self._set_film_presets()
         self._set_lens_presets()
  
-    def reset_image(self):
+    def empty_image(self):
         self.texture = KVTexture.create(size=(self.texture_width, self.texture_height), colorfmt='rgb', bufferfmt='float')
         self.texture.flip_vertical()
+        self.ids["preview"].texture = None
 
+        self.imgset = None
         self.click_x = 0
         self.click_y = 0
         self.is_zoomed = False
         self.crop_image = None
 
+        self.reset_param(self.primary_param)
         self.ids['mask_editor2'].clear_mask()
     
     def start_draw_image_and_crop(self, imgset, offset=(0, 0)):
@@ -87,12 +87,6 @@ class MainWidget(MDBoxLayout):
                 self.crop_image = None
                 effects.reeffect_all(self.primary_effects)
                 self.start_draw_image(offset)
-
-    def empty_image(self):
-        self.imgset = None
-        self.texture = KVTexture.create(size=(self.texture_width, self.texture_height), colorfmt='rgb', bufferfmt='float')
-        self.texture.flip_vertical()
-        self.ids["preview"].texture = None
 
     # @mainthread
     def blit_image(self, img):
@@ -106,9 +100,10 @@ class MainWidget(MDBoxLayout):
     def draw_image(self, offset, dt):
         if (self.imgset is not None) and (self.imgset.img is not None):
             img, self.crop_image = pipeline.process_pipeline(self.imgset.img, offset, self.crop_image, self.is_zoomed, self.texture_width, self.texture_height, self.click_x, self.click_y, self.primary_effects, self.primary_param, self.ids['mask_editor2'])
-            util.print_nan_inf(img)
+            #util.print_nan_inf(img)
             
             img = color.xyz_to_rgb(img, config.get_config('display_color_gamut'), True)
+            img = np.array(img)
             self.draw_histogram(img)
             img = np.clip(img, 0, 1)
             self.blit_image(img)
@@ -161,25 +156,39 @@ class MainWidget(MDBoxLayout):
         self.save_current_sidecar()
         # 前のエフェクトを終了
         effects.finalize_all(self.primary_effects, self.primary_param, self)
-        
-        self.reset_param(self.primary_param)
-        self.ids['mask_editor2'].clear_mask()
+        # 空のイメージをセット
+        self.empty_image()
+
         if card is not None:
             self.cache_system.register_for_preload(card.file_path, card.exif_data, None, True)
-            imgset, exif_data = self.cache_system.get_file(card.file_path, self.on_fcs_get_file)
+            exif_data, imgset = self.cache_system.get_file(card.file_path, self.on_fcs_get_file)
 
-        self.empty_image()
+            # 新しく開く画像のデータを全てセット
+            param = {}
+            core.set_image_param(param, exif_data)
+            self._set_image_for_mask2(param)
+            export.load_json(imgset.file_path, param, self.ids['mask_editor2'])
+            self.set2widget_all(self.primary_effects, param)
+            self.apply_effects_lv(0, 'crop') # 特別あつかい
+            self._set_exif_data(exif_data)
+
+            # 最終的なものを設定しとく
+            card.param = param
     
     @mainthread
-    def on_fcs_get_file(self, filename, imgset, exif_data):
+    def on_fcs_get_file(self, filename, imgset, exif_data, param):
+
+        # 最終的なパラメータを合成
+        card = self.ids['viewer'].get_card(filename)
+        if card is not None:
+            param.update(card.param)
+
+            # 最終的なものを設定しとく
+            card.imgset = imgset
+            card.param = param
+
         self.imgset = imgset
-        self.primary_param = imgset.param
-        self.reset_image()
-        self._set_image_for_mask2()
-        export.load_json(imgset.file_path, imgset.param, self.ids['mask_editor2'])
-        self.set2widget_all(self.primary_effects, self.primary_param)
-        self.apply_effects_lv(0, 'crop') # 特別あつかい
-        self._set_exif_data(exif_data)
+        self.primary_param = param
         self.start_draw_image_and_crop(imgset)
 
     def on_image_touch_down(self, touch):
@@ -289,16 +298,16 @@ class MainWidget(MDBoxLayout):
 
         return path
 
-    def _set_image_for_mask2(self):
-        self.ids['mask_editor2'].set_orientation(self.primary_param.get('rotation', 0), self.primary_param.get('rotation2', 0), self.primary_param.get('flip_mode', 0))
+    def _set_image_for_mask2(self, param):
+        self.ids['mask_editor2'].set_orientation(param.get('rotation', 0), param.get('rotation2', 0), param.get('flip_mode', 0))
         self.ids['mask_editor2'].set_texture_size(self.texture_width, self.texture_height)
-        self.ids['mask_editor2'].set_image(self.primary_param['original_img_size'], self.primary_param.get('crop_info', None))
+        self.ids['mask_editor2'].set_image(param['original_img_size'], param.get('crop_info', None))
         self.ids['mask_editor2'].update()
 
     def _enable_mask2(self):
         self.ids['mask_editor2'].opacity = 1
         self.ids['mask_editor2'].disabled = False
-        self._set_image_for_mask2()
+        self._set_image_for_mask2(self.primary_param)
         #Clock.schedule_once(self._delay_set_image, -1)   # editor2のサイズが未決定なので遅らせる
 
     def _disable_mask2(self):
@@ -415,7 +424,7 @@ class MainApp(MDApp):
         KVWindow.top = (scr_h - dp(400)) // 2
 
         # testcode
-        self.main_widget.ids['viewer'].set_path(os.getcwd() + "/picture")
+        #self.main_widget.ids['viewer'].set_path(os.getcwd() + "/picture")
 
         config.set_main_widget(self.main_widget)
         config.load_config()
