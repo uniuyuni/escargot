@@ -9,6 +9,7 @@ import logging
 import os
 import threading
 from wand.image import Image as WandImage
+from PIL import Image as PILImage
 
 #from dcp_profile import DCPReader, DCPProcessor
 import config
@@ -36,47 +37,7 @@ class ImageSet:
         in_img[in_img < black_level] = black_level
         out_img = in_img - black_level
         return out_img
-    
 
-    def _recover_saturated_colors(self, image):
-        """
-        画像内の飽和したRGB値を他のチャンネルの比率を使って復元する
-        
-        Parameters:
-        image: numpy.ndarray
-            Shape が (height, width, 3) の RGB画像データ。値は0-1の範囲を想定。
-            
-        Returns:
-        numpy.ndarray:
-            復元された画像データ
-        """
-        # 入力画像のコピーを作成
-        recovered = image.copy()
-        
-        # 飽和しているピクセルを見つける（どれかのチャンネルが1.0以上）
-        saturated_pixels = np.any(image >= 1.0, axis=2)
-        
-        # 飽和したピクセルに対して処理を行う
-        for y, x in np.argwhere(saturated_pixels):
-            pixel = image[y, x]
-            
-            # 飽和していないチャンネルのインデックスを取得
-            unsaturated_idx = np.where(pixel < 1.0)[0]
-            
-            if len(unsaturated_idx) >= 2:
-                # 飽和していない2つのチャンネル間の比率を計算
-                ratio = pixel[unsaturated_idx[0]] / pixel[unsaturated_idx[1]]
-                
-                # 飽和したチャンネルの値を推定
-                saturated_idx = np.where(pixel >= 1.0)[0]
-                for idx in saturated_idx:
-                    # 飽和していないチャンネルの最大値を基準に、比率を使って推定
-                    max_unsaturated = max(pixel[unsaturated_idx])
-                    estimated_value = max_unsaturated * (1 + ratio)
-                    recovered[y, x, idx] = estimated_value
-                    
-        return recovered
-    
 
     def _load_raw_preview(self, file_path, exif_data, param):
         try:
@@ -110,10 +71,14 @@ class ImageSet:
                 del exif_data["Orientation"]
 
             # RGB画像初期設定
-            img_array = img_array.astype(np.float32)/255.0
+            img_array = util.convert_to_float32(img_array)
+
+            # 色空間変換
             img_array = color.rgb_to_xyz(img_array, "sRGB", True)
             img_array = np.array(img_array)
-            temp, tint, Y, = core.invert_RGB2TempTint((1.0, 1.0, 1.0), 5000.0)
+
+            # 色温度とティントを反転
+            temp, tint, Y, = core.invert_RGB2TempTint((1.0, 1.0, 1.0))
             self._set_temperature(param, temp, tint, Y)
 
             # 情報の設定
@@ -160,11 +125,10 @@ class ImageSet:
             img_array = img_array[top:top+height, left:left+width]
 
             # float32へ
-            img_array = img_array.astype(np.float32)/65535.0
+            img_array = util.convert_to_float32(img_array)
             
             # 色空間変換
             img_array= color.rgb_to_xyz(img_array, "Adobe RGB")
-            #img_array = color.d50_to_d65(img_array)
 
             # 飽和ピクセル復元
             wb = raw.camera_whitebalance
@@ -172,7 +136,6 @@ class ImageSet:
             _, Tv = exif_data.get('ShutterSpeedValue', "1/100").split('/')
             Tv = float(_) / float(Tv)
             ISO = exif_data.get('ISO', 100)                
-            #img_array = self._recover_saturated_colors(img_array)
             #img_array = core.recover_saturated_pixels(img_array, Tv, ISO, wb)
             
             # プロファイルを適用
@@ -187,7 +150,7 @@ class ImageSet:
             #wb = np.array([wb[0], wb[1], wb[2]]).astype(np.float32)/1024.0
             wb[1] = np.sqrt(wb[1])
             img_array /= wb
-            temp, tint, Y, = core.invert_RGB2TempTint(wb, 5000.0)
+            temp, tint, Y, = core.invert_RGB2TempTint(wb)
             self._set_temperature(param, temp, tint, Y)
 
             # 明るさ補正
@@ -220,8 +183,6 @@ class ImageSet:
         return True
 
     def _load_rgb(self, file_path, exif_data, param):
-        from PIL import Image as PILImage
-
         # RGB画像で読み込んでみる
         #with WandImage(filename=file_path) as img:
             #img_array = np.array(img)
@@ -234,14 +195,13 @@ class ImageSet:
         #if img.dtype == np.uint8:
         with PILImage.open(file_path) as img:
             img_array = np.array(img)
-            if img_array.dtype == np.uint8:
-                img_array = img_array.astype(np.float32)/255
-            else:
-                img_array = img_array.astype(np.float32)/65535
+            img_array = util.convert_to_float32(img_array)
+
+            # 色空間変換
             img_array = color.rgb_to_xyz(img_array, "sRGB", True)
 
             # 画像からホワイトバランスパラメータ取得
-            temp, tint, Y, = core.invert_RGB2TempTint((1.0, 1.0, 1.0), 5000.0)
+            temp, tint, Y, = core.invert_RGB2TempTint((1.0, 1.0, 1.0))
             self._set_temperature(param, temp, tint, Y)
             
             # 情報の設定

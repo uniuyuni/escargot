@@ -1,3 +1,4 @@
+
 from kivymd.app import MDApp
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.card import MDCard
@@ -17,23 +18,30 @@ import math
 import param_slider
 
 class CWColorButton(MDCard):
-    background_color = ListProperty([1, 0, 0, 1])
+    background_color = ListProperty([0.5, 0.5, 0.5, 1])
     
     def on_color_select(self):
         app = MDApp.get_running_app()
         self.parent.parent.current_color = self.background_color
 
 class CWColorPreview(MDCard):
-    color = ListProperty([1, 0, 0, 1])
+    color = ListProperty([0.5, 0.5, 0.5, 1])
 
 class CWColorWheel(MDBoxLayout):
-    selected_color = ListProperty([1, 0, 0, 1])
+    selected_color = ListProperty([0.5, 0.5, 0.5, 1])
     hue = NumericProperty(0)
     lightness = NumericProperty(0.5)
-    saturation = NumericProperty(1)
+    saturation = NumericProperty(0)  # 初期値を0に変更
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+        with self.canvas.after:
+            # 選択位置のマーカー
+            self.marker_color = Color(1, 1, 1, 1)
+            self.marker_size = dp(10)
+            self.marker = Ellipse(size=(self.marker_size, self.marker_size))
+        
         Clock.schedule_once(self.draw_wheel)
         self.bind(pos=self.update_wheel, size=self.update_wheel)
     
@@ -42,8 +50,9 @@ class CWColorWheel(MDBoxLayout):
         self.center_x = self.pos[0] + self.size[0] / 2
         self.center_y = self.pos[1] + self.size[1] / 2
         
-        self.canvas.clear()
-        with self.canvas:
+        #self.canvas.clear()
+        with self.canvas.after:
+            """
             segments = 360  # 円周方向の分割数
             radial_steps = 25  # 半径方向のステップ数
             
@@ -79,11 +88,12 @@ class CWColorWheel(MDBoxLayout):
                         outer_x1, outer_y1,  # 外側の1点
                         outer_x2, outer_y2   # 外側の次の点
                     ])
-               
+            
             # 選択位置のマーカー
             self.marker_color = Color(1, 1, 1, 1)
             self.marker_size = dp(10)
             self.marker = Ellipse(size=(self.marker_size, self.marker_size))
+            """
             self.update_marker()    
             
     def update_wheel(self, *args):
@@ -98,36 +108,47 @@ class CWColorWheel(MDBoxLayout):
     
     def on_touch_down(self, touch):
         if self.collide_point(*touch.pos):
-            self.update_color_from_touch(touch)
-            return True
+            if touch.is_double_tap:
+                self._reset_color()
+                return True
+            else:
+                self._update_color_from_touch(touch)
+                return True
         return super().on_touch_down(touch)
     
     def on_touch_move(self, touch):
         if self.collide_point(*touch.pos):
-            self.update_color_from_touch(touch)
+            self._update_color_from_touch(touch)
             return True
         return super().on_touch_move(touch)
+
+    def _reset_color(self):
+        self.hue = 0
+        self.lightness = 0.5
+        self.saturation = 0
+        self.selected_color = [0.5, 0.5, 0.5, 1]
+        self.update_marker()
     
-    def update_color_from_touch(self, touch):
+    def _update_color_from_touch(self, touch):
         dx = touch.pos[0] - self.center_x
         dy = touch.pos[1] - self.center_y
         
         distance = math.sqrt(dx ** 2 + dy ** 2)
-        if distance > self.wheel_radius:
-            return  # ホイール外部のタッチは無視
+        if distance >= self.wheel_radius:
+            self.saturation = 1.0
+        else:
+            self.saturation = distance / self.wheel_radius
         
         angle = math.atan2(dy, dx)
         if angle < 0:
             angle += 2 * math.pi
-        
         self.hue = angle / (2 * math.pi)
-        self.saturation = distance / self.wheel_radius
         
         r, g, b = hls_to_rgb(self.hue, self.lightness, self.saturation)
         self.selected_color = [r, g, b, 1]
         self.update_marker()
 
-    def set_color_from_rgb(self, rgba):
+    def _set_color_from_rgb(self, rgba):
         # RGBをHLSに変換
         r, g, b, a = rgba
         hue, lightness, saturation = rgb_to_hls(r, g, b)
@@ -144,7 +165,7 @@ class CWColorWheel(MDBoxLayout):
         self.update_marker()
 
 class CWColorPicker(MDCard):
-    current_color = ListProperty([1, 0, 0, 1])
+    current_color = ListProperty([0.5, 0.5, 0.5, 1])
 
     def on_kv_post(self, *args, **kwargs):
         super().on_kv_post(*args, **kwargs)
@@ -166,7 +187,7 @@ class CWColorPicker(MDCard):
         self.ids.slider_lum.set_slider_value(l * 100)
         self.ids.slider_sat.set_slider_value(s * 100)
 
-        self.ids.color_wheel.set_color_from_rgb(self.current_color)
+        self.ids.color_wheel._set_color_from_rgb(self.current_color)
         self.update_preview(instance, value)
 
     def on_wheel_color(self, instance, value):

@@ -126,3 +126,48 @@ def tone_map(x, threshold=1.0):
 
 def soft_clip(x, threshold=1.0):
     return threshold * np.tanh(x / threshold)
+
+def convert_to_float32(img):
+    """
+    画像のデータ型をfloat32に変換する関数
+
+    Args:
+        img (numpy.ndarray): 変換する画像データ
+
+    Returns:
+        numpy.ndarray: float32の画像データ
+    """
+    if img.dtype == np.uint8:
+        img = img.astype(np.float32)/255
+    elif img.dtype == np.uint16:
+        img = img.astype(np.float32)/65535
+    elif img.dtype == np.uint32:
+        img = img.astype(np.float32)/4294967295
+    elif img.dtype == np.uint64:
+        img = img.astype(np.float32)/18446744073709551615
+    elif img.dtype == np.uint128:
+        img = img.astype(np.float32)/340282366920938463463374607431768211455
+    elif img.dtype == np.int8:
+        img = img.astype(np.float32)/127
+    elif img.dtype == np.int16:
+        img = img.astype(np.float32)/32767
+    elif img.dtype == np.int32:
+        img = img.astype(np.float32)/2147483647
+    elif img.dtype == np.int64:
+        img = img.astype(np.float32)/9223372036854775807
+    elif img.dtype == np.int128:
+        img = img.astype(np.float32)/170141183460469231731687303715884105727
+    elif img.dtype == np.int256:
+        img = img.astype(np.float32)/1152921504606846976
+    elif img.dtype == np.float16:
+        img = img.astype(np.float32)
+    elif img.dtype == np.float32:
+        pass
+    elif img.dtype == np.float64:
+        img = img.astype(np.float32)
+    elif img.dtype == np.float128:
+        img = img.astype(np.float32)
+    else:
+        raise ValueError(f"サポートされていないデータ型: {img.dtype}")
+
+    return img

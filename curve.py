@@ -23,9 +23,11 @@ class DraggablePoint():
         self.y = kwargs.get('y', 0.0)
         self.width = dp(10)
         self.height = dp(10)
+        self.collide_width = self.width / kwargs.get('w', 1.0)
+        self.collide_height = self.height / kwargs.get('h', 1.0)
 
-    def collide_point(self, x, y, w, h):
-        if abs(self.x-x)*w < self.width/2 and abs(self.y-y)*h < self.height/2:
+    def collide_point(self, x, y):
+        if abs(self.x-x) <= self.collide_width and abs(self.y-y) <= self.collide_height:
             return True
         return False
 
@@ -48,10 +50,10 @@ class CurveWidget(Widget):
 
     def on_kv_post(self, *args, **kwargs):
         super().on_kv_post(*args, **kwargs)
-        self.start_point.x = self.start_x
-        self.start_point.y = self.start_y
-        self.end_point.x = self.end_x
-        self.end_point.y = self.end_y
+        #self.start_point.x = self.start_x
+        #self.start_point.y = self.start_y
+        #self.end_point.x = self.end_x
+        #self.end_point.y = self.end_y
 
     def __update_points(self, *args):
         #self.start_point.x = 0.0
@@ -69,18 +71,18 @@ class CurveWidget(Widget):
 
         if touch.button == 'right':
             for point in self.points:
-                if point not in [self.start_point, self.end_point] and point.collide_point(local_x, local_y, self.width, self.height):
+                if point not in [self.start_point, self.end_point] and point.collide_point(local_x, local_y):
                     self.points.remove(point)
                     self.__update_curve()
                     self.curve += 1
                     return
         else:
             for point in self.points:
-                if point.collide_point(local_x, local_y, self.width, self.height):
+                if point.collide_point(local_x, local_y):
                     self.selected_point = point
                     return  # Select existing point
                 
-            point = DraggablePoint()
+            point = DraggablePoint(w=self.width, h=self.height)
             point.x, point.y = local_x, local_y
             self.points.append(point)
             self.selected_point = point
@@ -121,7 +123,7 @@ class CurveWidget(Widget):
             
             # Draw the grid
             Color(0.5, 0.5, 0.5)
-            for i in range(1, 5):
+            for i in range(0, 5):
                 Line(points=[self.width / 4 * i, 0, self.width / 4 * i, self.height], width=1)
                 Line(points=[0, self.height / 4 * i, self.width, self.height / 4 * i], width=1)
 
@@ -166,7 +168,7 @@ class CurveWidget(Widget):
     def set_point_list(self, point_list):
         if point_list is not None:
             point_list = sorted((pl[0], pl[1]) for pl in point_list)
-            self.points = [DraggablePoint(x=pl[0], y=pl[1]) for pl in point_list]
+            self.points = [DraggablePoint(x=pl[0], y=pl[1], w=self.width, h=self.height) for pl in point_list]
             self.start_point = self.points[0]
             self.end_point = self.points[len(self.points)-1]
             self.selected_point = None  
@@ -175,8 +177,8 @@ class CurveWidget(Widget):
             self.selected_point = None
 
             # Add start and end points
-            self.start_point = DraggablePoint(x=self.start_x, y=self.start_y)
-            self.end_point = DraggablePoint(x=self.end_x, y=self.end_y)
+            self.start_point = DraggablePoint(x=self.start_x, y=self.start_y, w=self.width, h=self.height)
+            self.end_point = DraggablePoint(x=self.end_x, y=self.end_y, w=self.width, h=self.height)
             self.points.append(self.start_point)
             self.points.append(self.end_point)
         self.__update_curve()

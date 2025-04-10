@@ -439,13 +439,11 @@ if __name__ == '__main__':
     multiprocessing.freeze_support()
     
     # メインプロセスでマネージャーを作成
-    with multiprocessing.Manager() as manager:
-        # ファイルキャッシュシステムを初期化（マネージャーを渡す）
-        cache_system = file_cache_system.FileCacheSystem(manager=manager, max_cache_size=100, max_concurrent_loads=2)
+    cache_system = file_cache_system.FileCacheSystem(max_cache_size=100, max_concurrent_loads=2)
         
-        # ここでシステムを使用...
-        MainApp(cache_system).run()
+    # ここでシステムを使用...
+    MainApp(cache_system).run()
         
-        # 終了時にクリーンアップ
-        cache_system.shutdown()
+    # 終了時にクリーンアップ
+    cache_system.shutdown()
 

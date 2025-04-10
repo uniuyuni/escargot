@@ -9,8 +9,6 @@ import bz2
 
 #import noise2void
 #import DRBNet
-#import colorcorrect.algorithm as cca
-#import perlin
 #import iopaint.predict
 #import dehazing.dehaze
 
@@ -47,10 +45,162 @@ class Effect():
         self.diff = img
 
     def apply_diff(self, img):
-        pass
+        if self.diff is not None:
+            return self.diff
+        return img
 
     def finalize(self, param, widget):
         pass
+
+
+# レンズモディファイア
+class LensModifierEffect(Effect):
+
+    def set2widget(self, widget, param):
+        widget.ids["switch_color_modification"].active = False if param.get('color_modification', 0) == 0 else True
+        widget.ids["switch_subpixel_distortion"].active = False if param.get('subpixel_distortion', 0) == 0 else True
+        widget.ids["switch_geometry_distortion"].active = False if param.get('geometry_distortion', 0) == 0 else True
+
+    def set2param(self, param, widget):
+        param['color_modification'] = 0 if widget.ids["switch_color_modification"].active == False else 1
+        param['subpixel_distortion'] = 0 if widget.ids["switch_subpixel_distortion"].active == False else 1
+        param['geometry_distortion'] = 0 if widget.ids["switch_geometry_distortion"].active == False else 1
+
+    def make_diff(self, img, param):
+        cd = param.get('color_modification', 0)
+        sd = param.get('subpixel_distortion', 0)
+        gd = param.get('geometry_distortion', 0)
+        if cd <= 0 and sd <= 0 and gd <= 0:
+            self.diff = None
+            self.hash = None
+        else:
+            param_hash = hash((cd, sd, gd))
+            if self.hash != param_hash:
+                self.diff = core.modify_lensimage(img, None, cd > 0, sd > 0, gd > 0)
+                self.hash = param_hash
+        
+        return self.diff
+    
+
+# サブピクセルシフト合成
+class SubpixelShiftEffect(Effect):
+
+    def set2widget(self, widget, param):
+        widget.ids["switch_subpixel_shift"].active = False if param.get('subpixel_shift', 0) == 0 else True
+
+    def set2param(self, param, widget):
+        param['subpixel_shift'] = 0 if widget.ids["switch_subpixel_shift"].active == False else 1
+
+    def make_diff(self, img, param):
+        ss = param.get('subpixel_shift', 0)
+        if ss <= 0:
+            self.diff = None
+            self.hash = None
+        else:
+            param_hash = hash((ss))
+            if self.hash != param_hash:
+                self.diff = subpixel_shift.create_enhanced_image(img)
+                self.hash = param_hash
+        
+        return self.diff
+    
+class InpaintDiff:
+    def __init__(self, **kwargs):
+        self.crop_info = kwargs.get('crop_info', None)
+        self.image = kwargs.get('image', None)
+
+    def image2list(self):
+        if type(self.image) is np.ndarray:
+            self.image = (self.image.shape, list(bz2.compress(self.image.tobytes(), 1)))
+            #self.image = self.image.tolist()
+
+    def list2image(self):
+        if type(self.image) is list:
+            self.image = np.reshape(np.frombuffer(bz2.decompress(bytearray(self.image[1])), dtype=np.float32), self.image[0])
+            #self.image = np.array(self.image)
+
+class InpaintEffect(Effect):
+    __iopaint = None
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        
+        self.inpaint_diff_list = []
+        self.mask_editor = None
+
+    @staticmethod
+    def dump(param):
+        inpaint_diff_list = param.get('inpaint_diff_list', None)
+        if inpaint_diff_list is not None:
+            inpaint_diff_list_dumps = []
+            for inpaint_diff in inpaint_diff_list:
+                inpaint_diff.image2list()
+                inpaint_diff_list_dumps.append((inpaint_diff.crop_info, inpaint_diff.image))
+            param['inpaint_diff_list'] = inpaint_diff_list_dumps
+
+    @staticmethod
+    def load(param):
+        inpaint_diff_list_dumps = param.get('inpaint_diff_list', None)
+        if inpaint_diff_list_dumps is not None:
+            inpaint_diff_list = []
+            for inpaint_diff_dump in inpaint_diff_list_dumps:
+                inpaint_diff = InpaintDiff(crop_info=inpaint_diff_dump[0], image=inpaint_diff_dump[1])
+                inpaint_diff.list2image()
+                inpaint_diff_list.append(inpaint_diff)
+            param['inpaint_diff_list'] = inpaint_diff_list
+
+    def set2widget(self, widget, param):
+        widget.ids["switch_inpaint"].active = False if param.get('inpaint', 0) == 0 else True
+        widget.ids["button_inpaint_predict"].state = "normal" if param.get('inpaint_predict', 0) == 0 else "down"
+
+    def set2param(self, param, widget):
+        param['inpaint'] = 0 if widget.ids["switch_inpaint"].active == False else 1
+        param['inpaint_predict'] = 0 if widget.ids["button_inpaint_predict"].state == "normal" else 1
+
+        if param['inpaint'] > 0:
+            if self.mask_editor is None:
+                self.mask_editor = mask_editor.MaskEditor(param['img_size'][0], param['img_size'][1])
+                self.mask_editor.zoom = param['crop_info'][4]
+                self.mask_editor.pos = [0, 0]
+                widget.ids["preview_widget"].add_widget(self.mask_editor)
+            
+        if param['inpaint'] <= 0:
+            if self.mask_editor is not None:
+                widget.ids["preview_widget"].remove_widget(self.mask_editor)
+                self.mask_editor = None
+
+    def make_diff(self, img, param):
+        self.inpaint_diff_list = param.get('inpaint_diff_list', [])
+        ip = param.get('inpaint', 0)
+        ipp = param.get('inpaint_predict', 0)
+        if (ip > 0 and ipp > 0) is True:
+            if InpaintEffect.__iopaint is None:
+                InpaintEffect.__iopaint = importlib.import_module('iopaint.predict')
+
+            mask = cv2.GaussianBlur(self.mask_editor.get_mask(), (63, 63), 0)
+            w, h = param['original_img_size']
+            eh, ew = img.shape[:2]
+            x, y = (ew-w)//2, (eh-h)//2
+            img2 = InpaintEffect.__iopaint.predict(img[y:y+h, x:x+w], mask, model=config.get_config('iopaint_model'), resize_limit=config.get_config('iopaint_resize_limit'), use_realesrgan=config.get_config('iopaint_use_realesrgan'))
+            img2 = img2 #/ param.get('white_balance', [1, 1, 1])
+            bboxes = core.get_multiple_mask_bbox(self.mask_editor.get_mask())
+            for bbox in bboxes:
+                self.inpaint_diff_list.append(InpaintDiff(crop_info=(bbox[0] + x, bbox[1] + y, bbox[2], bbox[3]), image=img2[bbox[1]:bbox[1]+bbox[3], bbox[0]:bbox[0]+bbox[2]]))
+            param['inpaint_diff_list'] = self.inpaint_diff_list
+            self.mask_editor.clear_mask()
+            self.mask_editor.update_canvas()
+        
+        if len(self.inpaint_diff_list) > 0:
+            img2 = img.copy()
+            for inpaint_diff in self.inpaint_diff_list:
+                cx, cy, cw, ch = inpaint_diff.crop_info
+                img2[cy:cy+ch, cx:cx+cw] = inpaint_diff.image
+            self.diff = img2
+        else:
+            self.diff = None
+
+        return self.diff
+    
 
 # 画像回転、反転
 class RotationEffect(Effect):
@@ -87,7 +237,7 @@ class RotationEffect(Effect):
         ang = param.get('rotation', 0)
         ang2 = param.get('rotation2', 0)
         flp = param.get('flip_mode', 0)
-        if False:
+        if ang == 0 and ang2 == 0 and flp == 0:
             self.diff = None
             self.hash = None
         else:
@@ -97,10 +247,9 @@ class RotationEffect(Effect):
                 self.hash = param_hash
         
         return self.diff
-    
-    def apply_diff(self, img):
-        return self.diff
 
+
+# クロップ
 class CropEffect(Effect):
 
     def __init__(self, **kwargs):
@@ -176,61 +325,6 @@ class CropEffect(Effect):
         self._close_crop_editor(param, widget)
 
 
-class LensModifierEffect(Effect):
-
-    def set2widget(self, widget, param):
-        widget.ids["switch_color_modification"].active = False if param.get('color_modification', 0) == 0 else True
-        widget.ids["switch_subpixel_distortion"].active = False if param.get('subpixel_distortion', 0) == 0 else True
-        widget.ids["switch_geometry_distortion"].active = False if param.get('geometry_distortion', 0) == 0 else True
-
-    def set2param(self, param, widget):
-        param['color_modification'] = 0 if widget.ids["switch_color_modification"].active == False else 1
-        param['subpixel_distortion'] = 0 if widget.ids["switch_subpixel_distortion"].active == False else 1
-        param['geometry_distortion'] = 0 if widget.ids["switch_geometry_distortion"].active == False else 1
-
-    def make_diff(self, img, param):
-        cd = param.get('color_modification', 0)
-        sd = param.get('subpixel_distortion', 0)
-        gd = param.get('geometry_distortion', 0)
-        if cd <= 0 and sd <= 0 and gd <= 0:
-            self.diff = None
-            self.hash = None
-        else:
-            param_hash = hash((cd, sd, gd))
-            if self.hash != param_hash:
-                self.diff = core.modify_lensimage(img, None, cd > 0, sd > 0, gd > 0)
-                self.hash = param_hash
-        
-        return self.diff
-    
-    def apply_diff(self, img):
-        return self.diff
-
-# サブピクセルシフト合成
-class SubpixelShiftEffect(Effect):
-
-    def set2widget(self, widget, param):
-        widget.ids["switch_subpixel_shift"].active = False if param.get('subpixel_shift', 0) == 0 else True
-
-    def set2param(self, param, widget):
-        param['subpixel_shift'] = 0 if widget.ids["switch_subpixel_shift"].active == False else 1
-
-    def make_diff(self, img, param):
-        ss = param.get('subpixel_shift', 0)
-        if ss <= 0:
-            self.diff = None
-            self.hash = None
-        else:
-            param_hash = hash((ss))
-            if self.hash != param_hash:
-                self.diff = subpixel_shift.create_enhanced_image(img)
-                self.hash = param_hash
-        
-        return self.diff
-    
-    def apply_diff(self, img):
-        return self.diff
-
 # AI ノイズ除去
 class AINoiseReductonEffect(Effect):
     __net = None
@@ -255,10 +349,11 @@ class AINoiseReductonEffect(Effect):
                 if AINoiseReductonEffect.__net is None:
                     AINoiseReductonEffect.__net = AINoiseReductonEffect.__noise2void.setup_predict()
 
-                self.diff = AINoiseReductonEffect.__noise2void.predict(img, AINoiseReductonEffect.__net, 'mps')
+                self.diff = AINoiseReductonEffect.__noise2void.predict(img, AINoiseReductonEffect.__net, config.get_config('gpu_type'))
                 self.hash = param_hash
         
         return self.diff
+
 
 # NLMノイズ除去
 class NLMNoiseReductionEffect(Effect):
@@ -286,7 +381,9 @@ class NLMNoiseReductionEffect(Effect):
                 self.hash = param_hash
 
         return self.diff
-    
+
+
+# デブラーフィルタ
 class DeblurFilterEffect(Effect):
 
     def set2widget(self, widget, param):
@@ -309,107 +406,6 @@ class DeblurFilterEffect(Effect):
 
         return self.diff
 
-class InpaintDiff:
-    def __init__(self, **kwargs):
-        self.crop_info = kwargs.get('crop_info', None)
-        self.image = kwargs.get('image', None)
-
-    def image2list(self):
-        if type(self.image) is np.ndarray:
-            self.image = (self.image.shape, list(bz2.compress(self.image.tobytes(), 1)))
-            #self.image = self.image.tolist()
-
-    def list2image(self):
-        if type(self.image) is list:
-            self.image = np.reshape(np.frombuffer(bz2.decompress(bytearray(self.image[1])), dtype=np.float32), self.image[0])
-            #self.image = np.array(self.image)
-
-class InpaintEffect(Effect):
-    __iopaint = None
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        
-        self.inpaint_diff_list = []
-        self.mask_editor = None
-        self.crop_editor = None
-
-    @staticmethod
-    def dump(param):
-        inpaint_diff_list = param.get('inpaint_diff_list', None)
-        if inpaint_diff_list is not None:
-            inpaint_diff_list_dumps = []
-            for inpaint_diff in inpaint_diff_list:
-                inpaint_diff.image2list()
-                inpaint_diff_list_dumps.append((inpaint_diff.crop_info, inpaint_diff.image))
-            param['inpaint_diff_list'] = inpaint_diff_list_dumps
-
-    @staticmethod
-    def load(param):
-        inpaint_diff_list_dumps = param.get('inpaint_diff_list', None)
-        if inpaint_diff_list_dumps is not None:
-            inpaint_diff_list = []
-            for inpaint_diff_dump in inpaint_diff_list_dumps:
-                inpaint_diff = InpaintDiff(crop_info=inpaint_diff_dump[0], image=inpaint_diff_dump[1])
-                inpaint_diff.list2image()
-                inpaint_diff_list.append(inpaint_diff)
-            param['inpaint_diff_list'] = inpaint_diff_list
-
-    def set2widget(self, widget, param):
-        widget.ids["switch_inpaint"].active = False if param.get('inpaint', 0) == 0 else True
-        widget.ids["button_inpaint_predict"].state = "normal" if param.get('inpaint_predict', 0) == 0 else "down"
-        #self.inpaint_diff_list = param.get('inpaint_diff_list', [])
-
-    def set2param(self, param, widget):
-        param['inpaint'] = 0 if widget.ids["switch_inpaint"].active == False else 1
-        param['inpaint_predict'] = 0 if widget.ids["button_inpaint_predict"].state == "normal" else 1
-
-        if param['inpaint'] > 0:
-            if self.mask_editor is None:
-                self.mask_editor = mask_editor.MaskEditor(param['img_size'][0], param['img_size'][1])
-                self.mask_editor.zoom = param['crop_info'][4]
-                self.mask_editor.pos = [0, 0]
-                widget.ids["preview_widget"].add_widget(self.mask_editor)
-            
-        if param['inpaint'] <= 0:
-            if self.mask_editor is not None:
-                widget.ids["preview_widget"].remove_widget(self.mask_editor)
-                self.mask_editor = None
-
-    def make_diff(self, img, param):
-        self.inpaint_diff_list = param.get('inpaint_diff_list', [])
-        ip = param.get('inpaint', 0)
-        ipp = param.get('inpaint_predict', 0)
-        if (ip > 0 and ipp > 0) is True:
-            if InpaintEffect.__iopaint is None:
-                InpaintEffect.__iopaint = importlib.import_module('iopaint.predict')
-
-            mask = cv2.GaussianBlur(self.mask_editor.get_mask(), (63, 63), 0)
-            w, h = param['original_img_size']
-            eh, ew = img.shape[:2]
-            x, y = (ew-w)//2, (eh-h)//2
-            img2 = InpaintEffect.__iopaint.predict(img[y:y+h, x:x+w], mask, model=config.get_config('iopaint_model'), resize_limit=config.get_config('iopaint_resize_limit'), use_realesrgan=config.get_config('iopaint_use_realesrgan'))
-            img2 = img2 #/ param.get('white_balance', [1, 1, 1])
-            bboxes = core.get_multiple_mask_bbox(self.mask_editor.get_mask())
-            for bbox in bboxes:
-                self.inpaint_diff_list.append(InpaintDiff(crop_info=(bbox[0] + x, bbox[1] + y, bbox[2], bbox[3]), image=img2[bbox[1]:bbox[1]+bbox[3], bbox[0]:bbox[0]+bbox[2]]))
-            param['inpaint_diff_list'] = self.inpaint_diff_list
-            self.mask_editor.clear_mask()
-            self.mask_editor.update_canvas()
-        
-        if len(self.inpaint_diff_list) > 0:
-            img2 = img.copy()
-            for inpaint_diff in self.inpaint_diff_list:
-                cx, cy, cw, ch = inpaint_diff.crop_info
-                img2[cy:cy+ch, cx:cx+cw] = inpaint_diff.image
-            self.diff = img2
-        else:
-            self.diff = None
-
-        return self.diff
-    
-    def apply_diff(self, img):
-        return self.diff
 
 class DefocusEffect(Effect):
     __net = None
@@ -443,34 +439,29 @@ class DefocusEffect(Effect):
 
         return self.diff
 
-class ColorCorrectEffect(Effect):
-    __cca = None
+
+class LensblurFilterEffect(Effect):
 
     def set2widget(self, widget, param):
-        widget.ids["switch_color_correct"].active = False if param.get('defcolor_correctocus', 0) == 0 else True
+        widget.ids["slider_lensblur_filter"].set_slider_value(param.get('lensblur_filter', 0))
 
     def set2param(self, param, widget):
-        param['color_correct'] = 0 if widget.ids["switch_color_correct"].active == False else 1
+        param['lensblur_filter'] = widget.ids["slider_lensblur_filter"].value
 
-    def make_diff(self, rgb, param):
-        cc = param.get('color_correct', 0)
-        if cc <= 0:
+    def make_diff(self, img, param):
+        lpfr = int(param.get('lensblur_filter', 0))
+        if lpfr == 0:
             self.diff = None
             self.hash = None
-        
-        else:
-            param_hash = hash((cc))
-            if self.hash != param_hash:
-                if ColorCorrectEffect.__cca is None:
-                    ColorCorrectEffect.__cca = importlib.import_module('colorcorrect.algorithm')
 
-                self.diff = ColorCorrectEffect.__cca
+        else:
+            param_hash = hash((lpfr))
+            if self.hash != param_hash:
+                self.diff = core.lensblur_filter(img, lpfr-1)
                 self.hash = param_hash
 
         return self.diff
-    
-    def apply_diff(self, rgb):
-        return ColorCorrectEffect.__cca.automatic_color_equalization(rgb)
+
 
 class LUTEffect(Effect):
     file_pathes = { '---': None }
@@ -567,60 +558,6 @@ class LensSimulatorEffect(Effect):
         per = self.diff[1] / 100.0
         return lens * per + rgb * (1-per)
 
-class LensblurFilterEffect(Effect):
-
-    def set2widget(self, widget, param):
-        widget.ids["slider_lensblur_filter"].set_slider_value(param.get('lensblur_filter', 0))
-
-    def set2param(self, param, widget):
-        param['lensblur_filter'] = widget.ids["slider_lensblur_filter"].value
-
-    def make_diff(self, img, param):
-        lpfr = int(param.get('lensblur_filter', 0))
-        if lpfr == 0:
-            self.diff = None
-            self.hash = None
-
-        else:
-            param_hash = hash((lpfr))
-            if self.hash != param_hash:
-                self.diff = core.lensblur_filter(img, lpfr-1)
-                self.hash = param_hash
-
-        return self.diff
-
-class PerlinNoiseEffect(Effect):
-    __perlin = None
-
-    def set2widget(self, widget, param):
-        widget.ids["slider_perlin_noise"].set_slider_value(param.get('perlin_noise', 0))
-        widget.ids["slider_perlin_noise_opacity"].set_slider_value(param.get('perlin_noise_opacity', 100))
-
-    def set2param(self, param, widget):
-        param['perlin_noise'] = widget.ids["slider_perlin_noise"].value
-        param['perlin_noise_opacity'] = widget.ids["slider_perlin_noise_opacity"].value
-
-    def make_diff(self, img, param):
-        pn = int(param.get('perlin_noise', 0))
-        pno = param.get('perlin_noise_opacity', 100)
-        if pn == 0:
-            self.diff = None
-            self.hash = None
-
-        else:
-            param_hash = hash((pn, pno))
-            if self.hash != param_hash:
-                if PerlinNoiseEffect.__perlin is None:
-                    PerlinNoiseEffect.__perlin = importlib.import_module('perlin')
-
-                img2 = PerlinNoiseEffect.__perlin.make_perlin_noise(img.shape[1], img.shape[0], pn)
-                img2 = ((img2*(pno/100.0))+1.0)/2.0
-                img2 = np.stack( [img2, img2, img2], axis=2)
-                img2 = core.blend_overlay(img, img2)
-                self.diff = img2
-                self.hash = param_hash
-
-        return self.diff
 
 class ColorTemperatureEffect(Effect):
 
@@ -1756,6 +1693,7 @@ def create_effects():
     effects = [{}, {}, {}, {}, {}]
 
     lv0 = effects[0]
+    #lv0['lens_modifier'] = LensModifierEffect()
     lv0['subpixel_shift'] = SubpixelShiftEffect()
     lv0['inpaint'] = InpaintEffect()
     lv0['rotation'] = RotationEffect()
@@ -1767,12 +1705,10 @@ def create_effects():
     lv1['deblur_filter'] = DeblurFilterEffect()
     lv1['defocus'] = DefocusEffect()
     lv1['lensblur_filter'] = LensblurFilterEffect()
-    lv1['perlin_noise'] = PerlinNoiseEffect()
     lv1['glow'] = GlowEffect()
     
     lv2 = effects[2]
     lv2['color_temperature'] = ColorTemperatureEffect()
-    lv2['color_correct'] = ColorCorrectEffect()
     lv2['dehaze'] = DehazeEffect()
 
     lv2['rgb2hls1'] = RGB2HLSEffect()
