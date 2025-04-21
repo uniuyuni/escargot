@@ -35,7 +35,7 @@ import export
 MASKTYPE_CIRCULAR = 'circular'
 MASKTYPE_GRADIENT = 'gradient'
 MASKTYPE_FULL = 'full'
-MASKTYPE_FREE_DRAW = 'free_draw'
+MASKTYPE_FREEDRAW = 'free_draw'
 MASKTYPE_SEGMENT = 'segment'
 
 # コントロールポイントのクラス
@@ -74,8 +74,8 @@ class ControlPoint(Widget):
         return True
 
     def on_touch_move(self, touch):
-        cx, cy = self.editor.window_to_tcg(*touch.pos)
         if self.touching:
+            cx, cy = self.editor.window_to_tcg(*touch.pos)
             self.ctrl_center = [cx, cy]
             #self.cnter = (cx, cy)
             return True
@@ -109,6 +109,12 @@ class BaseMask(Widget):
         self.is_draw_mask = True
         self.image_mask_cache = None
         self.image_mask_cache_hash = None
+
+    def start(self):
+        pass
+
+    def end(self):
+        pass
 
     def on_active_changed(self, instance, value):
         if value:
@@ -174,26 +180,26 @@ class BaseMask(Widget):
     def get_name(self):
         return self.name
 
-    def serialize(self):
-        pass
-
-    def deserialize(self):
-        pass
-
     def update(self):
-        pass
+        if len(self.control_points) > 0:
+            cp_center = self.control_points[0]
+            #cp_center.property('ctrl_center').dispatch(cp_center)
+            cp_center.ctrl_center[0] += float(np.finfo(np.float32).eps)
+            cp_center.ctrl_center[0] -= float(np.finfo(np.float32).eps)
 
     def update_control_points(self):
         pass
 
-    def update_mask(self):
-        pass  # 具体的な実装は各マスククラスで行う
-
-    def get_mask_image(self):
-        pass
-
     def draw_mask_to_fbo(self):
-        pass  # 具体的な実装は各マスククラスで行う
+        if not self.editor.crop_info:
+            Logger.warning(f"{self.__class__.__name__}: crop_infoが未設定。")
+            return
+
+        if self.active == True:
+            mask_image = self.get_mask_image()
+
+            # イメージを描画してもらう
+            self.editor.draw_mask_image(mask_image)
 
     def draw_hls_mask(self, image):
         himg = self.draw_hue_mask(image)
@@ -275,13 +281,11 @@ class CircularGradientMask(BaseMask):
             self.translate = Translate(*self.center)
             self.rotate = Rotate(angle=0, origin=(0, 0))
             Color(*self.color)
-            # 外側の円
-            self.outer_line = Line(ellipse=(0, 0, 0, 0), width=2)
-            # 内側の円
-            self.inner_line = Line(ellipse=(0, 0, 0, 0), width=2)
+            self.outer_line = Line(ellipse=(0, 0, 0, 0), width=2) # 外側の円
+            self.inner_line = Line(ellipse=(0, 0, 0, 0), width=2) # 内側の円
             PopMatrix()
 
-        self.update_mask()
+        #self.update_mask()
 
     def on_touch_down(self, touch):
         if self.initializing:
@@ -401,12 +405,6 @@ class CircularGradientMask(BaseMask):
 
         self.create_control_points()
         #self.update_mask()
-
-    def update(self):
-        # 更新
-        cp_center = self.control_points[0]
-        cp_center.ctrl_center[0] += float(np.finfo(np.float32).eps)
-        cp_center.ctrl_center[0] -= float(np.finfo(np.float32).eps)
  
     def calculate_point(self, radius_x, radius_y, angle_deg):
         angle_rad = math.radians(angle_deg)
@@ -436,12 +434,10 @@ class CircularGradientMask(BaseMask):
     def on_center_control_point_move(self, instance, value):
         dx = instance.ctrl_center[0] - self.center_x
         dy = instance.ctrl_center[1] - self.center_y
-        self.center_x += dx
-        self.center_y += dy
+        self.center = (self.center_x + dx, self.center_y + dy)
         for cp in self.control_points:
             if cp != instance:
-                cp.center_x += dx
-                cp.center_y += dy
+                cp.center = (cp.center_x + dx, cp.center_y + dy)
         self.update_control_points()
         self.update_mask()
         self.editor.start_draw_image()
@@ -524,12 +520,13 @@ class CircularGradientMask(BaseMask):
         center = self.editor.tcg_to_texture(*self.center)
         inner_axes = self.editor.tcg_to_world_scale(self.inner_radius_x, self.inner_radius_y)
         outer_axes = self.editor.tcg_to_world_scale(self.outer_radius_x, self.outer_radius_y)
+        rotate_rad = self.editor.get_rotate_rad(self.rotate_rad)
 
-        newhash = hash((image_size, center, inner_axes, outer_axes))
+        newhash = hash((self.editor.get_hash_items(), image_size, center, inner_axes, outer_axes, rotate_rad, self.invert))
         if self.image_mask_cache is None or self.image_mask_cache_hash != newhash:
 
             # グラデーションを描画
-            gradient_image = self.draw_elliptical_gradient(image_size, center, inner_axes, outer_axes, self.editor.get_rotate_rad(self.rotate_rad), self.invert)
+            gradient_image = self.draw_elliptical_gradient(image_size, center, inner_axes, outer_axes, rotate_rad, self.invert)
 
             # ルミナんとマスクを作成
             gradient_image = self.draw_hls_mask(gradient_image)
@@ -542,17 +539,6 @@ class CircularGradientMask(BaseMask):
 
         return self.image_mask_cache
 
-    def draw_mask_to_fbo(self):
-        if not self.editor.crop_info:
-            Logger.warning(f"{self.__class__.__name__}: crop_infoが未設定。")
-            return
-
-        if self.active == True:
-            gradient_image = self.get_mask_image()
-
-            # イメージを描画してもらう
-            self.editor.draw_mask_image(gradient_image)
-
     def draw_elliptical_gradient(self, image_size, center, inner_axes, outer_axes, angle_rad, invert=0, smoothness=2.0):
     
         # 座標グリッドの作成
@@ -561,8 +547,8 @@ class CircularGradientMask(BaseMask):
         y = y_indices - center[1]
 
         # 回転角をラジアンに変換
-        cos_angle = np.cos(-angle_rad)
-        sin_angle = np.sin(-angle_rad)
+        cos_angle = np.cos(angle_rad)
+        sin_angle = np.sin(angle_rad)
 
         # 座標の回転
         x_rot = x * cos_angle - y * sin_angle
@@ -622,7 +608,7 @@ class GradientMask(BaseMask):
             PopMatrix()
 
         self.rotate_rad = 0
-        self.update_mask()
+        #self.update_mask()
     
     def on_touch_down(self, touch):
         if self.initializing:
@@ -639,6 +625,7 @@ class GradientMask(BaseMask):
                 self.update_control_points()
                 self.update_mask()
                 return True
+            
             return super().on_touch_down(touch)
     
     def on_touch_move(self, touch):
@@ -693,11 +680,6 @@ class GradientMask(BaseMask):
         
         self.create_control_points()
         #self.update_mask()
-
-    def update(self):
-        cp_center = self.control_points[0]
-        cp_center.ctrl_center[0] += float(np.finfo(np.float32).eps)
-        cp_center.ctrl_center[0] -= float(np.finfo(np.float32).eps)
 
     def create_control_points(self):
         # 中心のコントロールポイント
@@ -808,6 +790,7 @@ class GradientMask(BaseMask):
         with self.canvas:
             if self.initializing:
                 tx, ty = self.editor.tcg_to_window(*self.start_point)
+                #self.line_color.rgba = self.color
                 self.translate.x, self.translate.y = tx, ty
                 self.start_line.points, _ = self.calculate_line(self.start_point, self.start_point, 0)
                 self.center_line.points, _ = self.calculate_line(self.center, self.start_point, +1)
@@ -831,10 +814,10 @@ class GradientMask(BaseMask):
         start_point = self.editor.tcg_to_texture(*self.start_point)
         end_point = self.editor.tcg_to_texture(*self.end_point)
 
-        newhash = hash((image_size, center, start_point, end_point))
+        newhash = hash((self.editor.get_hash_items(), image_size, center, start_point, end_point))
         if self.image_mask_cache is None or self.image_mask_cache_hash != newhash:
             # グラデーションを描画
-            gradient_image = self.draw_gradient(image_size, center, start_point, end_point, self.editor.get_rotate_rad(self.rotate_rad))
+            gradient_image = self.draw_gradient(image_size, center, start_point, end_point)
             
             # ルミナんとマスクを作成
             gradient_image = self.draw_hls_mask(gradient_image)
@@ -847,19 +830,7 @@ class GradientMask(BaseMask):
 
         return self.image_mask_cache
     
-    def draw_mask_to_fbo(self):
-        if not self.editor.crop_info:
-            Logger.warning(f"{self.__class__.__name__}: crop_infoが未設定。")
-            return
-
-        if self.active == True:
-            
-            gradient_image = self.get_mask_image()
-
-            # イメージを描画してもらう
-            self.editor.draw_mask_image(gradient_image)
-
-    def draw_gradient(self, image_size, center, start_point, end_point, angle, smoothness=1):
+    def draw_gradient(self, image_size, center, start_point, end_point, smoothness=1):
 
         width, height = image_size
         img = np.zeros((height, width), dtype=np.float32)  # 開始点前はすべて(0, 0, 0, 0)
@@ -909,7 +880,7 @@ class FullMask(BaseMask):
             self.translate = Translate(*self.center)
             PopMatrix()
 
-        self.update_mask()
+        #self.update_mask()
 
     def on_touch_down(self, touch):
         if self.initializing:
@@ -972,11 +943,6 @@ class FullMask(BaseMask):
         self.create_control_points()
         #self.update_mask()
 
-    def update(self):
-        cp_center = self.control_points[0]
-        cp_center.ctrl_center[0] += float(np.finfo(np.float32).eps)
-        cp_center.ctrl_center[0] -= float(np.finfo(np.float32).eps)
-
     def on_center_control_point_move(self, instance, value):
         dx = instance.ctrl_center[0] - self.center_x
         dy = instance.ctrl_center[1] - self.center_y
@@ -1013,7 +979,7 @@ class FullMask(BaseMask):
         image_size = (int(self.editor.texture_size[0]), int(self.editor.texture_size[1]))
         center = self.editor.tcg_to_texture(*self.center)
 
-        newhash = hash((image_size, center))
+        newhash = hash((self.editor.get_hash_items(), image_size, center))
         if self.image_mask_cache is None or self.image_mask_cache_hash != newhash:
             # 描画
             gradient_image = self.draw_full(image_size, center)
@@ -1029,19 +995,6 @@ class FullMask(BaseMask):
         
         return self.image_mask_cache
 
- 
-    def draw_mask_to_fbo(self):
-        if not self.editor.crop_info:
-            Logger.warning(f"{self.__class__.__name__}: crop_infoが未設定。")
-            return
-
-        if self.active == True:
-
-            gradient_image = self.get_mask_image()
-
-           # イメージを描画してもらう
-            self.editor.draw_mask_image(gradient_image)
-
     def draw_full(self, image_size, center):
         # 画像の初期化（黒背景、RGBA）
         image = np.ones((image_size[1], image_size[0]), dtype=np.float32)
@@ -1052,83 +1005,169 @@ class FullMask(BaseMask):
 
 # 自由描画マスクのクラス
 class FreeDrawMask(BaseMask):
+
+    class Line:
+        def __init__(self, is_eracing=False, size=10, soft=1.5, **kwargs):
+            self.size = size
+            self.soft = soft
+            self.points = []
+            self.is_erasing = is_eracing
+
+        def add_point(self, x, y):
+            self.points.append((x, y))
+
     def __init__(self, editor, **kwargs):
         super().__init__(editor, **kwargs)
         self.name = "Draw"
-        self.points = []
+        self.initializing = True
+
         self.lines = []  # 複数の線を保持
         self.current_line = None
-        self.drawing = False
-        self.initializing = True
-        self.brush_size = 10
-        self.brush_cursor = None
-        self.is_erasing = False  # 消去モードかどうか
+        self.brush_size = 100
 
         with self.canvas:
-            self.brush_color = Color(1, 1, 1, 0.5)
-            self.brush_cursor = Ellipse(size=(self.brush_size, self.brush_size))
+            PushMatrix()
+            self.translate = Translate(0, 0)
+            self.rotate = Rotate(angle=0, origin=(0, 0))
+            self.brush_color = Color((0, 1, 1, 1))
+            self.brush_cursor = Line(ellipse=(0, 0, self.brush_size, self.brush_size), width=2)
+            PopMatrix()
+
+    def start(self):
+        Window.bind(mouse_pos=self.on_mouse_pos)
+
+    def end(self):
+        self.brush_color.rgba = (0, 0, 0, 0)
+        Window.unbind(mouse_pos=self.on_mouse_pos)
 
     def serialize(self):
         """マスクの状態をシリアライズ"""
+        cx, cy = self.center
         param = export.delete_special_param(self.effects_param)
         dict = {
-            'type': MASKTYPE_FREE_DRAW,
+            'type': MASKTYPE_FREEDRAW,
             'name': self.name,
-            'lines': [(line.points, line.width, line.is_erasing) for line in self.lines],
-            'brush_size': self.brush_size,
-            'center': self.center,
+            'center': [cx, cy],
+            'lines': self.lines,
             'effects_param': param
         }
         return dict
 
     def deserialize(self, dict):
-        """マスクの状態をデシリアライズ"""
         self.initializing = False
         self.name = dict['name']
-        self.brush_size = dict['brush_size']
-        self.center = dict['center']
+        cx, cy = dict['center']
+        self.lines = dict['lines']
         self.effects_param.update(dict['effects_param'])
-
-        # 線を再描画
-        self.lines = []
-        for points, width, is_erasing in dict['lines']:
-            with self.canvas:
-                Color(*self.color)
-                line = Line(points=points, width=width)
-                line.is_erasing = is_erasing
-                self.lines.append(line)
-
+        self.center = (cx, cy)
         self.create_control_points()
 
-    def get_mask_image(self):
-        """マスク画像を生成"""
-        if not self.editor or self.editor.image_size[0] == 0 or self.editor.image_size[1] == 0:
-            return None
+    def on_mouse_pos(self, window, pos):
+        self.update_brush_cursor(pos[0], pos[1])
 
+    def on_touch_down(self, touch):
+        if touch.is_mouse_scrolling:
+            if self.editor.collide_point(*touch.pos):
+                # 描画中または消去中はブラシサイズを変更できない
+                if self.current_line is None:
+                    if touch.button == 'scrolldown':
+                        self.brush_size = max(10, self.brush_size - 10)
+                    elif touch.button == 'scrollup':
+                        self.brush_size = min(100, self.brush_size + 10)
+                        
+                    self.update_brush_cursor(touch.pos[0], touch.pos[1])
+
+                    return super().on_touch_down(touch)
+
+        if self.initializing:
+            cx, cy = self.editor.window_to_tcg(*touch.pos)
+            self.center_x = cx
+            self.center_y = cy
+            self.initializing = False
+            self.create_control_points()
+            self.editor.set_active_mask(self)            
+
+        # 右クリックで消去モード、左クリックで描画モード
+        is_erasing = (touch.button == 'right')            
+        cx, cy = self.editor.window_to_tcg(*touch.pos)
+        self.current_line = FreeDrawMask.Line(is_erasing, self.brush_size)
+        self.current_line.add_point(cx, cy)
+        self.editor.set_active_mask(self)
+        self.lines.append(self.current_line)
+
+        self.update_mask()
+        self.editor.start_draw_image()        
+        
+        return super().on_touch_down(touch)
+
+    def on_touch_move(self, touch):
+        if self.current_line is not None:
+            cx, cy = self.editor.window_to_tcg(*touch.pos)
+            self.current_line.add_point(cx, cy)
+
+            self.update_mask()
+            self.editor.start_draw_image()        
+
+        return super().on_touch_move(touch)
+
+    def on_touch_up(self, touch):
+        if self.current_line is not None:
+            self.current_line = None
+            # マスクを更新
+            self.update_mask()
+            self.editor.start_draw_image()        
+        
+        return super().on_touch_up(touch)
+
+    def create_control_points(self):
+        # 中心のコントロールポイント
+        cp_center = ControlPoint(self.editor)
+        cp_center.center = (self.center_x, self.center_y)
+        cp_center.ctrl_center = cp_center.center
+        cp_center.is_center = True
+        cp_center.color = [0, 1, 0] if self.active else [1, 0, 0]
+        cp_center.bind(ctrl_center=self.on_center_control_point_move)
+        self.control_points.append(cp_center)
+        self.add_widget(cp_center)
+
+    def on_center_control_point_move(self, instance, value):
+        dx = instance.ctrl_center[0] - self.center_x
+        dy = instance.ctrl_center[1] - self.center_y
+        self.center = (self.center_x + dx, self.center_y + dy)
+        for cp in self.control_points:
+            if cp != instance:
+                cp.center = (cp.center_x + dx, cp.center_y + dy)
+        self.update_control_points()
+        self.update_mask()
+        self.editor.start_draw_image()
+
+    def update_brush_cursor(self, x, y):
+        self.translate.x, self.translate.y = x - self.brush_size / 2, y - self.brush_size / 2
+        self.brush_cursor.ellipse = (0, 0, self.brush_size, self.brush_size)
+        #self.brush_color.rgba = (1, 1, 1, 0.5)
+
+    def update_mask(self):
+        if not self.editor or self.editor.image_size[0] == 0 or self.editor.image_size[1] == 0:
+            return
+        
+        self.rotate.angle = math.degrees(self.editor.get_rotate_rad(0))
+
+        if self.is_draw_mask == True:
+            self.draw_mask_to_fbo()
+
+    def get_mask_image(self):
+            
         # パラメータ設定
         image_size = (int(self.editor.texture_size[0]), int(self.editor.texture_size[1]))
+        nline = len(self.lines)
+        npoint = 0
+        for line in self.lines:
+            npoint += len(line.points)
 
-        newhash = hash((image_size, self.lines))
+        newhash = hash((self.editor.get_hash_items(), image_size, nline, npoint))
         if self.image_mask_cache is None or self.image_mask_cache_hash != newhash:
-            # マスク画像の初期化
-            mask = np.zeros((image_size[1], image_size[0]), dtype=np.float32)
-            
-            # 各線を描画
-            for line in self.lines:
-                points = line.points
-                width = line.width * self.editor.crop_info[4]
-                
-                # 線の座標をスケーリング
-                scaled_points = []
-                for i in range(0, len(points), 2):
-                    x = int(points[i] * self.editor.crop_info[4])
-                    y = int(image_size[1] - points[i + 1] * self.editor.crop_info[4])
-                    scaled_points.append((x, y))
-                
-                # 線を描画
-                if len(scaled_points) > 1:
-                    value = -1.0 if line.is_erasing else 1.0
-                    cv2.line(mask, scaled_points[0], scaled_points[-1], value, int(width))
+             
+            mask = self.draw_line(image_size, self.lines)
 
             # ルミナンスとマスクを作成
             mask = self.draw_hls_mask(mask)
@@ -1140,109 +1179,111 @@ class FreeDrawMask(BaseMask):
             self.image_mask_cache_hash = newhash
 
         return self.image_mask_cache
-
-    def on_touch_down(self, touch):
-        if self.collide_point(*touch.pos):
-            if self.initializing:
-                cx, cy = self.editor.window_to_tcg(*touch.pos)
-                self.points = [cx, cy]
-                with self.canvas:
-                    Color(*self.color)
-                    self.current_line = Line(points=self.points, width=self.brush_size)
-                    self.current_line.is_erasing = (touch.button == 'right')
-                self.drawing = True
-                self.update_brush_cursor(touch.x, touch.y)
-                return True
-            else:
-                return super().on_touch_down(touch)
-        return False
-
-    def on_touch_move(self, touch):
-        if self.drawing:
-            cx, cy = self.editor.window_to_tcg(*touch.pos)
-            self.points.extend([cx, cy])
-            self.current_line.points = self.points
-            self.update_brush_cursor(touch.x, touch.y)
-            return True
-        return False
-
-    def on_touch_up(self, touch):
-        if self.drawing:
-            self.drawing = False
-            self.initializing = False
-            self.lines.append(self.current_line)  # 現在の線を保存
-            self.create_control_points()
-            self.editor.set_active_mask(self)
-            self.brush_cursor.size = (0, 0)
-            return True
-        return super().on_touch_up(touch)
-
-    def on_mousewheel(self, window, x, y, dx, dy):
-        # 描画中または消去中はブラシサイズを変更できない
-        if self.drawing:
-            return True
-            
-        # ホイールでブラシサイズを変更
-        if dy > 0:
-            self.brush_size = min(50, self.brush_size + 2)
-        else:
-            self.brush_size = max(2, self.brush_size - 2)
-        self.update_brush_cursor(x, y)
-        return True
-
-    def create_control_points(self):
-        # 中心のコントロールポイントを作成
-        cp_center = ControlPoint(self.editor)
-        cp_center.center = self.center
-        cp_center.ctrl_center = cp_center.center
-        cp_center.is_center = True
-        cp_center.color = [0, 1, 0] if self.active else [1, 0, 0]
-        cp_center.bind(ctrl_center=self.on_center_control_point_move)
-        self.control_points.append(cp_center)
-        self.add_widget(cp_center)
-
-        if not self.active:
-            self.show_center_control_point_only()
-
-    def on_center_control_point_move(self, instance, value):
-        dx = instance.ctrl_center[0] - self.center[0]
-        dy = instance.ctrl_center[1] - self.center[1]
-        self.center = [self.center[0] + dx, self.center[1] + dy]
+    
+    def draw_line(self, image_size, lines):
+        # 画像の初期化（透明背景）
+        width, height = image_size
+        image = np.zeros((height, width), dtype=np.float32)
         
-        # すべての線を移動
-        for line in self.lines:
-            points = line.points
-            for i in range(0, len(points), 2):
-                points[i] += dx
-                points[i + 1] += dy
-            line.points = points
-
-        self.update_control_points()
-        self.update_mask()
-        self.editor.start_draw_image()
-
-    def update_brush_cursor(self, x, y):
-        # 描画中でない場合のみブラシカーソルを表示
-        if not self.drawing:
-            self.brush_cursor.pos = (x - self.brush_size / 2, y - self.brush_size / 2)
-            self.brush_cursor.size = (self.brush_size, self.brush_size)
-        else:
-            self.brush_cursor.size = (0, 0)
-
-    def update_mask(self):
-        if not self.editor or self.editor.image_size[0] == 0 or self.editor.image_size[1] == 0:
-            return
-
-        if self.is_draw_mask == True:
-            self.draw_mask_to_fbo()
-
-    def draw_mask_to_fbo(self):
-        if not self.editor.crop_info:
-            return
-
-        if self.active == True:
-            gradient_image = self.get_mask_image()
-            self.editor.draw_mask_image(gradient_image)
+        # 各線を描画
+        for line in lines:
+            # 点が0個の場合はスキップ
+            if len(line.points) == 0:
+                continue
+                
+            # 線の太さとソフトネス
+            brush_size = line.size
+            brush_radius = brush_size / 2
+            brush_soft = line.soft
+            is_erasing = line.is_erasing
+            
+            # 点が1つだけの場合は、その点にブラシを適用
+            if len(line.points) == 1:
+                p = self.editor.tcg_to_texture(*line.points[0])
+                x, y = int(p[0]), int(p[1])
+                
+                # OpenCVを使用して円を描画
+                center = (x, y)
+                # ブラシの形状を作成（円形）
+                brush_img = np.zeros((int(brush_size*2), int(brush_size*2)), dtype=np.float32)
+                cv2.circle(brush_img, (int(brush_size), int(brush_size)), int(brush_radius), 1.0, -1)
+                
+                # ソフトエッジを適用
+                if brush_soft > 1.0:
+                    # ソフトエッジ効果を作成
+                    dist_img = np.zeros_like(brush_img)
+                    cv2.circle(dist_img, (int(brush_size), int(brush_size)), int(brush_radius), 1.0, -1)
+                    dist_img = cv2.distanceTransform(dist_img.astype(np.uint8), cv2.DIST_L2, 3)
+                    dist_img = dist_img / np.max(dist_img)
+                    brush_img = np.power(dist_img, 1.0/brush_soft)
+                
+                # ブラシを画像に適用
+                x_min = max(0, x - int(brush_size))
+                y_min = max(0, y - int(brush_size))
+                x_max = min(width, x + int(brush_size))
+                y_max = min(height, y + int(brush_size))
+                
+                # x_minがx_maxより大きい、またはy_minがy_maxより大きい場合の修正
+                if x_min > x_max:
+                    x_min, x_max = x_max, x_min
+                if y_min > y_max:
+                    y_min, y_max = y_max, y_min
+                
+                # ブラシの対応部分を切り出し
+                brush_x_min = max(0, int(brush_size) - x)
+                brush_y_min = max(0, int(brush_size) - y)
+                brush_x_max = brush_x_min + (x_max - x_min)
+                brush_y_max = brush_y_min + (y_max - y_min)
+                
+                brush_part = brush_img[brush_y_min:brush_y_max, brush_x_min:brush_x_max]
+                
+                if is_erasing:
+                    # 消しゴムモード
+                    image[y_min:y_max, x_min:x_max] = np.maximum(0, image[y_min:y_max, x_min:x_max] - brush_part)
+                else:
+                    # 描画モード
+                    image[y_min:y_max, x_min:x_max] = np.minimum(1, image[y_min:y_max, x_min:x_max] + brush_part)
+                continue
+            
+            # 複数点がある場合は、各点を結ぶ線を描画
+            # 全ての点をテクスチャ座標に変換
+            points = [self.editor.tcg_to_texture(*p) for p in line.points]
+            
+            # OpenCVのpolylines関数用に点を整形
+            cv_points = np.array([[int(p[0]), int(p[1])] for p in points], dtype=np.int32)
+            
+            # 線の描画用のマスク画像
+            line_mask = np.zeros((height, width), dtype=np.uint8)
+            
+            # 太い線を描画
+            cv2.polylines(line_mask, [cv_points], False, 255, int(brush_size))
+            
+            # 線の端点も円で描画して繋ぎ目を滑らかに
+            for p in cv_points:
+                cv2.circle(line_mask, (p[0], p[1]), int(brush_radius), 255, -1)
+            
+            # ブラシのソフトエッジを適用
+            if brush_soft > 1.0:
+                # 距離変換でソフトエッジを作成
+                dist_img = cv2.distanceTransform((line_mask > 0).astype(np.uint8), cv2.DIST_L2, 3)
+                max_dist = np.max(dist_img)
+                if max_dist > 0:
+                    dist_img = dist_img / max_dist
+                    # ソフトネスを適用
+                    soft_mask = np.power(dist_img, 1.0/brush_soft)
+                    line_mask = (soft_mask * 255).astype(np.uint8)
+            
+            # 最終的なマスクを適用
+            line_mask_float = line_mask.astype(np.float32) / 255.0
+            
+            if is_erasing:
+                # 消しゴムモード
+                image = np.maximum(0, image - line_mask_float)
+            else:
+                # 描画モード
+                image = np.minimum(1, image + line_mask_float)
+        
+        return image
 
 # セグメントマスクのクラス
 class SegmentMask(BaseMask):
@@ -1261,7 +1302,7 @@ class SegmentMask(BaseMask):
             self.translate = Translate(*self.center)
             PopMatrix()
 
-        self.update_mask()
+        #self.update_mask()
 
     def on_touch_down(self, touch):
         if self.initializing:
@@ -1324,11 +1365,6 @@ class SegmentMask(BaseMask):
         self.create_control_points()
         #self.update_mask()
 
-    def update(self):
-        cp_center = self.control_points[0]
-        cp_center.ctrl_center[0] += float(np.finfo(np.float32).eps)
-        cp_center.ctrl_center[0] -= float(np.finfo(np.float32).eps)
-
     def on_center_control_point_move(self, instance, value):
         dx = instance.ctrl_center[0] - self.center_x
         dy = instance.ctrl_center[1] - self.center_y
@@ -1365,7 +1401,7 @@ class SegmentMask(BaseMask):
         image_size = (int(self.editor.texture_size[0]), int(self.editor.texture_size[1]))
         center = self.editor.tcg_to_full_image(*self.center)
 
-        newhash = hash((image_size, center, self.editor.crop_info))
+        newhash = hash((self.editor.get_hash_items(), image_size, center))
         if self.image_mask_cache is None or self.image_mask_cache_hash != newhash:
             # 描画
             gradient_image = self.draw_segment(image_size, center)
@@ -1380,20 +1416,6 @@ class SegmentMask(BaseMask):
             self.image_mask_cache_hash = newhash
             
         return self.image_mask_cache
-
- 
-    def draw_mask_to_fbo(self):
-        if not self.editor.crop_info:
-            Logger.warning(f"{self.__class__.__name__}: crop_infoが未設定。")
-            return
-
-        if self.active == True:
-
-            gradient_image = self.get_mask_image()
-
-           # イメージを描画してもらう
-            self.editor.draw_mask_image(gradient_image)
-
 
     def draw_segment(self, image_size, center):
         if SegmentMask.__iopaint_plugins is None:
@@ -1440,7 +1462,7 @@ class MaskLayer(BoxLayout):
     def delete_mask(self, instance):
         self.parent.remove_widget(self)
         self.mask.parent.remove_widget(self.mask)
-        self.mask.editor.delete_mask(self.mask)
+        self.mask.editor._delete_mask(self.mask)
 
     def set_active(self, instance):
         self.mask.editor.set_active_mask(self.mask)
@@ -1463,13 +1485,12 @@ class MaskEditor2(FloatLayout):
         self.add_widget(self.mask_container)
         self.rectangle = None
 
-        self.ui_layout = BoxLayout(orientation='vertical', size_hint=(0.2, 1))
+        self.ui_layout = BoxLayout(orientation='vertical', size_hint=(0.1, 1))
         self.ui_layout.pos_hint = {"x":0, "top":1}
         self.add_widget(self.ui_layout)
         self.create_ui()
-        self.current_mask_type = None
 
-        self.current_mask_type = None
+        self.create_mask = None
         self.center_rotate_rad = 0
         self.orientation = (0, 0)
         self.margin = (0, 0)
@@ -1478,6 +1499,11 @@ class MaskEditor2(FloatLayout):
         #self._keyboard.bind(on_key_down=self._on_keyboard_down)
 
         Logger.info("MaskEditor: 初期化完了")
+
+    # 終了処理
+    def end(self):
+        if self.active_mask is not None:
+            self.active_mask.end()
 
     def imread(self, image_source, dt):
         # 画像の読み込みとサイズの取得
@@ -1518,8 +1544,14 @@ class MaskEditor2(FloatLayout):
         self.center_rotate_rad = math.radians(rotation)
         self.orientation = (math.radians(rotation2), flip)
 
+    def get_hash_items(self):
+        return (self.crop_info, self.center_rotate_rad, self.orientation)
+
     def __set_image_info(self):
         self.margin = ((self.size[0]-self.texture_size[0])/2, (self.size[1]-self.texture_size[1])/2)
+        for mask in reversed(self.mask_layers):
+            #pass    # 無限ループ対策
+            effects.reeffect_all(mask.effects)
         
     def update(self):
         # 既存のマスクに対する更新を処理
@@ -1544,7 +1576,7 @@ class MaskEditor2(FloatLayout):
 
         for dict in list:
             type = dict.get('type', None)
-            mask = self.create_mask(type)
+            mask = self._create_mask(type)
             mask.deserialize(dict)
             mask.update()
 
@@ -1559,28 +1591,28 @@ class MaskEditor2(FloatLayout):
     
     def create_ui(self):
         # マスクタイプ選択ボタン
-        btn_circular = Button(text='Circle', size_hint=(1, 0.1))
-        btn_circular.bind(on_press=self.select_circular_gradient_mask)
+        btn_circular = Button(text='Circle', size_hint=(1, 0.05))
+        btn_circular.bind(on_release=self.select_circular_gradient_mask)
         self.ui_layout.add_widget(btn_circular)
 
-        btn_gradient = Button(text='Line', size_hint=(1, 0.1))
-        btn_gradient.bind(on_press=self.select_gradient_mask)
+        btn_gradient = Button(text='Line', size_hint=(1, 0.05))
+        btn_gradient.bind(on_release=self.select_gradient_mask)
         self.ui_layout.add_widget(btn_gradient)
 
-        btn_full = Button(text='Full', size_hint=(1, 0.1))
-        btn_full.bind(on_press=self.select_full_mask)
+        btn_full = Button(text='Full', size_hint=(1, 0.05))
+        btn_full.bind(on_release=self.select_full_mask)
         self.ui_layout.add_widget(btn_full)
 
-        btn_free_draw = Button(text='Draw', size_hint=(1, 0.1))
-        btn_free_draw.bind(on_press=self.select_free_draw_mask)
+        btn_free_draw = Button(text='Draw', size_hint=(1, 0.05))
+        btn_free_draw.bind(on_release=self.select_free_draw_mask)
         self.ui_layout.add_widget(btn_free_draw)
 
-        btn_segment = Button(text='Segment', size_hint=(1, 0.1))
-        btn_segment.bind(on_press=self.select_segment_mask)
+        btn_segment = Button(text='Segment', size_hint=(1, 0.05))
+        btn_segment.bind(on_release=self.select_segment_mask)
         self.ui_layout.add_widget(btn_segment)
 
         # マスクレイヤー表示
-        self.layer_list = BoxLayout(orientation='vertical', size_hint=(1, 0.7))
+        self.layer_list = BoxLayout(orientation='vertical', size_hint=(2, 0.7))
         self.ui_layout.add_widget(self.layer_list)
 
     def set_draw_mask(self, is_draw_mask):
@@ -1616,42 +1648,60 @@ class MaskEditor2(FloatLayout):
         # cv2.imwrite('combined_mask.png', (glayimg*255).astype(np.uint8))
 
     def select_circular_gradient_mask(self, instance):
-        self.current_mask_type = MASKTYPE_CIRCULAR
+        self._create_start_new_mask(MASKTYPE_CIRCULAR)
 
     def select_gradient_mask(self, instance):
-        self.current_mask_type = MASKTYPE_GRADIENT
+        self._create_start_new_mask(MASKTYPE_GRADIENT)
 
     def select_full_mask(self, instance):
-        self.current_mask_type = MASKTYPE_FULL
+        self._create_start_new_mask(MASKTYPE_FULL)
 
     def select_free_draw_mask(self, instance):
-        self.current_mask_type = MASKTYPE_FREE_DRAW
+        self._create_start_new_mask(MASKTYPE_FREEDRAW)
 
     def select_segment_mask(self, instance):
-        self.current_mask_type = MASKTYPE_SEGMENT
+        self._create_start_new_mask(MASKTYPE_SEGMENT)
+
+    def _create_start_new_mask(self, type):
+        # 画像サイズがまだ設定されていない場合、マスクの作成をスキップ
+        if self.image_size == [0, 0]:
+            Logger.warning("MaskEditor: 画像がまだロードされていません。マスクを追加できません。")
+            return
+        
+        self.ui_layout.disabled = True
+        mask = self._create_mask(type)
+        self.set_active_mask(None)
+        self.create_mask = mask
+
+    def _create_end_new_mask(self):
+        self.ui_layout.disabled = False
+        self.set_active_mask(self.create_mask)
 
     def on_touch_down(self, touch):
-        if self.current_mask_type:
-            # 画像サイズがまだ設定されていない場合、マスクの作成をスキップ
-            if self.image_size == [0, 0]:
-                Logger.warning("MaskEditor: 画像がまだロードされていません。マスクを追加できません。")
-                return False
-            
-            mask = self.create_mask(self.current_mask_type)
-            mask.on_touch_down(touch)
-            self.current_mask_type = None
+        if self.disabled == True:
+            return False
+        
+        # 既存のマスクに対するタッチイベントを処理
+        for mask in reversed(self.mask_layers):
+            if mask.on_touch_down(touch):
+                return True
 
-            Logger.debug(f"MaskEditor: マスク {mask.__class__.__name__} を追加しました。")
-            return True
+        return super().on_touch_down(touch)
+        
+    def on_touch_up(self, touch):
+        if self.disabled == True:
+            return False
+        
+        result = super().on_touch_up(touch)
 
-        else:
-            # 既存のマスクに対するタッチイベントを処理
-            for mask in reversed(self.mask_layers):
-                if mask.on_touch_down(touch):
-                    return True
-            return super().on_touch_down(touch)
+        # こっちを後でやらないとまだコントロールポイントが作られてない
+        if self.create_mask is not None:
+            self._create_end_new_mask()        
+            self.create_mask = None
+        
+        return result
 
-    def create_mask(self, mask_type):
+    def _create_mask(self, mask_type):
         # マスク作成
         if mask_type == MASKTYPE_CIRCULAR:
             mask = CircularGradientMask(editor=self)
@@ -1659,14 +1709,14 @@ class MaskEditor2(FloatLayout):
             mask = GradientMask(editor=self)
         elif mask_type == MASKTYPE_FULL:
             mask = FullMask(editor=self)
-        elif mask_type == MASKTYPE_FREE_DRAW:
+        elif mask_type == MASKTYPE_FREEDRAW:
             mask = FreeDrawMask(editor=self)
         elif mask_type == MASKTYPE_SEGMENT:
             mask = SegmentMask(editor=self)
         else:
             Logger.error(f"MaskEditor: 不明なマスクタイプ: {self.current_mask_type}")
-            return False
-        
+            return None
+            
         self.mask_container.add_widget(mask)
         self.mask_layers.append(mask)
 
@@ -1678,7 +1728,7 @@ class MaskEditor2(FloatLayout):
 
         return mask
 
-    def delete_mask(self, mask):
+    def _delete_mask(self, mask):
         if len(self.mask_layers) <= 1:
             self.draw_mask_image(None)
             self.set_active_mask(None)
@@ -1696,15 +1746,17 @@ class MaskEditor2(FloatLayout):
         self.mask_container.clear_widgets()
         self.mask_layers.clear()
         self.layer_list.clear_widgets()
-        self.current_mask_type = None
 
     def set_active_mask(self, mask):
         if self.active_mask and self.active_mask != mask:
             self.active_mask.active = False
+            self.active_mask.end()
+
         self.active_mask = mask
         if mask is not None:
             mask.active = True
             self.root.set2widget_all(mask.effects, mask.effects_param)
+            mask.start()
             #mask.update()
         else:
             self.draw_mask_image(None)
@@ -1722,7 +1774,7 @@ class MaskEditor2(FloatLayout):
         if flip == 2:
             rad = -rotate_rad + rad
         """
-        return self.center_rotate_rad + rad
+        return self.center_rotate_rad + rad + rotate_rad
     
     def world_to_tcg_scale(self, x, y):
         return (x / self.crop_info[4], y / self.crop_info[4])
@@ -1862,7 +1914,7 @@ class MaskEditor2(FloatLayout):
 class MaskEditor2App(App):
     def build(self):
         # 画像ファイルのパスを正しく設定してください
-        image_path = 'picture/your_image.jpg'
+        image_path = 'your_image.jpg'
 
         box0 = BoxLayout()
         box0.orientation = 'vertical'

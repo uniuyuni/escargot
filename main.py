@@ -165,30 +165,34 @@ class MainWidget(MDBoxLayout):
 
             # 新しく開く画像のデータを全てセット
             param = {}
-            core.set_image_param(param, exif_data)
-            self._set_image_for_mask2(param)
+            #core.set_image_param(param, exif_data)
+            #self._set_image_for_mask2(param)
             export.load_json(imgset.file_path, param, self.ids['mask_editor2'])
-            self.set2widget_all(self.primary_effects, param)
-            self.apply_effects_lv(0, 'crop') # 特別あつかい
+            #self.set2widget_all(self.primary_effects, param)
+            #self.apply_effects_lv(0, 'crop') # 特別あつかい
             self._set_exif_data(exif_data)
 
-            # 最終的なものを設定しとく
+            # .jsonファイルから読み込んだものを設定しとく、あとで合成する
             card.param = param
     
     @mainthread
-    def on_fcs_get_file(self, filename, imgset, exif_data, param):
+    def on_fcs_get_file(self, filename, imgset, exif_data, param, flag):
 
-        # 最終的なパラメータを合成
-        card = self.ids['viewer'].get_card(filename)
-        if card is not None:
-            param.update(card.param)
+        if flag == file_cache_system.CallbackFlag.CONTINUE:
+            # 最終的なパラメータを合成
+            card = self.ids['viewer'].get_card(filename)
+            if card is not None:
+                param.update(card.param)
 
-            # 最終的なものを設定しとく
-            card.imgset = imgset
-            card.param = param
+                # 最終的なものを設定しとく
+                card.imgset = imgset
+                card.param = param
 
-        self.imgset = imgset
-        self.primary_param = param
+            self.imgset = imgset
+            self.primary_param = param
+            self.set2widget_all(self.primary_effects, param)
+            self.apply_effects_lv(0, 'crop') # 特別あつかい
+            
         self.start_draw_image_and_crop(imgset)
 
     def on_image_touch_down(self, touch):
@@ -217,8 +221,6 @@ class MainWidget(MDBoxLayout):
                     offset_x = touch.pos[0] - self.drag_start_point[0]
                     offset_y = touch.pos[1] - self.drag_start_point[1]
                     offset_x = -offset_x
-
-                    effects.reeffect_all(self.primary_effects)
                     self.start_draw_image_and_crop(self.imgset, (offset_x, offset_y))
 
                     self.drag_start_point = touch.pos
@@ -314,6 +316,7 @@ class MainWidget(MDBoxLayout):
         self.ids['mask_editor2'].opacity = 0
         self.ids['mask_editor2'].disabled = True
         self.ids['mask_editor2'].set_active_mask(None)
+        self.ids['mask_editor2'].end()
 
     def on_mask2_press(self, value):
         if value == "down":

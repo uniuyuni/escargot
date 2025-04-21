@@ -933,8 +933,6 @@ def adjust_hls_magenta_smooth(hls_img, magenta_adjust, transition=15.0):
     return adjust_hls_smooth(hls_img, magenta_weight, jnp.array(magenta_adjust))
 
 
-
-
 # マスクイメージの適用
 @jit
 def __apply_mask(img1, msk, img2):
@@ -1110,9 +1108,14 @@ def crop_image(image, crop_info, texture_width, texture_height, click_x, click_y
         crop_width = int(texture_width)
         crop_height = int(texture_height)
 
-        # クリック位置を中心にする
-        crop_x = crop_info[0] + click_image_x - crop_width // 2
-        crop_y = crop_info[1] + click_image_y - crop_height // 2
+        if offset == (0, 0):
+            # クリック位置を中心にする
+            crop_x = crop_info[0] + click_image_x - crop_width // 2
+            crop_y = crop_info[1] + click_image_y - crop_height // 2
+        else:
+            # スクロール
+            crop_x = crop_info[0]
+            crop_y = crop_info[1]
 
         # クロップ
         result, crop_info = crop_image_info(image, (crop_x, crop_y, crop_width, crop_height, 1.0), offset)
@@ -1187,7 +1190,7 @@ def set_image_param(param, exif_data):
     param['crop_rect'] = param.get('crop_rect', crop_editor.CropEditor.get_initial_crop_rect(width, height))
     param['crop_info'] = crop_editor.CropEditor.convert_rect_to_info(param['crop_rect'], config.get_config('preview_size')/max(param['original_img_size']))
 
-    return width, height
+    return (width, height)
 
 # 上下または左右の余白を追加
 def adjust_shape(img, param):
@@ -1527,7 +1530,6 @@ def dehaze_image(img, strength=0.5):
 
     return result
 
-import numpy as np
 
 def bicubic_kernel_vectorized(x, a=-0.5):
     """

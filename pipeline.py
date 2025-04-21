@@ -77,6 +77,7 @@ def pipeline2(imgc, slice_y, slice_h, crop_info, primary_effects, primary_param,
     # マスクレイヤー
     mask_list = mask_editor2.get_layers_list()
     for mask in mask_list:
+        
         img2 = pipeline_lv1(img3, mask.effects, mask.effects_param)
         img2 = pipeline_lv2(img2, mask.effects, mask.effects_param)
 

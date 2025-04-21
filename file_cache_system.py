@@ -1,10 +1,8 @@
 import threading
 import time
 from typing import Dict, Any, Optional, Tuple
-import os
 import logging
 from enum import Enum
-import pickle
 from concurrent.futures import ThreadPoolExecutor
 
 from imageset import ImageSet
@@ -119,7 +117,7 @@ class FileCacheSystem:
                             if file_path in self.file_callbacks:
                                 # コールバックを実行
                                 callback = self.file_callbacks[file_path]
-                                callback(file_path, imgset, exif_data, param)
+                                callback(file_path, imgset, exif_data, param, callback_flags[file_path])
                         
                         # 進行中のスレッドから削除
                         if callback_flags[file_path] == CallbackFlag.FINISH and file_path in self.active_processes:

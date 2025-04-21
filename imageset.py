@@ -4,12 +4,14 @@ import numpy as np
 import core
 import rawpy
 import math
-import base64
 import logging
-import os
+import io
 import threading
 from wand.image import Image as WandImage
-from PIL import Image as PILImage
+from PIL import Image as PILImage, ImageOps as PILImageOps
+import jax.numpy as jnp
+from jax import jit
+from functools import partial
 
 #from dcp_profile import DCPReader, DCPProcessor
 import config
@@ -24,9 +26,9 @@ class ImageSet:
         super().__init__(**kwargs)
 
         self.file_path = None
-        self.img = None     # 加工元画像 float32
+        self.img = None
 
-    def _set_temperature(self, param, temp, tint, Y):
+    def _set_temperature_to_param(self, param, temp, tint, Y):
         param['color_temperature_reset'] = temp
         param['color_temperature'] = temp
         param['color_tint_reset'] = tint
@@ -37,6 +39,33 @@ class ImageSet:
         in_img[in_img < black_level] = black_level
         out_img = in_img - black_level
         return out_img
+    
+    def _apply_whitebalance(self, img_array, raw, exif_data, param):
+        wb = raw.camera_whitebalance
+        wb = np.array([wb[0], wb[1], wb[2]]).astype(np.float32)/1024.0
+        """
+        gl, rl, bl = exif_data.get('WB_GRBLevels', "1024 1024 1024").split(' ')
+        gl, rl, bl = int(gl), int(rl), int(bl)
+        wb = np.array([rl, gl, bl]).astype(np.float32)/1024.0
+        """
+        wb[1] = np.sqrt(wb[1])
+        img_array /= wb
+        temp, tint, Y, = core.invert_RGB2TempTint(wb)
+        self._set_temperature_to_param(param, temp, tint, Y)
+        return img_array
+
+    def _delete_exif_orientation(self, exif_data):
+            # クロップとexifデータの回転
+            top, left, width, height = core.get_exif_image_size(exif_data)
+            if "Orientation" in exif_data:
+                rad, flip = util.split_orientation(util.str_to_orientation(exif_data.get("Orientation", "")))
+                if rad < 0.0:
+                    top, left = left, top
+                    width, height = height, width
+                    core.set_exif_image_size(exif_data, top, left, width, height)
+                del exif_data["Orientation"]
+
+            return (top, left, width, height)
 
 
     def _load_raw_preview(self, file_path, exif_data, param):
@@ -48,38 +77,37 @@ class ImageSet:
             thumb = raw.extract_thumb()
             if thumb.format == rawpy.ThumbFormat.JPEG:
                 # JPEGフォーマットの場合
+                with PILImage.open(io.BytesIO(thumb.data)).convert("RGB") as img:
+                    img = PILImageOps.exif_transpose(img)
+                    img_array = np.array(img)
+                """
                 # バイナリデータをNumPy配列に変換
                 img_array = np.frombuffer(thumb.data, dtype=np.uint8)
                 # OpenCVで画像としてデコード
-                img_array = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+                img_array = cv2.imdecode(img_array, cv2.IMREAD_COLOR cv2.IM)
                 img_array = cv2.cvtColor(img_array, cv2.COLOR_BGR2RGB)
-                
+                """
+                """
             elif thumb.format == rawpy.ThumbFormat.BITMAP:
                 # BITMAPフォーマットの場合
-                img_array = thumb.data                    
+                """
             else:
                 raise ValueError(f"Unsupported thumbnail format: {thumb.format}")
-
-            # クロップとexifデータの回転
-            rad, flip = util.split_orientation(util.str_to_orientation(exif_data.get("Orientation", "")))
-            top, left, width, height = core.get_exif_image_size(exif_data)
-            if rad < 0.0:
-                top, left = left, top
-                width, height = height, width
-                core.set_exif_image_size(exif_data, top, left, width, height)
-            if "Orientation" in exif_data:
-                del exif_data["Orientation"]
 
             # RGB画像初期設定
             img_array = util.convert_to_float32(img_array)
 
             # 色空間変換
             img_array = color.rgb_to_xyz(img_array, "sRGB", True)
+
+            # ホワイトバランス定義
+            img_array = self._apply_whitebalance(img_array, raw, exif_data, param)
+
+            # GPU to CPU
             img_array = np.array(img_array)
 
-            # 色温度とティントを反転
-            temp, tint, Y, = core.invert_RGB2TempTint((1.0, 1.0, 1.0))
-            self._set_temperature(param, temp, tint, Y)
+            # クロップとexifデータの回転
+            _, _, width, height = self._delete_exif_orientation(exif_data)
 
             # 情報の設定
             width, height = core.set_image_param(param, exif_data)
@@ -90,10 +118,12 @@ class ImageSet:
             # 正方形にする
             img_array = core.adjust_shape(img_array, param)
 
+            # 描画用に設定
             self.img = img_array
 
         except (rawpy.LibRawFileUnsupportedError, rawpy.LibRawIOError):
             logging.warning("file is not supported " + file_path)
+            raw.close()
             return False
         
         return raw
@@ -126,18 +156,20 @@ class ImageSet:
 
             # float32へ
             img_array = util.convert_to_float32(img_array)
-            
+
             # 色空間変換
-            img_array= color.rgb_to_xyz(img_array, "Adobe RGB")
+            img_array = color.rgb_to_xyz(img_array, "Adobe RGB")
+            img_array = np.array(img_array)
 
             # 飽和ピクセル復元
+            """
             wb = raw.camera_whitebalance
             wb = np.array([wb[0], wb[1], wb[2]]).astype(np.float32)/1024.0
             _, Tv = exif_data.get('ShutterSpeedValue', "1/100").split('/')
             Tv = float(_) / float(Tv)
             ISO = exif_data.get('ISO', 100)                
-            #img_array = core.recover_saturated_pixels(img_array, Tv, ISO, wb)
-            
+            img_array = core.recover_saturated_pixels(img_array, Tv, ISO, wb)
+            """
             # プロファイルを適用
             #dcp_path = os.getcwd() + "/dcp/Fujifilm X-Pro3 Adobe Standard velvia.dcp"
             #reader = DCPReader(dcp_path)
@@ -146,31 +178,26 @@ class ImageSet:
             #img_array = processor.process(img_array, illuminant='1', use_look_table=True).astype(np.float32)
             
             # ホワイトバランス定義
-            #wb = raw.camera_whitebalance
-            #wb = np.array([wb[0], wb[1], wb[2]]).astype(np.float32)/1024.0
-            wb[1] = np.sqrt(wb[1])
-            img_array /= wb
-            temp, tint, Y, = core.invert_RGB2TempTint(wb)
-            self._set_temperature(param, temp, tint, Y)
-
+            img_array = self._apply_whitebalance(img_array, raw, exif_data, param)
+            
             # 明るさ補正
             if config.get_config('raw_auto_exposure') == True:
                 source_ev, _ = core.calculate_ev_from_image(core.normalize_image(img_array))
                 Av = exif_data.get('ApertureValue', 1.0)
-                #_, Tv = exif_data.get('ShutterSpeedValue', "1/100").split('/')
-                #Tv = float(_) / float(Tv)
+                _, Tv = exif_data.get('ShutterSpeedValue', "1/100").split('/')
+                Tv = float(_) / float(Tv)
                 Ev = math.log2((Av**2)/Tv)
-                #Sv = math.log2(exif_data.get('ISO', 100)/100.0)
-                Sv = math.log2(ISO/100.0)
+                Sv = math.log2(exif_data.get('ISO', 100)/100.0)
                 Ev = Ev + Sv
                 img_array = img_array * core.calc_exposure(img_array, core.calculate_correction_value(source_ev, Ev))
-
+            
             # 情報の設定
             core.set_image_param(param, exif_data)
 
             # 正方形にする
             img_array = core.adjust_shape(img_array, param)
             
+            # 描画用に設定
             self.img = img_array
 
         except (rawpy.LibRawFileUnsupportedError, rawpy.LibRawIOError):
@@ -184,71 +211,44 @@ class ImageSet:
 
     def _load_rgb(self, file_path, exif_data, param):
         # RGB画像で読み込んでみる
-        #with WandImage(filename=file_path) as img:
-            #img_array = np.array(img)
-        #    blob = np.frombuffer(img.make_blob('RGB'), dtype=np.uint8)
-        #    img_array = blob.reshape(img.height, img.width, 3)
-
-        #    if img.depth == 8:
-        #img = cv2.imread(file_path, cv2.IMREAD_UNCHANGED)
-        #img_array = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        #if img.dtype == np.uint8:
         with PILImage.open(file_path) as img:
+            img = PILImageOps.exif_transpose(img)
             img_array = np.array(img)
+
+            # float32へ
             img_array = util.convert_to_float32(img_array)
 
             # 色空間変換
             img_array = color.rgb_to_xyz(img_array, "sRGB", True)
-
+            
             # 画像からホワイトバランスパラメータ取得
             temp, tint, Y, = core.invert_RGB2TempTint((1.0, 1.0, 1.0))
-            self._set_temperature(param, temp, tint, Y)
+            self._set_temperature_to_param(param, temp, tint, Y)
             
+            # クロップとexifデータの回転
+            self._delete_exif_orientation(exif_data)
+
             # 情報の設定
             core.set_image_param(param, exif_data)
 
+            # 正方形へ変換
             img_array = core.adjust_shape(img_array, param)
             
         self.img = img_array
         
         return True
-    
-    def _load_thumb(self, exif_data, param):
-        thumb_base64 = exif_data.get('ThumbnailImage')
-        if thumb_base64 is not None:
-            thumb = np.frombuffer(base64.b64decode(thumb_base64[7:]), dtype=np.uint8)
-            thumb = cv2.imdecode(thumb, 1)
-            thumb = cv2.cvtColor(thumb, cv2.COLOR_BGR2RGB)
-            thumb = thumb.astype(np.float32)/255
-            thumb = color.rgb_to_xyz(thumb, "sRGB", True)
-            temp, tint, Y, = core.invert_RGB2TempTint((1.0, 1.0, 1.0), 5000.0)
-            self._set_temperature(param, temp, tint, Y)
-
-            top, left, width, height = core.get_exif_image_size(exif_data)
-            img_array = cv2.resize(img_array, dsize=(width, height))
-            param['img_size'] = [width, height]
-            param['original_img_size'] = [width, height]
-
-            self.img = thumb
 
     def load(self, file_path, exif_data, param, raw=None):
         self.file_path = file_path
 
         if file_path.lower().endswith(viewer_widget.supported_formats_raw):
-            #self._load_thumb(exif_data, param)
             if raw is None:
                 return self._load_raw_preview(file_path, exif_data, param)            
             else:
                 return self._load_raw(raw, file_path, exif_data, param)
 
-            #thread = threading.Thread(target=self._load_raw, args=[file_path, exif_data, param], daemon=True)
-            #thread.start()
-
         elif file_path.lower().endswith(viewer_widget.supported_formats_rgb):
-            #self._load_thumb(exif_data, param)
             return self._load_rgb(file_path, exif_data, param)
-            #thread = threading.Thread(target=self._load_rgb, args=[file_path, exif_data, param], daemon=True)
-            #thread.start()
             
         logging.warning("file is not supported " + file_path)
         return False
