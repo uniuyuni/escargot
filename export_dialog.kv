@@ -32,10 +32,10 @@
                     size_hint_x: 0.7
                     on_text: root.load_preset(self.text)
 
-            VSpacer:
+            HSpacer:
                 size_hint_y: 0.01
-            HSeparator:
-            VSpacer:
+            VSeparator:
+            HSpacer:
                 size_hint_y: 0.01
 
             # 出力形式セクション
@@ -65,7 +65,7 @@
                     value: root.quality_value
                     on_slider: root.quality_value = int(self.value)
 
-            VSpacer:
+            HSpacer:
                 size_hint_y: 0.01
 
             # 出力先設定
@@ -92,7 +92,7 @@
                         size_hint_x: 0.3
                         on_press: root.browse_output()
 
-            VSpacer:
+            HSpacer:
                 size_hint_y: 0.01
         
             # サイズ設定セクション
@@ -116,7 +116,7 @@
                     disabled: root.size_mode == 'Original'
                     on_text: root.size_value = self.text
 
-            VSpacer:
+            HSpacer:
                 size_hint_y: 0.01
 
             # プロファイル
@@ -134,10 +134,10 @@
                     values: ['sRGB', 'Adobe RGB', 'ProPhoto RGB', 'Wide Gamut RGB']
                     on_text: root.color_space = self.text
 
-            VSpacer:
+            HSpacer:
                 size_hint_y: 0.01
-            HSeparator:
-            VSpacer:
+            VSeparator:
+            HSpacer:
                 size_hint_y: 0.01
 
             ParamSlider:
@@ -164,10 +164,10 @@
                     active: root.include_metadata
                     on_active: root.include_metadata = self.active
 
-            VSpacer:
+            HSpacer:
                 size_hint_y: 0.01
-            HSeparator:
-            VSpacer:
+            VSeparator:
+            HSpacer:
                 size_hint_y: 0.01
 
             # プリセット管理ボタン
@@ -189,7 +189,7 @@
             orientation: 'horizontal'
             size_hint_y: 0.1
 
-            VSpacer:
+            HSpacer:
                 size_hint_x: 0.6
 
             # キャンセルボタン

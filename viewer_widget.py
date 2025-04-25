@@ -1,4 +1,3 @@
-
 import os
 import threading
 import base64
@@ -26,7 +25,6 @@ from kivy.metrics import dp
 #from Cocoa import NSDragOperationCopy
 
 import core
-from spacer import HSpacer, VSpacer
 import macos
 
 supported_formats_rgb = ('.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp', '.gif')
@@ -47,26 +45,19 @@ class ThumbnailCard(MDCard):
 
         self.orientation = 'vertical'
         self.size_hint = (None, None)
-        self.size = (self.grid_width, self.grid_width+dp(40))
+        self.ref_width = self.grid_width
+        self.ref_height = self.grid_width+40
         self.md_bg_color = [0.1, 0.1, 0.1, 1]
         self.radius = [5, 5, 5, 5]
         self.elevation = 2
 
-        vbox = MDBoxLayout()
-        vbox.orientation = 'vertical'
+        vbox = MDBoxLayout(orientation='vertical')
+        vbox.ref_padding = 8
         self.add_widget(vbox)
 
         # サムネイル表示
-        vbox.add_widget(HSpacer(height=dp(4)))
-        hbox = MDBoxLayout(size_hint_y=7)
-        hbox.orientation = 'horizontal'
-        hbox.add_widget(VSpacer(width=dp(4)))
-        self.image = KVImage(source='spinner.zip')
-        self.image.anim_delay = 0.01
-        hbox.add_widget(self.image)
-        hbox.add_widget(VSpacer(width=dp(4)))
-        vbox.add_widget(HSpacer(height=dp(4)))
-        vbox.add_widget(hbox)
+        self.image = KVImage(source='spinner.zip', size_hint_y=7, anim_delay=0.01)
+        vbox.add_widget(self.image)
 
         # ファイル名ラベル
         name = os.path.basename(self.file_path)
@@ -376,6 +367,35 @@ class Viewer_WidgetApp(MDApp):
         viewer.set_path("/Users/uniuyuni/PythonProjects/escargot/picture")  # 画像フォルダーのパスを指定
 
         return viewer
+
+    def on_start(self):
+        KVWindow.bind(on_resize=self.on_window_resize)
+        return super().on_start()
+
+    def on_window_resize(self, window, width, height):
+        # すべてのスケールが必要なウィジェットを更新
+        if self.root:
+            for child in self.root.walk():
+                if hasattr(child, 'ref_width'):
+                    child.width = self.scale_width(child.ref_width)
+                if hasattr(child, 'ref_height'):
+                    child.height = self.scale_height(child.ref_height)
+                if hasattr(child, 'ref_padding'):
+                    child.padding = self.scale_width(child.ref_padding)
+                if hasattr(child, 'ref_spacing'):
+                    child.spacing = self.scale_width(child.ref_spacing)
+                if hasattr(child, 'ref_tab_width'):
+                    child.tab_width = self.scale_width(child.ref_tab_width)
+                if hasattr(child, 'ref_tab_height'):
+                    child.tab_height = self.scale_height(child.ref_tab_height)
+
+    @staticmethod
+    def scale_width(ref):
+        return ref * (KVWindow.width / 1200)
+    
+    @staticmethod
+    def scale_height(ref):
+        return ref * (KVWindow.height / 800)
 
 if __name__ == "__main__":
     Viewer_WidgetApp().run()

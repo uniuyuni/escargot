@@ -1,25 +1,23 @@
 #:include param_slider.kv
 
-<CWColorButton>:
+<CWColorWheel>:
+    pos_hint: {'center_x': .5, 'center_y': .5}
     size_hint: None, None
-    size: dp(40), dp(40)
-    radius: [dp(5)]
-    on_release: self.on_color_select()
-    parent: self.parent
+    ref_width: 130
+    ref_height: 130
+    width: app.scale_width(self.ref_width)
+    height: app.scale_height(self.ref_height)
 
-    canvas:
-        Color:
-            rgba: self.background_color
-        RoundedRectangle:
-            pos: self.pos
-            size: self.size
-            radius: self.radius
+    Image:
+        source: 'color_wheel.png'
 
 <CWColorPreview>:
     size_hint: None, None
-    #size: dp(100), dp(100)
-    #pos_hint: {'center_x': .5, 'center_y': .5}
-    radius: [dp(10)]
+    radius: [8]
+    ref_width: 40
+    ref_height: 20
+    width: app.scale_width(self.ref_width)
+    height: app.scale_height(self.ref_height)
 
     canvas:
         Color:
@@ -29,52 +27,31 @@
             size: self.size
             radius: self.radius
 
-<CWColorWheel>:
-    #size_hint: None, None
-    #size: dp(150), dp(150)
-    pos_hint: {'center_x': .5, 'center_y': .5}
-    Image:
-        source: 'color_wheel.png'
-        size: self.size
-        pos: self.pos
-
 <CWColorPicker>:
     orientation: 'vertical'
-    padding: dp(20)
-    spacing: dp(20)
-    size_hint: None, None
-    size: dp(400), dp(160)
-    pos_hint: {'center_x': .5, 'center_y': .5}
+    spacing: 20
+    size_hint: 1, None
+    ref_height: 160
+    height: app.scale_height(self.ref_height)
+    pos_hint: {'center_x': 0.5, 'center_y': .5}
 
     MDBoxLayout:
-        #size_hint: 1, None
-        #size: 0, dp(200)
         
         CWColorWheel:
-            size_hint: None, None
-            size: dp(130), dp(130)
-            #size_hint: 6, 10
             id: color_wheel
 
         MDBoxLayout:
             id: sliders_container
-            #size_hint: 1, None
-            #size: 0, dp(130)
             orientation: 'vertical'
-            pos_hint: {'center_x': .5, 'center_y': .4}
+            #pos_hint: {'center_x': .5, 'center_y': .5}
 
             CWColorPreview:
-                #size_hint: 1, 0.5
-                height: dp(20)
                 id: preview
-                #padding: dp(20)
-                #spacing: dp(20)
-                #pos_hint: {'center_x': .5, 'center_y': .5}
                 color: root.current_color
 
             ParamSlider:
                 text: 'R:'
-                label_width: dp(20)
+                label_width: 20
                 id: slider_red
                 min: 0
                 max: 255
@@ -83,7 +60,7 @@
 
             ParamSlider:
                 text: 'G:'
-                label_width: dp(20)
+                label_width: 20
                 id: slider_green
                 min: 0
                 max: 255
@@ -92,7 +69,7 @@
 
             ParamSlider:
                 text: 'B:'
-                label_width: dp(20)
+                label_width: 20
                 id: slider_blue
                 min: 0
                 max: 255
@@ -101,7 +78,7 @@
 
             ParamSlider:
                 text: 'H:'
-                label_width: dp(20)
+                label_width: 20
                 id: slider_hue
                 min: 0
                 max: 360
@@ -110,7 +87,7 @@
 
             ParamSlider:
                 text: 'L:'
-                label_width: dp(20)
+                label_width: 20
                 id: slider_lum
                 min: 0
                 max: 100
@@ -119,9 +96,9 @@
 
             ParamSlider:
                 text: 'S:'
-                label_width: dp(20)
+                label_width: 20
                 id: slider_sat
                 min: 0
                 max: 100
-                value: 100
+                value: 0
                 on_slider: root.on_slider_change_hls()

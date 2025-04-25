@@ -1,11 +1,12 @@
 
-from kivy.uix.widget import Widget
+from kivy.uix.widget import Widget as KVWidget
+from kivy.properties import NumericProperty as KVNumericProperty
 
-class Spacer(Widget):
+class Spacer(KVWidget):
     pass
 
 class HSpacer(Spacer):
-    pass
+    ref_width = KVNumericProperty(8)
 
 class VSpacer(Spacer):
-    pass
+    ref_height = KVNumericProperty(8)

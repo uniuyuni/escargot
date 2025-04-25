@@ -18,7 +18,7 @@ import config
 import util
 import viewer_widget
 import color
-
+import bit_depth_expansion
 
 class ImageSet:
 
@@ -100,6 +100,9 @@ class ImageSet:
             # 色空間変換
             img_array = color.rgb_to_xyz(img_array, "sRGB", True)
 
+            # GPU to CPU
+            img_array = np.array(img_array)
+
             # ホワイトバランス定義
             img_array = self._apply_whitebalance(img_array, raw, exif_data, param)
 
@@ -144,7 +147,7 @@ class ImageSet:
                                         auto_bright_thr=0.0005)
             """
             # ブラックレベル補正
-            raw_image = self.__black(raw.raw_image_visible, raw.black_level_per_channel[0])
+            raw_image = self._black(raw.raw_image_visible, raw.black_level_per_channel[0])
 
             # float32へ
             raw_image = raw_image.astype(np.float32) / ((1<<exif_data.get('BitsPerSample', 14))-1)

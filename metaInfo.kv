@@ -1,24 +1,31 @@
 <MetaKey@MDLabel>:
-    size_hint_x: 0.4
     halign: 'right'
     font_size: '9pt'
     color: 'b0b0b0'
+    size_hint_x: None
+    ref_width: 100
+    width: app.scale_width(self.ref_width)
 
 <MetaValue@MDLabel>:
-    size_hint_x: 0.6
     halign: 'left'
     font_size: '9pt'
     color: 'e0e0e0'
+    size_hint_x: None
+    ref_width: 120
+    width: app.scale_width(self.ref_width)
 
 <MetaInfo>:
     orientation: 'horizontal'
     size_hint_y: None
-    height: dp(20)
+    ref_height: 20
+    height: app.scale_height(self.ref_height)
 
     MetaKey:
         id: key
         text: root.key
-    
+    HSpacer:
     MetaValue:
         id: value
         text: root.value
+        shorten: True
+        

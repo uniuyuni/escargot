@@ -1,5 +1,4 @@
 numpy==1.26.4
-pyautogui
 kivymd
 Opencv-python
 jax-metal
@@ -14,3 +13,4 @@ torch
 torchvision
 wand
 watchfiles
+screeninfo

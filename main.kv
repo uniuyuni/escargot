@@ -11,6 +11,38 @@
     size_hint_y: None
     height: dp(20)
 
+<ParamChip@MDChip>:
+    type: 'filter'
+    pos_hint: {"center_x": .5, "center_y": .5}
+    size_hint: 0.2, None
+    ref_height: 20
+    height: app.scale_height(self.ref_height)
+    radius: 40
+    line_color: 'grey'
+
+<ParamChipText@MDChipText>:
+    font_size: '9pt'
+    color: 'b0b0b0' 
+
+<ParamSpinner@Spinner>:
+    pos_hint: {'center_x': .5, 'center_y': .5}
+    size_hint: 0.55, None
+    ref_height: 20
+    height: app.scale_height(self.ref_height)
+    font_size: '9pt'
+    #option_cls: "MainSpinnerOption"
+
+<CurveTabbedPanel@TabbedPanel>:
+    size_hint: None, None
+    width: self.parent.width
+    height: self.parent.width
+    ref_tab_width: 80
+    ref_tab_height: 20
+    tab_width: app.scale_width(self.ref_tab_width)
+    tab_height: app.scale_height(self.ref_tab_height)
+    do_default_tab: False
+    on_kv_post: self.switch_to(root.tab_list[0]) if root.tab_list else None
+
 <MainWidget>:
 
     BoxLayout:
@@ -19,7 +51,7 @@
 
         BoxLayout:
             orientation: 'horizontal'
-            size_hint_y: 0.9
+            size_hint_y: 1
 
             BoxLayout:
                 orientation: 'vertical'
@@ -29,10 +61,10 @@
 
                 HistogramWidget:
                     id: histogram
-                    size_hint: 1, 0.1
+                    size_hint: 1, 0.2
 
                 MDScrollView:
-                    size_hint: 1, 0.9
+                    size_hint: 1, 0.8
 
                     BoxLayout:
                         size_hint_y: None
@@ -123,7 +155,7 @@
                         size_hint_x: 0.1
                         text: "select"
                         on_press: root.on_select_press()
-                    VSpacer:
+                    HSpacer:
                         size_hint_x: 0.7
                     ToggleButton:
                         id: mask2
@@ -156,14 +188,8 @@
                             orientation: "vertical"
                             height: self.minimum_height
 
-                            Label:
-                                text_size: self.size
-                                size: 0, dp(20)
-                                size_hint_y: None
+                            HeadLabel:
                                 text: ' White Balance'
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
  
                             ParamSlider:
                                 id: slider_color_temperature
@@ -183,17 +209,10 @@
                                 step: 1
                                 on_slider: root.apply_effects_lv(2, 'color_temperature')
 
-                            HSeparator:
-                                height: 30
+                            VSeparator:
  
-                            Label:
-                                text_size: self.size
-                                size: 0, dp(20)
-                                size_hint_y: None
+                            HeadLabel:
                                 text: ' Tone'
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
 
                             ParamSlider:
                                 id: slider_exposure
@@ -224,8 +243,7 @@
                                 for_float: True
                                 on_slider: root.apply_effects_lv(2, 'tone')
 
-                            HSeparator:
-                                height: 20
+                            VSeparator:
 
                             ParamSlider:
                                 id: slider_highlight
@@ -263,17 +281,10 @@
                                 step: 1
                                 on_slider: root.apply_effects_lv(2, 'tone')
 
-                            HSeparator:
-                                height: dp(15)
+                            VSeparator:
                             
-                            Label:
-                                text_size: self.size
-                                size: 0, dp(20)
-                                size_hint_y: None
+                            HeadLabel:
                                 text: ' Precence'
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
 
                             ParamSlider:
                                 id: slider_microcontrast
@@ -303,8 +314,7 @@
                                 step: 1
                                 on_slider: root.apply_effects_lv(2, 'clahe')
 
-                            HSeparator:
-                                height: dp(20)
+                            VSeparator:
                             
                             ParamSlider:
                                 text: "Saturation"
@@ -324,41 +334,27 @@
                                 step: 1
                                 on_slider: root.apply_effects_lv(2, 'vs_and_saturation')
 
-                            HSeparator:
-                                height: dp(15)
+                            VSeparator:
                                                         
-                            Label:
-                                text_size: self.size
-                                size: 0, dp(20)
-                                size_hint_y: None
+                            HeadLabel:
                                 text: ' Color Mixer'
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
 
                             TabbedPanel:
-                                size: dp(350), dp(160)
-                                size_hint: None, None
-                                tab_width: dp(60)
-                                tab_height: dp(20)
+                                size_hint_y: None
+                                ref_height: 22*3+20+22
+                                ref_tab_width: 60
+                                ref_tab_height: 20
                                 do_default_tab: False
 
                                 TabbedPanelItem:
                                     text: 'Red'
 
                                     BoxLayout:
-                                        size_hint_y: None
+                                        #size_hint_y: None
                                         orientation: "vertical"
-                                        height: self.minimum_height
-
-                                        Label:
-                                            text_size: self.size
-                                            size: 0, dp(20)
-                                            size_hint_y: None
+                                        #height: self.minimum_height
+                                        HeadLabel:
                                             text: ' Red'
-                                            font_size: '10pt'
-                                            halign: 'left'
-                                            valign: 'center'
                                         ParamSlider:
                                             id: slider_hls_red_hue
                                             text: "Hue"
@@ -391,14 +387,8 @@
                                         size_hint_y: None
                                         orientation: "vertical"
                                         height: self.minimum_height
-                                        Label:
-                                            text_size: self.size
-                                            size: 0, dp(20)
-                                            size_hint_y: None
+                                        HeadLabel:
                                             text: ' Orange'
-                                            font_size: '10pt'
-                                            halign: 'left'
-                                            valign: 'center'
                                         ParamSlider:
                                             id: slider_hls_orange_hue
                                             text: "Hue"
@@ -431,14 +421,8 @@
                                         size_hint_y: None
                                         orientation: "vertical"
                                         height: self.minimum_height
-                                        Label:
-                                            text_size: self.size
-                                            size: 0, dp(20)
-                                            size_hint_y: None
+                                        HeadLabel:
                                             text: ' Yellow'
-                                            font_size: '10pt'
-                                            halign: 'left'
-                                            valign: 'center'
                                         ParamSlider:
                                             id: slider_hls_yellow_hue
                                             text: "hue"
@@ -471,14 +455,8 @@
                                         size_hint_y: None
                                         orientation: "vertical"
                                         height: self.minimum_height
-                                        Label:
-                                            text_size: self.size
-                                            size: 0, dp(20)
-                                            size_hint_y: None
+                                        HeadLabel:
                                             text: ' Green'
-                                            font_size: '10pt'
-                                            halign: 'left'
-                                            valign: 'center'
                                         ParamSlider:
                                             id: slider_hls_green_hue
                                             text: "Hue"
@@ -511,14 +489,8 @@
                                         size_hint_y: None
                                         orientation: "vertical"
                                         height: self.minimum_height
-                                        Label:
-                                            text_size: self.size
-                                            size: 0, dp(20)
-                                            size_hint_y: None
+                                        HeadLabel:
                                             text: ' Cyan'
-                                            font_size: '10pt'
-                                            halign: 'left'
-                                            valign: 'center'
                                         ParamSlider:
                                             id: slider_hls_cyan_hue
                                             text: "Hue"
@@ -551,14 +523,8 @@
                                         size_hint_y: None
                                         orientation: "vertical"
                                         height: self.minimum_height
-                                        Label:
-                                            text_size: self.size
-                                            size: 0, dp(20)
-                                            size_hint_y: None
+                                        HeadLabel:
                                             text: ' Blue'
-                                            font_size: '10pt'
-                                            halign: 'left'
-                                            valign: 'center'
                                         ParamSlider:
                                             id: slider_hls_blue_hue
                                             text: "Hue"
@@ -591,14 +557,8 @@
                                         size_hint_y: None
                                         orientation: "vertical"
                                         height: self.minimum_height
-                                        Label:
-                                            text_size: self.size
-                                            size: 0, dp(20)
-                                            size_hint_y: None
+                                        HeadLabel:
                                             text: ' Purple'
-                                            font_size: '10pt'
-                                            halign: 'left'
-                                            valign: 'center'
                                         ParamSlider:
                                             id: slider_hls_purple_hue
                                             text: "Hue"
@@ -631,14 +591,8 @@
                                         size_hint_y: None
                                         orientation: "vertical"
                                         height: self.minimum_height
-                                        Label:
-                                            text_size: self.size
-                                            size: 0, dp(20)
-                                            size_hint_y: None
+                                        HeadLabel:
                                             text: ' Magenta'
-                                            font_size: '10pt'
-                                            halign: 'left'
-                                            valign: 'center'
                                         ParamSlider:
                                             id: slider_hls_magenta_hue
                                             text: "Hue"
@@ -664,17 +618,10 @@
                                             step: 0.05
                                             on_slider: root.apply_effects_lv(2, 'hls')
 
-                            HSeparator:
-                                height: 30
+                            VSeparator:
  
-                            Label:
-                                text_size: self.size
-                                size: 0, dp(20)
-                                size_hint_y: None
+                            HeadLabel:
                                 text: ' Vignette'
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
 
                             ParamSlider:
                                 id: slider_vignette_intensity
@@ -694,63 +641,32 @@
                                 step: 1
                                 on_slider: root.apply_effects_lv(4, 'vignette')
 
-                            HSeparator:
-                                height: 30
+                            VSeparator:
  
-                            Label:
-                                text_size: self.size
-                                size: 0, dp(20)
-                                size_hint_y: None
+                            HeadLabel:
                                 text: ' Exception'
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
 
-                            BoxLayout:
-                                size: 0, dp(30)
-                                size_hint_y: None
-                                orientation: 'horizontal'
+                            ParamBoxLayout:
                                 ParamLabel:
                                     text: "Highlight"
                                 VSpacer:
-                                    size_hint_x: 5
-                                MDChip:
-                                    type: 'filter'
-                                    pos_hint: {"center_x": .5, "center_y": .5}
-                                    size: dp(100), dp(20)
-                                    size_hint: None, None
+                                    size_hint_x: 0.45
+                                ParamChip:
                                     id: switch_highlight_compress
-                                    radius: 40
-                                    line_color: 'grey'
                                     on_active: root.apply_effects_lv(2, 'highlight_compress')
-
-                                    MDChipText:
+                                    ParamChipText:
                                         text: "Compress"
-                                        font_size: '9pt'
-                                        color: 'b0b0b0' 
 
-                            BoxLayout:
-                                size: 0, dp(30)
-                                size_hint_y: None
-                                orientation: 'horizontal'
+                            ParamBoxLayout:
                                 ParamLabel:
-                                    text: "Correct"
+                                    text: "Overexposed"
                                 VSpacer:
-                                    size_hint_x: 5
-                                MDChip:
-                                    type: 'filter'
-                                    pos_hint: {"center_x": .5, "center_y": .5}
-                                    size: dp(100), dp(20)
-                                    size_hint: None, None
+                                    size_hint_x: 0.45
+                                ParamChip:
                                     id: switch_correct_overexposed_areas
-                                    radius: 40
-                                    line_color: 'grey'
                                     on_active: root.apply_effects_lv(3, 'correct_overexposed_areas')
-
-                                    MDChipText:
-                                        text: "OverexposedColor"
-                                        font_size: '9pt'
-                                        color: 'b0b0b0' 
+                                    ParamChipText:
+                                        text: "Correct"
 
                             ParamSlider:
                                 id: slider_correct_overexposed_areas_blur
@@ -776,27 +692,18 @@
                     MDScrollView:
 
                         BoxLayout:
-                            size_hint_y: None
                             orientation: "vertical"
+                            size_hint_y: None
                             height: self.minimum_height
 
-                            Label:
-                                text_size: self.size
-                                size: 0, dp(20)
-                                size_hint_y: None
+                            HeadLabel:
                                 text: ' Tone Curve'
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
 
-                            TabbedPanel:
-                                size: dp(350), dp(350)
-                                size_hint: None, None
-                                tab_width: dp(80)
-                                tab_height: dp(20)
-                                do_default_tab: False
+                            CurveTabbedPanel:
+                                default_tab: tab_all
 
                                 TabbedPanelItem:
+                                    id: tab_all
                                     text: 'All'
 
                                     CurveWidget:
@@ -832,37 +739,26 @@
                                         end_y: 1.0
                                         on_curve: root.apply_effects_lv(2, 'curve')
 
-                            HSeparator:
-                                height: 30
+                            VSeparator:
                                 
-                            Label:
-                                text_size: self.size
-                                size: 0, dp(20)
-                                size_hint_y: None
+                            HeadLabel:
                                 text: ' Color Grading'
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
 
-                            TabbedPanel:
-                                size: dp(350), dp(400+600)
-                                size_hint: None, None
-                                tab_width: dp(80)
-                                tab_height: dp(20)
-                                do_default_tab: False
+                            CurveTabbedPanel:
+                                ref_tab_width: 100
+                                default_tab: tab_grading1
 
                                 TabbedPanelItem:
+                                    id: tab_grading1
                                     text: 'Grading 1'
 
                                     BoxLayout:
-                                        size_hint_y: None
                                         orientation: "vertical"
-                                        height: self.minimum_height
+                                        #size_hint_y: None
+                                        #height: self.minimum_height
                                         
                                         CurveWidget:
                                             id: grading1
-                                            size: dp(350), dp(350-60)
-                                            size_hint: None, None
                                             start_y: 1.0
                                             end_y: 0.0
                                             on_curve: root.apply_effects_lv(2, 'curve')
@@ -876,14 +772,12 @@
                                     text: 'Grading 2'
 
                                     BoxLayout:
-                                        size_hint_y: None
                                         orientation: "vertical"
-                                        height: self.minimum_height
+                                        #size_hint_y: None
+                                        #height: self.minimum_height
 
                                         CurveWidget:
                                             id: grading2
-                                            size: dp(350), dp(350-60)
-                                            size_hint: None, None
                                             start_y: 0.0
                                             end_y: 1.0
                                             on_curve: root.apply_effects_lv(2, 'curve')
@@ -892,31 +786,20 @@
                                             id: grading2_color_picker
                                             on_current_color: root.apply_effects_lv(2, 'curve')
 
-                            HSeparator:
-                                height: dp(15)
+                            VSeparator:
                             
-                            TabbedPanel:
-                                size: dp(350), dp(350)
-                                size_hint: None, None
-                                tab_width: dp(90)
-                                tab_height: dp(20)
-                                do_default_tab: False
+                            CurveTabbedPanel:
+                                ref_tab_width: 100
+                                default_tab: tab_lum_vs_lum
 
                                 TabbedPanelItem:
+                                    id: tab_lum_vs_lum
                                     text: 'Lum vs Lum'
 
-                                    Label:
-                                        text_size: self.size
-                                        size: 0, dp(20)
-                                        size_hint_y: None
+                                    HeadLabel:
                                         text: "Lum vs Lum"
-                                        font_size: '10pt'
-                                        halign: 'left'
-                                        valign: 'center'
                                     CurveWidget:
                                         id: LumvsLum
-                                        size: dp(350), dp(350-60)
-                                        size_hint: None, None
                                         start_y: 0.5
                                         end_y: 0.5
                                         on_curve: root.apply_effects_lv(2, 'vs_and_saturation')
@@ -924,18 +807,10 @@
                                 TabbedPanelItem:
                                     text: 'Hue vs Hue'
 
-                                    Label:
-                                        text_size: self.size
-                                        size: 0, dp(20)
-                                        size_hint_y: None
-                                        font_size: '10pt'
-                                        halign: 'left'
-                                        valign: 'center'
+                                    HeadLabel:
                                         text: "Hue vs Hue"
                                     CurveWidget:
                                         id: HuevsHue
-                                        size: dp(350), dp(350-60)
-                                        size_hint: None, None
                                         start_y: 0.5
                                         end_y: 0.5
                                         on_curve: root.apply_effects_lv(2, 'vs_and_saturation')
@@ -943,18 +818,10 @@
                                 TabbedPanelItem:
                                     text: 'Hue vs Sat'
 
-                                    Label:
-                                        text_size: self.size
-                                        size: 0, dp(20)
-                                        size_hint_y: None
-                                        font_size: '10pt'
-                                        halign: 'left'
-                                        valign: 'center'
+                                    HeadLabel:
                                         text: "Hue vs Sat"
                                     CurveWidget:
                                         id: HuevsSat
-                                        size: dp(350), dp(350-60)
-                                        size_hint: None, None
                                         start_y: 0.5
                                         end_y: 0.5
                                         on_curve: root.apply_effects_lv(2, 'vs_and_saturation')
@@ -962,18 +829,10 @@
                                 TabbedPanelItem:
                                     text: 'Hue vs Lum'
 
-                                    Label:
-                                        text_size: self.size
-                                        size: 0, dp(20)
-                                        size_hint_y: None
-                                        font_size: '10pt'
-                                        halign: 'left'
-                                        valign: 'center'
+                                    HeadLabel:
                                         text: "Hue vs Lum"
                                     CurveWidget:
                                         id: HuevsLum
-                                        size: dp(350), dp(350-60)
-                                        size_hint: None, None
                                         start_y: 0.5
                                         end_y: 0.5
                                         on_curve: root.apply_effects_lv(2, 'vs_and_saturation')
@@ -981,18 +840,10 @@
                                 TabbedPanelItem:
                                     text: 'Lum vs Sat'
 
-                                    Label:
-                                        text_size: self.size
-                                        size: 0, dp(20)
-                                        size_hint_y: None
-                                        font_size: '10pt'
-                                        halign: 'left'
-                                        valign: 'center'
+                                    HeadLabel:
                                         text: "Lum vs Sat"
                                     CurveWidget:
                                         id: LumvsSat
-                                        size: dp(350), dp(350-60)
-                                        size_hint: None, None
                                         start_y: 0.5
                                         end_y: 0.5
                                         on_curve: root.apply_effects_lv(2, 'vs_and_saturation')
@@ -1000,18 +851,10 @@
                                 TabbedPanelItem:
                                     text: 'Sat vs Sat'
 
-                                    Label:
-                                        text_size: self.size
-                                        size: 0, dp(20)
-                                        size_hint_y: None
-                                        font_size: '10pt'
-                                        halign: 'left'
-                                        valign: 'center'
+                                    HeadLabel:
                                         text: "Sat vs Sat"
                                     CurveWidget:
                                         id: SatvsSat
-                                        size: dp(350), dp(350-60)
-                                        size_hint: None, None
                                         start_y: 0.5
                                         end_y: 0.5
                                         on_curve: root.apply_effects_lv(2, 'vs_and_saturation')
@@ -1019,18 +862,10 @@
                                 TabbedPanelItem:
                                     text: 'Sat vs Lum'
 
-                                    Label:
-                                        text_size: self.size
-                                        size: 0, dp(20)
-                                        size_hint_y: None
-                                        font_size: '10pt'
-                                        halign: 'left'
-                                        valign: 'center'
+                                    HeadLabel:
                                         text: "Sat vs Lum"
                                     CurveWidget:
                                         id: SatvsLum
-                                        size: dp(350), dp(350-60)
-                                        size_hint: None, None
                                         start_y: 0.5
                                         end_y: 0.5
                                         on_curve: root.apply_effects_lv(2, 'vs_and_saturation')                            
@@ -1041,42 +876,23 @@
                     MDScrollView:
 
                         MDBoxLayout:
-                            size_hint_y: None
                             orientation: "vertical"
+                            size_hint_y: None
                             height: self.minimum_height
 
-                            Label:
-                                text_size: self.size
-                                size: 0, dp(20)
-                                size_hint_y: None
+                            HeadLabel:
                                 text: ' Noise Reduction'
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
 
-                            BoxLayout:
-                                size: 0, dp(30)
-                                size_hint_y: None
-                                orientation: 'horizontal'
+                            ParamBoxLayout:
                                 ParamLabel:
                                     text: "AI"
                                 VSpacer:
-                                    size_hint_x: 5
-                                MDChip:
-                                    type: 'filter'
-                                    pos_hint: {"center_x": .5, "center_y": .5}
-                                    size: dp(100), dp(20)
-                                    size_hint: None, None
+                                    size_hint_x: 0.55
+                                ParamChip:
                                     id: switch_ai_noise_reduction
-                                    radius: dp(20)
-                                    line_color: 'grey'
                                     on_active: root.apply_effects_lv(1, 'ai_noise_reduction')
-
-                                    MDChipText:
+                                    ParamChipText:
                                         text: "AI"
-                                        font_size: '9pt'
-                                        color: 'b0b0b0' 
-
 
                             ParamSlider:
                                 id: slider_nlm_noise_reduction
@@ -1087,94 +903,49 @@
                                 step: 1
                                 on_slider: root.apply_effects_lv(1, 'nlm_noise_reduction')
 
-                            HSeparator:
-                                height: 30
+                            VSeparator:
 
-                            Label:
-                                text_size: self.size
-                                size: 0, dp(20)
-                                size_hint_y: None
+                            HeadLabel:
                                 text: ' Details'
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
 
-                            BoxLayout:
-                                size: 0, dp(30)
-                                size_hint_y: None
-                                orientation: 'horizontal'
+                            ParamBoxLayout:
                                 ParamLabel:
                                     text: "Inpaint"
                                 VSpacer:
-                                    size_hint_x: 5
-                                MDChip:
-                                    type: 'filter'
-                                    pos_hint: {"center_x": .5, "center_y": .5}
-                                    size: dp(100), dp(20)
-                                    size_hint: None, None
+                                    size_hint_x: 0.25
+                                ParamChip:
                                     id: switch_inpaint
-                                    radius: 40
-                                    line_color: 'grey'
                                     on_active: root.apply_effects_lv(0, 'inpaint')
-
-                                    MDChipText:
+                                    ParamChipText:
                                         text: "Prepare"
-                                        font_size: '9pt'
-                                        color: 'b0b0b0'
-
-                                MDRoundFlatButton:
-                                    pos_hint: {"center_x": .5, "center_y": .5}
-                                    size: dp(100), dp(20)
-                                    size_hint: None, None
+                                ParamChip:
+                                    type: 'assist'
                                     id: button_inpaint_predict
-                                    text: "Predict"
                                     on_press: root.apply_effects_lv(0, 'inpaint')
+                                    ParamChipText:
+                                        text: "Predict"
 
-                            BoxLayout:
-                                size: 0, dp(30)
-                                size_hint_y: None
-                                orientation: 'horizontal'
+                            ParamBoxLayout:
                                 ParamLabel:
                                     text: "Defocus"
                                 VSpacer:
-                                    size_hint_x: 5
-                                MDChip:
-                                    type: 'filter'
-                                    pos_hint: {"center_x": .5, "center_y": .5}
-                                    size: dp(100), dp(20)
-                                    size_hint: None, None
+                                    size_hint_x: 0.55
+                                ParamChip:
                                     id: switch_defocus
-                                    radius: 40
-                                    line_color: 'grey'
                                     on_active: root.apply_effects_lv(1, 'defocus')
-
-                                    MDChipText:
+                                    ParamChipText:
                                         text: "AI"
-                                        font_size: '9pt'
-                                        color: 'b0b0b0' 
 
-                            BoxLayout:
-                                size: 0, dp(30)
-                                size_hint_y: None
-                                orientation: 'horizontal'
+                            ParamBoxLayout:
                                 ParamLabel:
                                     text: "Subpixel shift"
                                 VSpacer:
-                                    size_hint_x: 5
-                                MDChip:
-                                    type: 'filter'
-                                    pos_hint: {"center_x": .5, "center_y": .5}
-                                    size: dp(100), dp(20)
-                                    size_hint: None, None
+                                    size_hint_x: 0.55
+                                ParamChip:
                                     id: switch_subpixel_shift
-                                    radius: dp(20)
-                                    line_color: 'grey'
                                     on_active: root.apply_effects_lv(0, 'subpixel_shift')
-
-                                    MDChipText:
+                                    ParamChipText:
                                         text: "AI"
-                                        font_size: '9pt'
-                                        color: 'b0b0b0' 
 
                             ParamSlider:
                                 id: slider_deblur_filter
@@ -1185,46 +956,24 @@
                                 step: 1
                                 on_slider: root.apply_effects_lv(1, 'deblur_filter')
                                 
-                            HSeparator:
-                                height: dp(15)
+                            VSeparator:
 
-                            Label:
-                                text_size: self.size
-                                size: 0, dp(20)
-                                size_hint_y: None
-                                text: ' Color'
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
-
-                            Label:
-                                text_size: self.size
-                                size: 0, dp(20)
-                                size_hint_y: None
+                            HeadLabel:
                                 text: ' LUT'
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
 
-                            BoxLayout:
-                                size: 0, dp(30)
-                                size_hint_y: None
-                                orientation: 'horizontal'
+                            ParamBoxLayout:
                                 ParamLabel:
                                     text: "File"
-                                Spinner:
+                                VSpacer:
+                                    size_hint_x: 0.12
+                                ParamSpinner:
                                     id: lut_spinner
-                                    pos_hint: {'center_x': .5, 'center_y': .5}
-                                    size: 0, dp(20)
-                                    size_hint: 9, None
-                                    font_size: '9pt'
-                                    option_cls: "MainSpinnerOption"
                                     values: [ 'None', ]
                                     on_text: root.apply_effects_lv(2, 'lut')
                                 Button:
                                     pos_hint: {'center_x': .5, 'center_y': .5}
-                                    size: 0, dp(20)
-                                    size_hint: 1, None
+                                    size_hint: 0.08, None
+                                    ref_height: 20
                                     on_press: root.on_lut_select_folder()
 
                             ParamSlider:
@@ -1236,31 +985,18 @@
                                 step: 1
                                 on_slider: root.apply_effects_lv(2, 'lut')
 
-                            HSeparator:
-                                height: dp(15)
+                            VSeparator:
 
-                            Label:
-                                text_size: self.size
-                                size: 0, dp(20)
-                                size_hint_y: None
+                            HeadLabel:
                                 text: ' Film Simulation'
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
 
-                            BoxLayout:
-                                size: 0, dp(30)
-                                size_hint_y: None
-                                orientation: 'horizontal'
+                            ParamBoxLayout:
                                 ParamLabel:
                                     text: "Type"
-                                Spinner:
+                                VSpacer:
+                                    size_hint_x: 0.1
+                                ParamSpinner:
                                     id: spinner_film_preset
-                                    pos_hint: {'center_x': .5, 'center_y': .5}
-                                    size: 0, dp(20)
-                                    size_hint: 9, None
-                                    font_size: '9pt'
-                                    option_cls: "MainSpinnerOption"
                                     values: [ 'None', ]
                                     on_text: root.apply_effects_lv(2, 'film_simulation')
                                     
@@ -1273,28 +1009,16 @@
                                 step: 1
                                 on_slider: root.apply_effects_lv(2, 'film_simulation')
 
-                            Label:
-                                text_size: self.size
-                                size: 0, dp(20)
-                                size_hint_y: None
+                            HeadLabel:
                                 text: ' Lens Simulator'
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
 
-                            BoxLayout:
-                                size: 0, dp(30)
-                                size_hint_y: None
-                                orientation: 'horizontal'
+                            ParamBoxLayout:
                                 ParamLabel:
                                     text: "Type"
-                                Spinner:
+                                VSpacer:
+                                    size_hint_x: 0.1
+                                ParamSpinner:
                                     id: spinner_lens_preset
-                                    pos_hint: {'center_x': .5, 'center_y': .5}
-                                    size: 0, dp(20)
-                                    size_hint: 9, None
-                                    font_size: '9pt'
-                                    option_cls: "MainSpinnerOption"
                                     values: [ 'None', ]
                                     on_text: root.apply_effects_lv(2, 'lens_simulator')
                                     
@@ -1307,47 +1031,24 @@
                                 step: 1
                                 on_slider: root.apply_effects_lv(2, 'lens_simulator')
 
-                            HSeparator:
-                                height: dp(15)
+                            VSeparator:
 
-                            Label:
-                                text_size: self.size
-                                size: 0, dp(20)
-                                size_hint_y: None
+                            HeadLabel:
                                 text: ' Filter'
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
 
                             ParamSlider:
                                 id: slider_lensblur_filter
-                                text: "Lensblur Filter"
+                                text: "Lensblur"
                                 min: 0
                                 max: 100
                                 value: 0
                                 step: 2
                                 on_slider: root.apply_effects_lv(1, 'lensblur_filter')
 
-                            ParamSlider:
-                                id: slider_perlin_noise_opacity
-                                text: "Perlin Opacity"
-                                min: 0
-                                max: 100
-                                value: 100
-                                step: 1
-                                on_slider: root.apply_effects_lv(1, 'perlin_noise')
+                            VSeparator:
 
-                            HSeparator:
-                                height: dp(15)
-
-                            Label:
-                                text_size: self.size
-                                size: 0, dp(20)
-                                size_hint_y: None
+                            HeadLabel:
                                 text: ' Level'
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
 
                             ParamSlider:
                                 id: slider_black_level
@@ -1376,17 +1077,10 @@
                                 step: 1
                                 on_slider: root.apply_effects_lv(2, 'level')
 
-                            HSeparator:
-                                height: dp(15)
+                            VSeparator:
 
-                            Label:
-                                text_size: self.size
-                                size: 0, dp(20)
-                                size_hint_y: None
+                            HeadLabel:
                                 text: ' Glow Effect'
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
 
                             ParamSlider:
                                 id: slider_glow_black
@@ -1422,18 +1116,12 @@
                     MDScrollView:
 
                         MDBoxLayout:
-                            size_hint_y: None
                             orientation: "vertical"
+                            size_hint_y: None
                             height: self.minimum_height
 
-                            Label:
-                                text_size: self.size
-                                size: 0, dp(20)
-                                size_hint_y: None
+                            HeadLabel:
                                 text: ' Rotation'
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
 
                             ParamSlider:
                                 id: slider_rotation
@@ -1445,87 +1133,61 @@
                                 on_slider: root.apply_effects_lv(0, 'crop')
                                 on_slider: root.apply_effects_lv(0, 'rotation')
 
-                            HSpacer:
-                                width: dp(15)
+                            VSpacer:
                             
-                            BoxLayout:
-                                size: 0, dp(20)
-                                size_hint: 1, None
+                            ParamBoxLayout:
 
                                 HSpacer:
-                                    width: dp(100)
+                                    ref_width: 100
                                 Button:
                                     pos_hint: {'center_x': .5, 'center_y': .5}
-                                    size: 0, dp(20)
-                                    size_hint: 1, None
+                                    ref_height: 20
                                     text: "L"
                                     on_press: root.apply_effects_lv(0, 'crop')
                                     on_press: root.set_effect_param(0, 'rotation', 90)
                                 Button:
                                     pos_hint: {'center_x': .5, 'center_y': .5}
-                                    size: 0, dp(20)
-                                    size_hint: 1, None
+                                    ref_height: 20
                                     text: "R"
                                     on_press: root.apply_effects_lv(0, 'crop')
                                     on_press: root.set_effect_param(0, 'rotation', -90)
                                 Button:
                                     pos_hint: {'center_x': .5, 'center_y': .5}
-                                    size: 0, dp(20)
-                                    size_hint: 1, None
+                                    ref_height: 20
                                     text: "H"
                                     on_press: root.apply_effects_lv(0, 'crop')
                                     on_press: root.set_effect_param(0, 'rotation', 'hflip')
                                 Button:
                                     pos_hint: {'center_x': .5, 'center_y': .5}
-                                    size: 0, dp(20)
-                                    size_hint: 1, None
+                                    ref_height: 20
                                     text: "V"
                                     on_press: root.apply_effects_lv(0, 'crop')
                                     on_press: root.set_effect_param(0, 'rotation', 'vflip')
 
-                            VSpacer:
-                                height: dp(15)
-                            HSeparator:
-                                height: dp(15)
+                            VSeparator:
 
-                            BoxLayout:
-                                size: 0, dp(30)
-                                size_hint_y: None
-                                orientation: 'horizontal'
+                            HeadLabel:
+                                text: " Crop"
+
+                            ParamBoxLayout:
                                 ParamLabel:
                                     text: "Crop"
-                                VSpacer:
-                                    size_hint_x: 5
-                                MDChip:
+                                HSpacer:
+                                    size_hint_x: 0.5
+                                ParamChip:
                                     type: 'assist'
-                                    pos_hint: {"center_x": .5, "center_y": .5}
-                                    size: dp(100), dp(20)
-                                    size_hint: None, None
                                     id: button_crop_reset
-                                    radius: 40
-                                    line_color: 'grey'
                                     on_press: root.apply_effects_lv(0, 'crop')
-
-                                    MDChipText:
+                                    ParamChipText:
                                         text: "Reset"
-                                        font_size: '9pt'
-                                        color: 'b0b0b0'
                                     
-                            BoxLayout:
-                                size: 0, dp(30)
-                                size_hint_y: None
-                                orientation: 'horizontal'
+                            ParamBoxLayout:
                                 ParamLabel:
                                     text: "Aspect Ratio"
                                 HSpacer:
-                                    width: dp(15)
-                                Spinner:
+                                    size_hint_x: 0.15
+                                ParamSpinner:
                                     id: spinner_acpect_ratio
-                                    pos_hint: {'center_x': .5, 'center_y': .5}
-                                    size: 0, dp(20)
-                                    size_hint: 9, None
-                                    font_size: '9pt'
-                                    option_cls: "MainSpinnerOption"
                                     values: ["None", "1 / 1", "5 / 4", "3 / 2", "4 / 3", "16 / 9", "1.414 / 1", "148 / 100"]
                                     on_text: root.apply_effects_lv(0, 'crop')
 
@@ -1535,46 +1197,23 @@
                     MDScrollView:
 
                         MDBoxLayout:
-                            size_hint_y: None
                             orientation: "vertical"
+                            size_hint_y: None
                             height: self.minimum_height
 
-                            Label:
-                                text_size: self.size
-                                size: 0, dp(20)
-                                size_hint_y: None
+                            HeadLabel:
                                 text: ' Hue'
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
-
                             ParamSlider:
-                                id: slider_mask2_hue_min
-                                text: "Min"
+                                id: slider_mask2_hue_distance
+                                text: "Distance"
                                 min: 0
                                 max: 359
-                                value: 0
-                                step: 1
-                                on_slider: root.apply_effects_lv(3, 'mask2')
-
-                            ParamSlider:
-                                id: slider_mask2_hue_max
-                                text: "Max"
-                                min: 0
-                                max: 360*2-1
                                 value: 359
                                 step: 1
                                 on_slider: root.apply_effects_lv(3, 'mask2')
 
-                            Label:
-                                text_size: self.size
-                                size: 0, dp(20)
-                                size_hint_y: None
+                            HeadLabel:
                                 text: ' Lum'
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
-
                             ParamSlider:
                                 id: slider_mask2_lum_min
                                 text: "Min"
@@ -1583,7 +1222,6 @@
                                 value: 0
                                 step: 1
                                 on_slider: root.apply_effects_lv(3, 'mask2')
-
                             ParamSlider:
                                 id: slider_mask2_lum_max
                                 text: "Max"
@@ -1593,15 +1231,8 @@
                                 step: 1
                                 on_slider: root.apply_effects_lv(3, 'mask2')
 
-                            Label:
-                                text_size: self.size
-                                size: 0, dp(20)
-                                size_hint_y: None
+                            HeadLabel:
                                 text: ' Sat'
-                                font_size: '10pt'
-                                halign: 'left'
-                                valign: 'center'
-
                             ParamSlider:
                                 id: slider_mask2_sat_min
                                 text: "Min"
@@ -1610,7 +1241,6 @@
                                 value: 0
                                 step: 1
                                 on_slider: root.apply_effects_lv(3, 'mask2')
-
                             ParamSlider:
                                 id: slider_mask2_sat_max
                                 text: "Max"
@@ -1620,8 +1250,7 @@
                                 step: 1
                                 on_slider: root.apply_effects_lv(3, 'mask2')
 
-                            HSeparator:
-                                height: dp(15)
+                            VSeparator:
 
                             ParamSlider:
                                 id: slider_mask2_blur
@@ -1635,8 +1264,8 @@
         ViewerWidget:
             id: viewer
             size_hint_y: None
-            size: (0, dp(160))
-            grid_width: dp(120)
+            ref_height: 160
+            grid_width: 100
             on_last_selected: root.on_select(self.last_selected)
 
 <CurveWidget>:

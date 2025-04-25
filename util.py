@@ -1,6 +1,10 @@
 
 import math
 import numpy as np
+from kivy.core.window import Window as KVWindow
+#from kivy.clock import KVClock
+from kivy.uix.widget import Widget as KVWidget
+from screeninfo import get_monitors
 
 def to_texture(pos, widget):
     # ウィンドウ座標からローカルイメージ座標に変換
@@ -171,3 +175,52 @@ def convert_to_float32(img):
         raise ValueError(f"サポートされていないデータ型: {img.dtype}")
 
     return img
+
+def get_current_dispay():
+    # 現在のウィンドウの左上座標
+    win_x, win_y = KVWindow.left, KVWindow.top
+
+    # モニタ一覧を取得して、ウィンドウが属しているモニタを探す
+    monitors = get_monitors()
+
+    for i, m in enumerate(monitors):
+        if m.is_primary == True:
+            primary = m
+            break
+
+    for i, m in enumerate(monitors):
+        if m.y != 0:
+            m.y = -m.height if m.y > 0 else primary.height
+        if m.x <= win_x < m.x + m.width and m.y <= win_y < m.y + m.height:
+            return {"display": i, "width": m.width, "height": m.height, "is_primary": m.is_primary}
+    
+    return None
+
+def get_entire_widget_tree(root, delay=0.1):
+    """全ウィジェット取得（未表示含む）"""
+    results = []
+    
+    def _collect(w):
+        if not isinstance(w, KVWidget):
+            return
+            
+        results.append(w)
+        
+        # 特殊レイアウト対応
+        if hasattr(w, 'tab_list'):  # TabbedPanel
+            for tab in w.tab_list:
+                _collect(tab.content)
+                
+        if hasattr(w, 'screens'):  # ScreenManager
+            for screen in w.screens:
+                _collect(screen)
+                
+        # 通常の子要素
+        for child in w.children:
+            _collect(child)
+    
+    # 遅延実行で未初期化要素に対応
+    #KVClock.schedule_once(lambda dt: _collect(root), delay)
+    _collect(root)
+
+    return results

@@ -17,13 +17,6 @@ import math
 
 import param_slider
 
-class CWColorButton(MDCard):
-    background_color = ListProperty([0.5, 0.5, 0.5, 1])
-    
-    def on_color_select(self):
-        app = MDApp.get_running_app()
-        self.parent.parent.current_color = self.background_color
-
 class CWColorPreview(MDCard):
     color = ListProperty([0.5, 0.5, 0.5, 1])
 

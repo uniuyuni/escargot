@@ -7,8 +7,6 @@ class MetaInfo(KVBoxLayout):
     key = KVStringProperty()
     value = KVStringProperty()
 
-    def __init__(self, **kwargs):
-        super(MetaInfo, self).__init__(**kwargs)
 
 class MetaInfoApp(MDApp):
     def __init__(self, **kwargs):

@@ -3,7 +3,6 @@ import cv2
 import numpy as np
 
 import os
-import pyautogui as pag
 from kivymd.app import MDApp
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivy.core.window import Window as KVWindow
@@ -343,6 +342,10 @@ class MainWidget(MDBoxLayout):
         if self.imgset is not None:
             self.apply_effects_lv(0, "crop")
 
+        #KVWindow.system_size = (KVWindow.width, KVWindow.height)
+        #MainApp.get_running_app().on_window_resize(KVWindow, KVWindow.width, KVWindow.height)
+        #Clock.schedule_once(lambda dt: MainApp.get_running_app().on_window_resize(KVWindow, KVWindow.width, KVWindow.height), 0.1)
+
     def _set_lut_path(self, path):
         lut_values = ['None']
         effects.LUTEffect.file_pathes = { 'None': None, }
@@ -421,10 +424,10 @@ class MainApp(MDApp):
     def build(self): 
         self.main_widget = MainWidget(self.cache_system)
 
-        KVWindow.size = (dp(600), dp(400))
-        scr_w,scr_h = pag.size()
-        KVWindow.left = (scr_w - dp(600)) // 2
-        KVWindow.top = (scr_h - dp(400)) // 2
+        display = util.get_current_dispay()
+        KVWindow.size = (display["width"] * 0.9, display["height"] * 0.9)
+        KVWindow.left = (display["width"] - display["width"] * 0.9) // 2
+        KVWindow.top = (display["height"] - display["height"] * 0.9) // 2
 
         # testcode
         #self.main_widget.ids['viewer'].set_path(os.getcwd() + "/picture")
@@ -433,10 +436,42 @@ class MainApp(MDApp):
         config.load_config()
 
         return self.main_widget
+    
+    def on_start(self):
+        KVWindow.bind(on_resize=self.on_window_resize)
+        return super().on_start()
 
     def on_stop(self):
         self.main_widget.save_current_sidecar()
         self.main_widget.shutdown()
+
+
+    def on_window_resize(self, window, width, height):
+        # すべてのスケールが必要なウィジェットを更新
+        if self.root:
+            for child in util.get_entire_widget_tree(self.root):
+                if hasattr(child, 'ref_width'):
+                    child.width = self.scale_width(child.ref_width)
+                if hasattr(child, 'ref_height'):
+                    child.height = self.scale_height(child.ref_height)
+                if hasattr(child, 'ref_padding'):
+                    child.padding = self.scale_width(child.ref_padding)
+                if hasattr(child, 'ref_spacing'):
+                    child.spacing = self.scale_width(child.ref_spacing)
+                if hasattr(child, 'ref_tab_width'):
+                    child.tab_width = self.scale_width(child.ref_tab_width)
+                if hasattr(child, 'ref_tab_height'):
+                    child.tab_height = self.scale_height(child.ref_tab_height)
+
+    @staticmethod
+    def scale_width(ref):
+        return ref * (KVWindow.dpi / 96)
+        #return ref * (KVWindow.width / 1200)
+    
+    @staticmethod
+    def scale_height(ref):
+        return ref * (KVWindow.dpi / 96)
+        #return ref * (KVWindow.height / 800)
 
 if __name__ == '__main__':
     multiprocessing.freeze_support()
@@ -449,4 +484,5 @@ if __name__ == '__main__':
         
     # 終了時にクリーンアップ
     cache_system.shutdown()
+
 
