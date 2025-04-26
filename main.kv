@@ -5,11 +5,8 @@
 #:include histogram_widget.kv
 #:include metainfo.kv
 #:include color_picker.kv
-#:include export_dialog.kv  
-
-<MainSpinnerOption@SpinnerOption>:
-    size_hint_y: None
-    height: dp(20)
+#:include export_dialog.kv
+#:include hover_spinner.kv
 
 <ParamChip@MDChip>:
     type: 'filter'
@@ -24,7 +21,11 @@
     font_size: '9pt'
     color: 'b0b0b0' 
 
-<ParamSpinner@Spinner>:
+<MainSpinnerOption@SpinnerOption>:
+    size_hint_y: None
+    height: dp(20)
+
+<ParamSpinner@HoverSpinner>:
     pos_hint: {'center_x': .5, 'center_y': .5}
     size_hint: 0.55, None
     ref_height: 20
@@ -969,7 +970,8 @@
                                 ParamSpinner:
                                     id: lut_spinner
                                     values: [ 'None', ]
-                                    on_text: root.apply_effects_lv(2, 'lut')
+                                    #on_text: root.apply_effects_lv(2, 'lut')
+                                    on_hovered_item: root.apply_effects_lv(2, 'lut')
                                 Button:
                                     pos_hint: {'center_x': .5, 'center_y': .5}
                                     size_hint: 0.08, None
@@ -998,7 +1000,8 @@
                                 ParamSpinner:
                                     id: spinner_film_preset
                                     values: [ 'None', ]
-                                    on_text: root.apply_effects_lv(2, 'film_simulation')
+                                    #on_text: root.apply_effects_lv(2, 'film_simulation')
+                                    on_hovered_item: root.apply_effects_lv(2, 'film_simulation')
                                     
                             ParamSlider:
                                 id: slider_film_intensity
@@ -1020,7 +1023,8 @@
                                 ParamSpinner:
                                     id: spinner_lens_preset
                                     values: [ 'None', ]
-                                    on_text: root.apply_effects_lv(2, 'lens_simulator')
+                                    #on_text: root.apply_effects_lv(2, 'lens_simulator')
+                                    on_hovered_item: root.apply_effects_lv(2, 'lens_simulator')
                                     
                             ParamSlider:
                                 id: slider_lens_intensity

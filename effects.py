@@ -1445,9 +1445,11 @@ class LUTEffect(Effect):
         widget.ids["lut_spinner"].text = param.get('lut_name', 'None')
 
     def set2param(self, param, widget):
-        if param.get('lut_name', "") != widget.ids["lut_spinner"].text:
+        spinner = widget.ids["lut_spinner"]
+        name = spinner.text if spinner.hovered_item is None else spinner.hovered_item.text
+        if param.get('lut_name', "") != name:
             self.lut = None
-        param['lut_name'] = widget.ids["lut_spinner"].text
+        param['lut_name'] = name
         param['lut_path'] = LUTEffect.file_pathes.get(param['lut_name'], None)
 
     def make_diff(self, rgb, param):
@@ -1476,7 +1478,8 @@ class LensSimulatorEffect(Effect):
         widget.ids["slider_lens_intensity"].set_slider_value(param.get('lens_intensity', 100))
 
     def set2param(self, param, widget):
-        param['lens_preset'] = widget.ids["spinner_lens_preset"].text
+        spinner = widget.ids["spinner_lens_preset"]
+        param['lens_preset'] = spinner.text if spinner.hovered_item is None else spinner.hovered_item.text
         param['lens_intensity'] = widget.ids["slider_lens_intensity"].value
 
     def make_diff(self, rgb, param):
@@ -1506,7 +1509,8 @@ class FilmSimulationEffect(Effect):
         widget.ids["slider_film_intensity"].set_slider_value(param.get('film_intensity', 100))
 
     def set2param(self, param, widget):
-        param['film_preset'] = widget.ids["spinner_film_preset"].text
+        spinner = widget.ids["spinner_film_preset"]
+        param['film_preset'] = spinner.text if spinner.hovered_item is None else spinner.hovered_item.text
         param['film_intensity'] = widget.ids["slider_film_intensity"].value
 
     def make_diff(self, rgb, param):

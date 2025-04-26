@@ -33,6 +33,7 @@ import export
 from export_dialog import ExportDialog, ExportConfirmDialog
 import color
 import file_cache_system
+import hover_spinner
 
 class MainWidget(MDBoxLayout):
 
@@ -346,7 +347,7 @@ class MainWidget(MDBoxLayout):
         #MainApp.get_running_app().on_window_resize(KVWindow, KVWindow.width, KVWindow.height)
         #Clock.schedule_once(lambda dt: MainApp.get_running_app().on_window_resize(KVWindow, KVWindow.width, KVWindow.height), 0.1)
 
-    def _set_lut_path(self, path):
+    def set_lut_path(self, path):
         lut_values = ['None']
         effects.LUTEffect.file_pathes = { 'None': None, }
 
