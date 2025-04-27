@@ -5,8 +5,6 @@
     size_hint: None, None
     ref_width: 130
     ref_height: 130
-    width: app.scale_width(self.ref_width)
-    height: app.scale_height(self.ref_height)
 
     Image:
         source: 'color_wheel.png'
@@ -16,8 +14,6 @@
     radius: [8]
     ref_width: 40
     ref_height: 20
-    width: app.scale_width(self.ref_width)
-    height: app.scale_height(self.ref_height)
 
     canvas:
         Color:
@@ -32,7 +28,6 @@
     spacing: 20
     size_hint: 1, None
     ref_height: 160
-    height: app.scale_height(self.ref_height)
     pos_hint: {'center_x': 0.5, 'center_y': .5}
 
     MDBoxLayout:

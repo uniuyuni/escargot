@@ -4,13 +4,11 @@
     halign: 'left'
     size_hint_y: None
     ref_height: 18
-    height: app.scale_height(self.ref_height)
 
 <ParamBoxLayout@BoxLayout>:
     orientation: 'horizontal'
     size_hint_y: None
     ref_height: 22
-    height: app.scale_height(self.ref_height)
 
 <ParamLabel@MDLabel>:
     font_size: '9pt'
@@ -18,14 +16,12 @@
     color: 'b0b0b0'
     size_hint_x: None
     ref_width: 100
-    width: app.scale_width(self.ref_width)
 
 <ParamSlider>:
     text: 'Label'
     orientation: 'horizontal'
     size_hint_y: None
     ref_height: 24
-    height: app.scale_height(self.ref_height)
     label_width: 100
     on_text: root.on_label_text()
 
@@ -51,14 +47,12 @@
         multiline: False
         size_hint_x: None
         ref_width: 40
-        width: app.scale_width(self.ref_width)
         on_text_validate: root.on_input_text_validate()
 
     BoxLayout:
         orientation: 'vertical'
         size_hint_x: None
         ref_width: 15
-        width: app.scale_width(self.ref_width)
         
         Button:
             #size_hint_y: 1

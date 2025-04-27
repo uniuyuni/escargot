@@ -13,7 +13,6 @@
     pos_hint: {"center_x": .5, "center_y": .5}
     size_hint: 0.2, None
     ref_height: 20
-    height: app.scale_height(self.ref_height)
     radius: 40
     line_color: 'grey'
 
@@ -29,7 +28,6 @@
     pos_hint: {'center_x': .5, 'center_y': .5}
     size_hint: 0.55, None
     ref_height: 20
-    height: app.scale_height(self.ref_height)
     font_size: '9pt'
     #option_cls: "MainSpinnerOption"
 
@@ -39,10 +37,10 @@
     height: self.parent.width
     ref_tab_width: 80
     ref_tab_height: 20
-    tab_width: app.scale_width(self.ref_tab_width)
-    tab_height: app.scale_height(self.ref_tab_height)
     do_default_tab: False
     on_kv_post: self.switch_to(root.tab_list[0]) if root.tab_list else None
+
+<CurveWidget>:
 
 <MainWidget>:
 
@@ -52,7 +50,7 @@
 
         BoxLayout:
             orientation: 'horizontal'
-            size_hint_y: 1
+            #size_hint_y: 1
 
             BoxLayout:
                 orientation: 'vertical'
@@ -1272,4 +1270,3 @@
             grid_width: 100
             on_last_selected: root.on_select(self.last_selected)
 
-<CurveWidget>:

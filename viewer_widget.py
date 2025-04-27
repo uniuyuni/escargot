@@ -26,6 +26,7 @@ from kivy.metrics import dp
 
 import core
 import macos
+import util
 
 supported_formats_rgb = ('.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp', '.gif')
 supported_formats_raw = ('.cr2', '.nef', '.arw', '.dng', '.orf', '.raf', '.rw2', '.sr2', '.pef', '.raw')
@@ -375,27 +376,19 @@ class Viewer_WidgetApp(MDApp):
     def on_window_resize(self, window, width, height):
         # すべてのスケールが必要なウィジェットを更新
         if self.root:
-            for child in self.root.walk():
+            for child in util.get_entire_widget_tree(self.root):
                 if hasattr(child, 'ref_width'):
-                    child.width = self.scale_width(child.ref_width)
+                    child.width = util.dpi_scale_width(child.ref_width)
                 if hasattr(child, 'ref_height'):
-                    child.height = self.scale_height(child.ref_height)
+                    child.height = util.dpi_scale_height(child.ref_height)
                 if hasattr(child, 'ref_padding'):
-                    child.padding = self.scale_width(child.ref_padding)
+                    child.padding = util.dpi_scale_width(child.ref_padding)
                 if hasattr(child, 'ref_spacing'):
-                    child.spacing = self.scale_width(child.ref_spacing)
+                    child.spacing = util.dpi_scale_width(child.ref_spacing)
                 if hasattr(child, 'ref_tab_width'):
-                    child.tab_width = self.scale_width(child.ref_tab_width)
+                    child.tab_width = util.dpi_scale_width(child.ref_tab_width)
                 if hasattr(child, 'ref_tab_height'):
-                    child.tab_height = self.scale_height(child.ref_tab_height)
-
-    @staticmethod
-    def scale_width(ref):
-        return ref * (KVWindow.width / 1200)
-    
-    @staticmethod
-    def scale_height(ref):
-        return ref * (KVWindow.height / 800)
+                    child.tab_height = util.dpi_scale_height(child.ref_tab_height)
 
 if __name__ == "__main__":
     Viewer_WidgetApp().run()

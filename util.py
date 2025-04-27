@@ -224,3 +224,11 @@ def get_entire_widget_tree(root, delay=0.1):
     _collect(root)
 
     return results
+
+def dpi_scale_width(ref):
+    return ref * (KVWindow.dpi / 96)
+    #return ref * (KVWindow.width / 1200)
+
+def dpi_scale_height(ref):
+    return ref * (KVWindow.dpi / 96)
+    #return ref * (KVWindow.height / 800)

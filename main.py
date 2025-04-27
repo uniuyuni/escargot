@@ -452,27 +452,17 @@ class MainApp(MDApp):
         if self.root:
             for child in util.get_entire_widget_tree(self.root):
                 if hasattr(child, 'ref_width'):
-                    child.width = self.scale_width(child.ref_width)
+                    child.width = util.dpi_scale_width(child.ref_width)
                 if hasattr(child, 'ref_height'):
-                    child.height = self.scale_height(child.ref_height)
+                    child.height = util.dpi_scale_height(child.ref_height)
                 if hasattr(child, 'ref_padding'):
-                    child.padding = self.scale_width(child.ref_padding)
+                    child.padding = util.dpi_scale_width(child.ref_padding)
                 if hasattr(child, 'ref_spacing'):
-                    child.spacing = self.scale_width(child.ref_spacing)
+                    child.spacing = util.dpi_scale_width(child.ref_spacing)
                 if hasattr(child, 'ref_tab_width'):
-                    child.tab_width = self.scale_width(child.ref_tab_width)
+                    child.tab_width = util.dpi_scale_width(child.ref_tab_width)
                 if hasattr(child, 'ref_tab_height'):
-                    child.tab_height = self.scale_height(child.ref_tab_height)
-
-    @staticmethod
-    def scale_width(ref):
-        return ref * (KVWindow.dpi / 96)
-        #return ref * (KVWindow.width / 1200)
-    
-    @staticmethod
-    def scale_height(ref):
-        return ref * (KVWindow.dpi / 96)
-        #return ref * (KVWindow.height / 800)
+                    child.tab_height = util.dpi_scale_height(child.ref_tab_height)
 
 if __name__ == '__main__':
     multiprocessing.freeze_support()
