@@ -34,6 +34,7 @@ from export_dialog import ExportDialog, ExportConfirmDialog
 import color
 import file_cache_system
 import hover_spinner
+import integer_input
 
 class MainWidget(MDBoxLayout):
 
@@ -178,7 +179,7 @@ class MainWidget(MDBoxLayout):
     @mainthread
     def on_fcs_get_file(self, filename, imgset, exif_data, param, flag):
 
-        if flag == file_cache_system.CallbackFlag.CONTINUE:
+        if flag != file_cache_system.CallbackFlag.CONTINUE:
             # 最終的なパラメータを合成
             card = self.ids['viewer'].get_card(filename)
             if card is not None:

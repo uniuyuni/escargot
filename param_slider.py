@@ -28,7 +28,7 @@ class ParamSlider(KVBoxLayout):
         self.ids['slider'].max = self.max
         self.ids['slider'].value = self.value
         self.ids['slider'].step = self.step
-        self.ids['input'].text = str(round(self.value, 2))
+        self.ids['input'].set_value(self.value)
         self.disabled = False
     
     def on_label_text(self):
@@ -36,20 +36,20 @@ class ParamSlider(KVBoxLayout):
 
     def on_slider_value(self):
         self.value = self.ids['slider'].value
-        self.ids['input'].text = str(round(self.value, 2))
+        self.ids['input'].set_value(self.value)
         if self.disabled == False:
             self.slider = self.value
 
     def on_input_text_validate(self):
         try:
             if self.for_float:
-                val = round(float(self.ids['input'].text), 2)
+                val = round(self.ids['input'].get_value(), 2)
             else:
-                val = int(self.ids['input'].text)
+                val = int(self.ids['input'].get_value())
         except ValueError:
             val = self.reset_value
         val = min(self.max, max(self.min, val))
-        self.ids['input'].text = str(val)
+        self.ids['input'].set_value(val)
         self.value = val
         self.ids['slider'].value = self.value
     

@@ -195,7 +195,7 @@
                                 text: "Temperature"
                                 min: 2000
                                 max: 12000
-                                value: 6500
+                                value: 5000
                                 step: 10
                                 on_slider: root.apply_effects_lv(2, 'color_temperature')
 
@@ -239,7 +239,6 @@
                                 max: 100
                                 value: 0
                                 step: 1
-                                for_float: True
                                 on_slider: root.apply_effects_lv(2, 'tone')
 
                             VSeparator:
@@ -301,7 +300,6 @@
                                 max: 100
                                 value: 0
                                 step: 1
-                                for_float: True
                                 on_slider: root.apply_effects_lv(2, 'dehaze')
 
                             ParamSlider:
@@ -340,7 +338,7 @@
 
                             TabbedPanel:
                                 size_hint_y: None
-                                ref_height: 22*3+20+22
+                                ref_height: 22*3+20+22+6
                                 ref_tab_width: 60
                                 ref_tab_height: 20
                                 do_default_tab: False
@@ -349,34 +347,34 @@
                                     text: 'Red'
 
                                     BoxLayout:
-                                        #size_hint_y: None
+                                        size_hint_y: None
                                         orientation: "vertical"
-                                        #height: self.minimum_height
+                                        height: self.minimum_height
                                         HeadLabel:
                                             text: ' Red'
                                         ParamSlider:
                                             id: slider_hls_red_hue
                                             text: "Hue"
-                                            min: -100.0
-                                            max: 100.0
-                                            value: 0.0
-                                            step: 1.0
-                                            on_slider: root.apply_effects_lv(2, 'hls')
-                                        ParamSlider:
-                                            id: slider_hls_red_sat
-                                            text: "Saturation"
-                                            min: -1.0
-                                            max: 1.0
-                                            value: 0.0
-                                            step: 0.05
+                                            min: -180
+                                            max: 180
+                                            value: 0
+                                            step: 1
                                             on_slider: root.apply_effects_lv(2, 'hls')
                                         ParamSlider:
                                             id: slider_hls_red_lum
                                             text: "Luminance"
-                                            min: -1.0
-                                            max: 1.0
-                                            value: 0.0
-                                            step: 0.05
+                                            min: -100
+                                            max: 100
+                                            value: 0
+                                            step: 1
+                                            on_slider: root.apply_effects_lv(2, 'hls')
+                                        ParamSlider:
+                                            id: slider_hls_red_sat
+                                            text: "Saturation"
+                                            min: -100
+                                            max: 100
+                                            value: 0
+                                            step: 1
                                             on_slider: root.apply_effects_lv(2, 'hls')
                     
                                 TabbedPanelItem:
@@ -391,26 +389,26 @@
                                         ParamSlider:
                                             id: slider_hls_orange_hue
                                             text: "Hue"
-                                            min: -100.0
-                                            max: 100.0
-                                            value: 0.0
-                                            step: 1.0
-                                            on_slider: root.apply_effects_lv(2, 'hls')
-                                        ParamSlider:
-                                            id: slider_hls_orange_sat
-                                            text: "Saturation"
-                                            min: -1.0
-                                            max: 1.0
-                                            value: 0.0
-                                            step: 0.05
+                                            min: -180
+                                            max: 180
+                                            value: 0
+                                            step: 1
                                             on_slider: root.apply_effects_lv(2, 'hls')
                                         ParamSlider:
                                             id: slider_hls_orange_lum
                                             text: "Luminance"
-                                            min: -1.0
-                                            max: 1.0
-                                            value: 0.0
-                                            step: 0.05
+                                            min: -100
+                                            max: 100
+                                            value: 0
+                                            step: 1
+                                            on_slider: root.apply_effects_lv(2, 'hls')
+                                        ParamSlider:
+                                            id: slider_hls_orange_sat
+                                            text: "Saturation"
+                                            min: -100
+                                            max: 100
+                                            value: 0
+                                            step: 1
                                             on_slider: root.apply_effects_lv(2, 'hls')
 
                                 TabbedPanelItem:
@@ -425,26 +423,26 @@
                                         ParamSlider:
                                             id: slider_hls_yellow_hue
                                             text: "hue"
-                                            min: -100.0
-                                            max: 100.0
-                                            value: 0.0
-                                            step: 1.0
-                                            on_slider: root.apply_effects_lv(2, 'hls')
-                                        ParamSlider:
-                                            id: slider_hls_yellow_sat
-                                            text: "Saturation"
-                                            min: -1.0
-                                            max: 1.0
-                                            value: 0.0
-                                            step: 0.05
+                                            min: -180
+                                            max: 180
+                                            value: 0
+                                            step: 1
                                             on_slider: root.apply_effects_lv(2, 'hls')
                                         ParamSlider:
                                             id: slider_hls_yellow_lum
                                             text: "Luminance"
-                                            min: -1.0
-                                            max: 1.0
-                                            value: 0.0
-                                            step: 0.05
+                                            min: -100
+                                            max: 100
+                                            value: 0
+                                            step: 1
+                                            on_slider: root.apply_effects_lv(2, 'hls')
+                                        ParamSlider:
+                                            id: slider_hls_yellow_sat
+                                            text: "Saturation"
+                                            min: -100
+                                            max: 100
+                                            value: 0
+                                            step: 1
                                             on_slider: root.apply_effects_lv(2, 'hls')
 
                                 TabbedPanelItem:
@@ -459,26 +457,26 @@
                                         ParamSlider:
                                             id: slider_hls_green_hue
                                             text: "Hue"
-                                            min: -100.0
-                                            max: 100.0
-                                            value: 0.0
-                                            step: 1.0
-                                            on_slider: root.apply_effects_lv(2, 'hls')
-                                        ParamSlider:
-                                            id: slider_hls_green_sat
-                                            text: "Saturation"
-                                            min: -1.0
-                                            max: 1.0
-                                            value: 0.0
-                                            step: 0.05
+                                            min: -180
+                                            max: 180
+                                            value: 0
+                                            step: 1
                                             on_slider: root.apply_effects_lv(2, 'hls')
                                         ParamSlider:
                                             id: slider_hls_green_lum
                                             text: "Luminance"
-                                            min: -1.0
-                                            max: 1.0
-                                            value: 0.0
-                                            step: 0.05
+                                            min: -100
+                                            max: 100
+                                            value: 0
+                                            step: 1
+                                            on_slider: root.apply_effects_lv(2, 'hls')
+                                        ParamSlider:
+                                            id: slider_hls_green_sat
+                                            text: "Saturation"
+                                            min: -100
+                                            max: 100
+                                            value: 0
+                                            step: 1
                                             on_slider: root.apply_effects_lv(2, 'hls')
 
                                 TabbedPanelItem:
@@ -493,26 +491,26 @@
                                         ParamSlider:
                                             id: slider_hls_cyan_hue
                                             text: "Hue"
-                                            min: -100.0
-                                            max: 100.0
-                                            value: 0.0
-                                            step: 1.0
-                                            on_slider: root.apply_effects_lv(2, 'hls')
-                                        ParamSlider:
-                                            id: slider_hls_cyan_sat
-                                            text: "Saturation"
-                                            min: -1.0
-                                            max: 1.0
-                                            value: 0.0
-                                            step: 0.05
+                                            min: -180
+                                            max: 180
+                                            value: 0
+                                            step: 1
                                             on_slider: root.apply_effects_lv(2, 'hls')
                                         ParamSlider:
                                             id: slider_hls_cyan_lum
                                             text: "Luminance"
-                                            min: -1.0
-                                            max: 1.0
-                                            value: 0.0
-                                            step: 0.05
+                                            min: -100
+                                            max: 100
+                                            value: 0
+                                            step: 1
+                                            on_slider: root.apply_effects_lv(2, 'hls')
+                                        ParamSlider:
+                                            id: slider_hls_cyan_sat
+                                            text: "Saturation"
+                                            min: -100
+                                            max: 100
+                                            value: 0
+                                            step: 1
                                             on_slider: root.apply_effects_lv(2, 'hls')
 
                                 TabbedPanelItem:
@@ -527,26 +525,26 @@
                                         ParamSlider:
                                             id: slider_hls_blue_hue
                                             text: "Hue"
-                                            min: -100.0
-                                            max: 100.0
-                                            value: 0.0
-                                            step: 1.0
-                                            on_slider: root.apply_effects_lv(2, 'hls')
-                                        ParamSlider:
-                                            id: slider_hls_blue_sat
-                                            text: "Saturation"
-                                            min: -1.0
-                                            max: 1.0
-                                            value: 0.0
-                                            step: 0.05
+                                            min: -180
+                                            max: 180
+                                            value: 0
+                                            step: 1
                                             on_slider: root.apply_effects_lv(2, 'hls')
                                         ParamSlider:
                                             id: slider_hls_blue_lum
                                             text: "Luminance"
-                                            min: -1.0
-                                            max: 1.0
-                                            value: 0.0
-                                            step: 0.05
+                                            min: -100
+                                            max: 100
+                                            value: 0
+                                            step: 1
+                                            on_slider: root.apply_effects_lv(2, 'hls')
+                                        ParamSlider:
+                                            id: slider_hls_blue_sat
+                                            text: "Saturation"
+                                            min: -100
+                                            max: 100
+                                            value: 0
+                                            step: 1
                                             on_slider: root.apply_effects_lv(2, 'hls')
 
                                 TabbedPanelItem:
@@ -561,26 +559,26 @@
                                         ParamSlider:
                                             id: slider_hls_purple_hue
                                             text: "Hue"
-                                            min: -100.0
-                                            max: 100.0
-                                            value: 0.0
-                                            step: 1.0
-                                            on_slider: root.apply_effects_lv(2, 'hls')
-                                        ParamSlider:
-                                            id: slider_hls_purple_sat
-                                            text: "Saturation"
-                                            min: -1.0
-                                            max: 1.0
-                                            value: 0.0
-                                            step: 0.05
+                                            min: -180
+                                            max: 180
+                                            value: 0
+                                            step: 1
                                             on_slider: root.apply_effects_lv(2, 'hls')
                                         ParamSlider:
                                             id: slider_hls_purple_lum
                                             text: "Luminance"
-                                            min: -1.0
-                                            max: 1.0
-                                            value: 0.0
-                                            step: 0.05
+                                            min: -100
+                                            max: 100
+                                            value: 0
+                                            step: 1
+                                            on_slider: root.apply_effects_lv(2, 'hls')
+                                        ParamSlider:
+                                            id: slider_hls_purple_sat
+                                            text: "Saturation"
+                                            min: -100
+                                            max: 100
+                                            value: 0
+                                            step: 1
                                             on_slider: root.apply_effects_lv(2, 'hls')
 
                                 TabbedPanelItem:
@@ -595,26 +593,26 @@
                                         ParamSlider:
                                             id: slider_hls_magenta_hue
                                             text: "Hue"
-                                            min: -100.0
-                                            max: 100.0
-                                            value: 0.0
-                                            step: 1.0
-                                            on_slider: root.apply_effects_lv(2, 'hls')
-                                        ParamSlider:
-                                            id: slider_hls_magenta_sat
-                                            text: "Saturation"
-                                            min: -1.0
-                                            max: 1.0
-                                            value: 0.0
-                                            step: 0.05
+                                            min: -180
+                                            max: 180
+                                            value: 0
+                                            step: 1
                                             on_slider: root.apply_effects_lv(2, 'hls')
                                         ParamSlider:
                                             id: slider_hls_magenta_lum
                                             text: "Luminance"
-                                            min: -1.0
-                                            max: 1.0
-                                            value: 0.0
-                                            step: 0.05
+                                            min: -100
+                                            max: 100
+                                            value: 0
+                                            step: 1
+                                            on_slider: root.apply_effects_lv(2, 'hls')
+                                        ParamSlider:
+                                            id: slider_hls_magenta_sat
+                                            text: "Saturation"
+                                            min: -100
+                                            max: 100
+                                            value: 0
+                                            step: 1
                                             on_slider: root.apply_effects_lv(2, 'hls')
 
                             VSeparator:

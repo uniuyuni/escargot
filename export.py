@@ -60,7 +60,7 @@ VERSION = get_version()
 
 SPECIAL_PARAM = [
     # for core.set_image_param
-    'original_img_size',
+    #'original_img_size',
     'img_size',
     #'crop_rect',
     'crop_info',

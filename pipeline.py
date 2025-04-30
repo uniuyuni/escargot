@@ -267,7 +267,7 @@ def pipeline_curve(rgb, effects, param):
     if diff is not None: rgb2[..., 1:2] = effects['tonecurve_green'].apply_diff(rgb2[..., 1:2])
     diff = effects['tonecurve_blue'].make_diff(rgb, param)
     if diff is not None: rgb2[..., 2:3] = effects['tonecurve_blue'].apply_diff(rgb2[..., 2:3])
-
+    
     # グレーディング
     diff = effects['grading1'].make_diff(rgb, param)
     if diff is not None: rgb2 = effects['grading1'].apply_diff(rgb2)

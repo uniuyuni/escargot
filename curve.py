@@ -50,24 +50,16 @@ class CurveWidget(Widget):
     def __init__(self, **kwargs):
         super(CurveWidget, self).__init__(**kwargs)
 
-        self.set_point_list(None)
+    def on_kv_post(self, *args, **kwargs):
+        super().on_kv_post(*args, **kwargs)
+
+        self.set_point_list((None, True))
         
         self.bind(size=self.update_grid)
         self.bind(pos=self.update_grid)
         self.update_grid()
 
-    def on_kv_post(self, *args, **kwargs):
-        super().on_kv_post(*args, **kwargs)
-        #self.start_point.x = self.start_x
-        #self.start_point.y = self.start_y
-        #self.end_point.x = self.end_x
-        #self.end_point.y = self.end_y
-
     def __update_points(self, *args):
-        #self.start_point.x = 0.0
-        #self.start_point.y = 0.0
-        #self.end_point.x = 1.0
-        #self.end_point.y = 1.0
         pass
 
     def on_touch_down(self, touch):
@@ -168,12 +160,12 @@ class CurveWidget(Widget):
             PopMatrix()
     
     def get_point_list(self):
-        if len(self.points) == 2 and self.points[0].x == self.start_x and self.points[0].y == self.start_y and self.points[1].x == self.end_x and self.points[1].y == self.end_y:
-            return None
+        reset = True if len(self.points) == 2 and self.points[0].x == self.start_x and self.points[0].y == self.start_y and self.points[1].x == self.end_x and self.points[1].y == self.end_y else False
         point_list = [(p.x, p.y) for p in self.points]
-        return point_list
+        return (point_list, reset)
 
-    def set_point_list(self, point_list):
+    def set_point_list(self, p):
+        point_list, reset = p
         if point_list is not None:
             point_list = sorted((pl[0], pl[1]) for pl in point_list)
             self.points = [DraggablePoint(x=pl[0], y=pl[1]) for pl in point_list]

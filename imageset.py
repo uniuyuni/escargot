@@ -49,7 +49,7 @@ class ImageSet:
         wb = np.array([rl, gl, bl]).astype(np.float32)/1024.0
         """
         wb[1] = np.sqrt(wb[1])
-        img_array /= wb
+        #img_array /= wb
         temp, tint, Y, = core.invert_RGB2TempTint(wb)
         self._set_temperature_to_param(param, temp, tint, Y)
         return img_array
@@ -72,6 +72,7 @@ class ImageSet:
         try:
             # RAWで読み込んでみる
             raw = rawpy.imread(file_path)
+            return raw
 
             # プレビューを読む
             thumb = raw.extract_thumb()
@@ -119,7 +120,7 @@ class ImageSet:
             img_array = cv2.resize(img_array, (width, height))
 
             # 正方形にする
-            img_array = core.adjust_shape(img_array, param)
+            img_array = core.adjust_shape(img_array)
 
             # 描画用に設定
             self.img = img_array
@@ -162,7 +163,9 @@ class ImageSet:
 
             # 色空間変換
             img_array = color.rgb_to_xyz(img_array, "Adobe RGB")
-            img_array = np.array(img_array)
+
+            # クロップとexifデータの回転
+            _, _, _, _ = self._delete_exif_orientation(exif_data)
 
             # 飽和ピクセル復元
             """
@@ -198,10 +201,10 @@ class ImageSet:
             core.set_image_param(param, exif_data)
 
             # 正方形にする
-            img_array = core.adjust_shape(img_array, param)
+            img_array = core.adjust_shape(img_array)
             
             # 描画用に設定
-            self.img = img_array
+            self.img = np.array(img_array)
 
         except (rawpy.LibRawFileUnsupportedError, rawpy.LibRawIOError):
             logging.warning("file is not supported " + file_path)
@@ -235,9 +238,9 @@ class ImageSet:
             core.set_image_param(param, exif_data)
 
             # 正方形へ変換
-            img_array = core.adjust_shape(img_array, param)
+            img_array = core.adjust_shape(img_array)
             
-        self.img = img_array
+        self.img = np.array(img_array)
         
         return True
 
@@ -246,7 +249,9 @@ class ImageSet:
 
         if file_path.lower().endswith(viewer_widget.supported_formats_raw):
             if raw is None:
-                return self._load_raw_preview(file_path, exif_data, param)            
+                #return self._load_raw_preview(file_path, exif_data, param)   
+                raw = self._load_raw_preview(file_path, exif_data, param)   
+                return self._load_raw(raw, file_path, exif_data, param)         
             else:
                 return self._load_raw(raw, file_path, exif_data, param)
 

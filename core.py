@@ -23,21 +23,23 @@ import crop_editor
 
 jax.config.update("jax_platform_name", "METAL")
 
+@jit
 def normalize_image(image_data):
-    min_val = np.min(image_data)
-    max_val = np.max(image_data)
+    min_val = jnp.min(image_data)
+    max_val = jnp.max(image_data)
     normalized_image = (image_data - min_val) / (max_val - min_val)
     return normalized_image
 
+@jit
 def calculate_ev_from_image(image_data):
-    if image_data.size == 0:
-        raise ValueError("画像データが空です。")
+    #if image_data.size == 0:
+    #    raise ValueError("画像データが空です。")
 
-    average_value = np.mean(image_data)
+    average_value = jnp.mean(image_data)
 
     # ここで基準を明確に設定
     # 例えば、EV0が0.5に相当する場合
-    ev = np.log2(0.5 / average_value)  # 0.5を基準
+    ev = jnp.log2(0.5 / average_value)  # 0.5を基準
 
     return ev, average_value
 
@@ -729,6 +731,7 @@ def create_smooth_weight(hue_img, center, width, transition=15.0):
     Returns:
         0〜1の間の重み値の配列
     """
+
     # 中心からの距離を計算
     half_width = width / 2.0
     
@@ -805,7 +808,7 @@ def adjust_hls_smooth(hls_img, weight, adjust):
     
     # 彩度が低い部分（グレースケールに近い）で色相変更を抑制
     # 彩度が低いほど、色相の変化が目立たなくなるため、彩度に比例して色相調整を適用
-    saturation_factor = s  # 彩度がそのまま係数になる（0〜1）
+    saturation_factor = jnp.clip(s * 3.0, 0.0, 1.0)  # 彩度が0.33以上で最大効果
     
     # 極端な明度（非常に暗いor明るい）でも色相/彩度変更を抑制
     # 明度0.5を中心にした二次関数で、L=0またはL=1で0になる係数
@@ -818,21 +821,37 @@ def adjust_hls_smooth(hls_img, weight, adjust):
     
     # 各チャンネルの調整（保護係数を適用）
     # 色相調整：保護係数と重みの両方を適用
-    h_adjusted = h + adjust[0] * 1.8 * weight_3d * protection_factor
+    h_adjusted = h + adjust[0] * weight_3d * protection_factor
     
-    # 明度調整：明度の調整は通常通り適用
-    l_adjusted = l * (1.0 + (2.0**adjust[1] - 1.0) * weight_3d * jnp.sqrt(luminance_factor))
+    # 明度調整：明度の調整は通常通り適用（保護係数を考慮）
+    # 明度調整時の境界をより滑らかにするため、重みを2乗して適用
+    # これにより境界部分での変化が緩やかになる
+    l_factor = adjust[1] / 100.0 * 2.0  # スケーリング調整
+    smoothed_weight = weight_3d * weight_3d  # 重みを2乗して境界を滑らかに
+    
+    # 明度調整の適用方法を変更
+    # 明度が高い/低い領域での急激な変化を防ぐため、より滑らかな関数を使用
+    # jaxでは条件分岐を避けるため、条件に基づいて両方の計算を行い、条件に応じて選択する
+    # 明度を上げる場合の計算
+    l_increase = l + (1.0 - l) * l_factor * smoothed_weight
+    # 明度を下げる場合の計算
+    l_decrease = l + l * l_factor * smoothed_weight
+    # 条件に基づいて選択（jaxの条件付き選択を使用）
+    l_adjusted = jnp.where(l_factor >= 0, l_increase, l_decrease)
+    l_adjusted = jnp.clip(l_adjusted, 0.0, 1.0)
     
     # 彩度調整：保護係数に反比例して抑制
     # これにより、元々彩度が低い部分では彩度上昇が抑えられる
-    s_adjusted = s * (1.0 + (2.0**adjust[2] - 1.0) * weight_3d * jnp.sqrt(protection_factor))
+    s_factor = adjust[2] / 100.0 * 2.0  # スケーリング調整
+    s_adjusted = s * (1.0 + s_factor * weight_3d * jnp.sqrt(luminance_factor))
+    s_adjusted = jnp.clip(s_adjusted, 0.0, 1.0)
     
     # 結果を結合
     return jnp.concatenate([h_adjusted, l_adjusted, s_adjusted], axis=-1)
 
 # 各色の調整関数（JITで事前コンパイル）
 @partial(jit, static_argnums=(2,))
-def adjust_hls_red_smooth(hls_img, red_adjust, transition=15.0):
+def adjust_hls_red_smooth(hls_img, red_adjust, transition=30.0):
     """
     赤色領域の調整を滑らかに実装（GPU対応版）
     
@@ -849,7 +868,7 @@ def adjust_hls_red_smooth(hls_img, red_adjust, transition=15.0):
     return adjust_hls_smooth(hls_img, red_weight, jnp.array(red_adjust))
 
 @partial(jit, static_argnums=(2,))
-def adjust_hls_orange_smooth(hls_img, orange_adjust, transition=15.0):
+def adjust_hls_orange_smooth(hls_img, orange_adjust, transition=30.0):
     """
     オレンジ色領域の調整を滑らかに実装（GPU対応版）
     """
@@ -861,7 +880,7 @@ def adjust_hls_orange_smooth(hls_img, orange_adjust, transition=15.0):
     return adjust_hls_smooth(hls_img, orange_weight, jnp.array(orange_adjust))
 
 @partial(jit, static_argnums=(2,))
-def adjust_hls_yellow_smooth(hls_img, yellow_adjust, transition=15.0):
+def adjust_hls_yellow_smooth(hls_img, yellow_adjust, transition=30.0):
     """
     黄色領域の調整を滑らかに実装（GPU対応版）
     """
@@ -873,7 +892,7 @@ def adjust_hls_yellow_smooth(hls_img, yellow_adjust, transition=15.0):
     return adjust_hls_smooth(hls_img, yellow_weight, jnp.array(yellow_adjust))
 
 @partial(jit, static_argnums=(2,))
-def adjust_hls_green_smooth(hls_img, green_adjust, transition=15.0):
+def adjust_hls_green_smooth(hls_img, green_adjust, transition=30.0):
     """
     緑色領域の調整を滑らかに実装（GPU対応版）
     """
@@ -885,7 +904,7 @@ def adjust_hls_green_smooth(hls_img, green_adjust, transition=15.0):
     return adjust_hls_smooth(hls_img, green_weight, jnp.array(green_adjust))
 
 @partial(jit, static_argnums=(2,))
-def adjust_hls_cyan_smooth(hls_img, cyan_adjust, transition=15.0):
+def adjust_hls_cyan_smooth(hls_img, cyan_adjust, transition=30.0):
     """
     シアン色領域の調整を滑らかに実装（GPU対応版）
     """
@@ -897,7 +916,7 @@ def adjust_hls_cyan_smooth(hls_img, cyan_adjust, transition=15.0):
     return adjust_hls_smooth(hls_img, cyan_weight, jnp.array(cyan_adjust))
 
 @partial(jit, static_argnums=(2,))
-def adjust_hls_blue_smooth(hls_img, blue_adjust, transition=15.0):
+def adjust_hls_blue_smooth(hls_img, blue_adjust, transition=30.0):
     """
     青色領域の調整を滑らかに実装（GPU対応版）
     """
@@ -909,7 +928,7 @@ def adjust_hls_blue_smooth(hls_img, blue_adjust, transition=15.0):
     return adjust_hls_smooth(hls_img, blue_weight, jnp.array(blue_adjust))
 
 @partial(jit, static_argnums=(2,))
-def adjust_hls_purple_smooth(hls_img, purple_adjust, transition=15.0):
+def adjust_hls_purple_smooth(hls_img, purple_adjust, transition=30.0):
     """
     紫色領域の調整を滑らかに実装（GPU対応版）
     """
@@ -921,7 +940,7 @@ def adjust_hls_purple_smooth(hls_img, purple_adjust, transition=15.0):
     return adjust_hls_smooth(hls_img, purple_weight, jnp.array(purple_adjust))
 
 @partial(jit, static_argnums=(2,))
-def adjust_hls_magenta_smooth(hls_img, magenta_adjust, transition=15.0):
+def adjust_hls_magenta_smooth(hls_img, magenta_adjust, transition=30.0):
     """
     マゼンタ色領域の調整を滑らかに実装（GPU対応版）
     """
@@ -931,7 +950,6 @@ def adjust_hls_magenta_smooth(hls_img, magenta_adjust, transition=15.0):
     magenta_weight = create_smooth_weight(hue_img, 318.75, 37.5, transition)
     
     return adjust_hls_smooth(hls_img, magenta_weight, jnp.array(magenta_adjust))
-
 
 # マスクイメージの適用
 @jit
@@ -949,106 +967,79 @@ def apply_mask(img1, msk, img2):
 
     return np.array(array)
 
-def apply_vignette(image, intensity=0, radius_percent=100, crop_info=None, original_size=None):
+def apply_vignette(image, intensity=0, radius_percent=100, crop_info=None, original_size=None, gradient_softness=3.0):
     """
-    float32形式の画像に周辺光量落ち効果を適用する関数（クロップと拡大に対応）
+    完全修正版 周辺光量落ち効果
+    - 中心位置が正確にクロップ中心に一致
+    - 効果の向きが正しく適用（負の値で周辺暗く、正の値で周辺明るく）
+    - 滑らかなグラデーション
     
     Parameters:
-    image: numpy.ndarray - 入力画像（float32形式、値域は0-1）
-    intensity: int - 光量落ちの強度 (-100 から 100)
-        負の値: 周辺を暗くする
-        正の値: 周辺を明るくする
-    radius_percent: float - 効果の及ぶ半径（画像の対角線の長さに対する割合、1-100）
-    crop_info: list or None - クロップ情報 [x, y, w, h, scale]
-        x: 切り出し開始x座標（元画像での位置）
-        y: 切り出し開始y座標（元画像での位置）
-        w: 切り出し幅
-        h: 切り出し高さ
-        scale: 拡大率
-    original_size: tuple or None - 元画像のサイズ (width, height)
-        crop_infoが指定された場合は必須
-    
-    Returns:
-    numpy.ndarray - 効果を適用した画像（float32形式、値域は0-1）
+        image: 入力画像 (float32, 0-1)
+        intensity: 効果の強さ (-100 to 100)
+        radius_percent: 効果の半径 (1-100%)
+        crop_info: [x, y, w, h, scale]
+        original_size: (orig_w, orig_h)
+        gradient_softness: グラデーションの滑らかさ
     """
-    
-    # 入力値の検証
-    if image.dtype != np.float32:
-        raise ValueError("入力画像はfloat32形式である必要があります")
-    
-    if crop_info is not None:
-        if len(crop_info) != 5:
-            raise ValueError("crop_infoは[x, y, w, h, scale]の形式である必要があります")
-        if original_size is None:
-            raise ValueError("crop_infoが指定された場合、original_sizeは必須です")
-    
-    intensity = np.clip(intensity, -100, 100)
+
+    intensity = np.clip(intensity, -100, 100) / 100.0
     radius_percent = np.clip(radius_percent, 1, 100)
+    gradient_softness = max(0.1, gradient_softness)
     
-    # 現在の画像サイズを取得
-    current_rows, current_cols = image.shape[:2]
+    h, w = image.shape[:2]
     
     if crop_info is None:
-        # クロップ情報がない場合は現在の画像中心を使用
-        center_x = current_cols / 2
-        center_y = current_rows / 2
-        max_radius = np.sqrt(current_rows**2 + current_cols**2) / 2
+        # クロップなしの場合
+        center_x, center_y = w/2, h/2
+        max_radius = np.sqrt(w**2 + h**2) / 2
     else:
-        x, y, w, h, scale = crop_info
-        original_w, original_h = original_size
+        # クロップ情報がある場合
+        if len(crop_info) != 5 or original_size is None:
+            raise ValueError("Invalid crop_info or original_size")
         
-        # 元画像の中心座標
-        original_center_x = original_w / 2
-        original_center_y = original_h / 2
+        x, y, crop_w, crop_h, scale = crop_info
+        orig_w, orig_h = original_size
         
-        # クロップ領域の中心座標（元画像での座標）
-        crop_center_x = x + w / 2
-        crop_center_y = y + h / 2
+        # 現在の画像における中心座標を直接計算
+        center_x = w/2  # クロップ画像の中心は常に画像中心
+        center_y = h/2
         
-        # 中心からのオフセットを計算し、スケールを適用
-        offset_x = (original_center_x - crop_center_x) * scale
-        offset_y = (original_center_y - crop_center_y) * scale
+        # 元画像の中心からのオフセットを考慮した半径計算
+        orig_center_x = orig_w / 2
+        orig_center_y = orig_h / 2
+        crop_center_x = x + crop_w/2
+        crop_center_y = y + crop_h/2
         
-        # 現在の画像での中心座標
-        center_x = current_cols / 2 + offset_x
-        center_y = current_rows / 2 + offset_y
-        
-        # 元画像の対角線長さから最大半径を計算し、スケールを適用
-        max_radius = np.sqrt(original_w**2 + original_h**2) / 2 * scale
+        # 元画像の対角線に対する相対的な位置を計算
+        dx = (crop_center_x - orig_center_x) / orig_w
+        dy = (crop_center_y - orig_center_y) / orig_h
+        max_radius = np.sqrt(1 + dx**2 + dy**2) * np.sqrt(w**2 + h**2) / 2
     
-    # 実際に使用する半径を計算
     radius = max_radius * (radius_percent / 100)
     
-    # マスクを作成
-    Y, X = np.ogrid[:current_rows, :current_cols]
-    dist_from_center = np.sqrt((X - center_x)**2 + (Y - center_y)**2)
+    # 距離マップ作成
+    y_indices, x_indices = np.ogrid[:h, :w]
+    dist = np.sqrt((x_indices - center_x)**2 + (y_indices - center_y)**2)
     
-    # 正規化された距離マップを作成（0-1の範囲）
-    mask = dist_from_center / radius
-    mask = np.clip(mask, 0, 1)
+    # マスク作成（0が中心、1が端）
+    mask = np.clip(dist / radius, 0, 1)
+    mask = np.power(mask, gradient_softness)  # グラデーション調整
     
-    # intensity値に基づいてマスクを調整
+    # 効果適用（intensityの符号で方向を制御）
     if intensity < 0:
         # 周辺を暗くする
-        mask = mask * (-intensity / 100)
-        mask = 1 - mask
+        vignette = 1.0 + intensity * mask
     else:
         # 周辺を明るくする
-        mask = mask * (intensity / 100)
+        vignette = 1.0 - intensity * mask
     
-    # 画像が3チャンネル（カラー）の場合は、マスクを3次元に拡張
+    # カラー画像対応
     if len(image.shape) == 3:
-        mask = np.dstack([mask] * 3)
+        vignette = vignette[..., np.newaxis]
     
-    # float32形式を維持したまま効果を適用
-    if intensity < 0:
-        result = image * mask
-    else:
-        # 明るくする場合
-        bright_increase = (1 - image) * mask
-        result = image + bright_increase
-    
-    # float32形式を維持
+    # 効果適用
+    result = np.clip(image * vignette, 0, 1) if intensity < 0 else np.clip(image + (1-image)*(1-vignette), 0, 1)
     return result.astype(np.float32)
 
 # テクスチャサイズとクロップ情報から、新しい描画サイズと余白の大きさを得る
@@ -1193,13 +1184,14 @@ def set_image_param(param, exif_data):
     return (width, height)
 
 # 上下または左右の余白を追加
-def adjust_shape(img, param):
+@jit
+def adjust_shape(img):
     imax = max(img.shape[1], img.shape[0])
 
     # イメージを正方形にする
     offset_y = (imax-img.shape[0])//2
     offset_x = (imax-img.shape[1])//2
-    img = np.pad(img, ((offset_y, imax-(offset_y+img.shape[0])), (offset_x, imax-(offset_x+img.shape[1])), (0, 0)), constant_values=0)
+    img = jnp.pad(img, ((offset_y, imax-(offset_y+img.shape[0])), (offset_x, imax-(offset_x+img.shape[1])), (0, 0)), constant_values=0)
 
     return img
 
@@ -1218,6 +1210,21 @@ def adjust_tone(img, highlights=0, shadows=0, midtone=0, white_level=0, black_le
     Returns:
         np.ndarray: 調整後の画像（クリッピングなし）
     """
+    def enhance_midtones_robust(img, C):
+        # 1.0を超える部分は別の処理をする
+        
+        # 通常の範囲(0〜1)の計算
+        normal_result = (np.exp(img * math.log(1 + C)) - 1) / C
+        
+        # 1.0の時の関数値と傾きを計算
+        f_1 = ((1 + C) - 1) / C  # (np.exp(1.0 * math.log(1 + C)) - 1) / C を簡略化
+        derivative_at_1 = (1 + C) * math.log(1 + C) / C
+        
+        # 1.0超の範囲 - 線形拡張する
+        extended_result = f_1 + derivative_at_1 * (img - 1.0)
+        
+        # 条件マスクを使って結果を組み合わせる
+        return np.where(img <= 1.0, normal_result, extended_result)
 
     # 中間調の調整
     midtone_scale = 4
@@ -1227,7 +1234,9 @@ def adjust_tone(img, highlights=0, shadows=0, midtone=0, white_level=0, black_le
 
     elif midtone < 0:
         C = -midtone / 100 * midtone_scale
-        img = (np.exp(img * math.log(1 + C)) - 1) / C
+        #img = (1 - np.exp(-img * math.log(1 + C))) / C
+        #img = (np.exp(img * math.log(1 + C)) - 1) / C
+        img = enhance_midtones_robust(img, C)
 
     # シャドウ（暗部）の調整
     if shadows > 0:

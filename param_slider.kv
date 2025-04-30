@@ -17,13 +17,17 @@
     size_hint_x: None
     ref_width: 100
 
+<SwitchableFloatInput>:
+
 <ParamSlider>:
     text: 'Label'
     orientation: 'horizontal'
     size_hint_y: None
     ref_height: 24
     label_width: 100
+    for_float: False
     on_text: root.on_label_text()
+    on_for_float: self.ids.input.set_float_mode(self.for_float)
 
     ParamLabel:
         id: label
@@ -39,7 +43,7 @@
         #MDSliderHandle:
         #    size: 10, 10
 
-    TextInput:
+    SwitchableFloatInput:
         id: input
         halign: 'right'
         valign: 'middle'

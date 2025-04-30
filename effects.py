@@ -525,7 +525,9 @@ class ColorTemperatureEffect(Effect):
         else:
             param_hash = hash((temp, tint))
             if self.hash != param_hash:
-                self.diff = rgb * core.invert_TempTint2RGB(temp, tint, Y, 5000)
+                trgb = core.convert_TempTint2RGB(param['color_temperature_reset'], param['color_tint_reset'], param['color_Y'])
+                self.diff = rgb * (trgb / core.convert_TempTint2RGB(temp, tint, Y))
+                #self.diff = rgb * np.array(core.invert_TempTint2RGB(temp, tint, Y, 5000), dtype=np.float32)
                 self.hash = param_hash
 
         return self.diff
@@ -1046,17 +1048,16 @@ class CurveEffect(Effect):
 class TonecurveEffect(Effect):
 
     def set2widget(self, widget, param):
-        widget.ids["tonecurve"].set_point_list(param.get('tonecurve', None))
+        widget.ids["tonecurve"].set_point_list(param.get('tonecurve', (None, True)))
 
     def set2param(self, param, widget):
         param['tonecurve'] = widget.ids["tonecurve"].get_point_list()
 
     def make_diff(self, rgb, param):
-        pl = param.get('tonecurve', None)
-        if pl is None:
+        pl, reset = param.get('tonecurve', (None, True))
+        if reset == True:
             self.diff = None
             self.hash = None
-
         else:
             param_hash = hash(np.sum(pl))
             if self.hash != param_hash:
@@ -1071,17 +1072,16 @@ class TonecurveEffect(Effect):
 class TonecurveRedEffect(Effect):
 
     def set2widget(self, widget, param):
-        widget.ids["tonecurve_red"].set_point_list(param.get('tonecurve_red', None))
+        widget.ids["tonecurve_red"].set_point_list(param.get('tonecurve_red', (None, True)))
 
     def set2param(self, param, widget):
         param['tonecurve_red'] = widget.ids["tonecurve_red"].get_point_list()
 
     def make_diff(self, rgb_r, param):
-        pl = param.get('tonecurve_red', None)
-        if pl is None:
+        pl, reset = param.get('tonecurve_red', (None, True))
+        if reset == True:
             self.diff = None
             self.hash = None
-
         else:
             param_hash = hash(np.sum(pl))
             if self.hash != param_hash:
@@ -1096,17 +1096,16 @@ class TonecurveRedEffect(Effect):
 class TonecurveGreenEffect(Effect):
 
     def set2widget(self, widget, param):
-        widget.ids["tonecurve_green"].set_point_list(param.get('tonecurve_green', None))
+        widget.ids["tonecurve_green"].set_point_list(param.get('tonecurve_green', (None, True)))
 
     def set2param(self, param, widget):
         param['tonecurve_green'] = widget.ids["tonecurve_green"].get_point_list()
 
     def make_diff(self, rgb_g, param):   
-        pl = param.get('tonecurve_green', None)
-        if pl is None:
+        pl, reset = param.get('tonecurve_green', (None, True))
+        if reset == True:
             self.diff = None
             self.hash = None
-
         else:
             param_hash = hash(np.sum(pl))
             if self.hash != param_hash:
@@ -1121,14 +1120,14 @@ class TonecurveGreenEffect(Effect):
 class TonecurveBlueEffect(Effect):
 
     def set2widget(self, widget, param):
-        widget.ids["tonecurve_blue"].set_point_list(param.get('tonecurve_blue', None))
+        widget.ids["tonecurve_blue"].set_point_list(param.get('tonecurve_blue', (None, True)))
 
     def set2param(self, param, widget):
         param['tonecurve_blue'] = widget.ids["tonecurve_blue"].get_point_list()
 
     def make_diff(self, rgb_b, param):
-        pl = param.get('tonecurve_blue', None)
-        if pl is None:
+        pl, reset = param.get('tonecurve_blue', (None, True))
+        if reset == True:
             self.diff = None
             self.hash = None
 
@@ -1152,9 +1151,9 @@ class GradingEffect(Effect):
         self.numstr = numstr
 
     def set2widget(self, widget, param):
-        widget.ids["grading" + self.numstr].set_point_list(param.get('grading' + self.numstr, None))
+        widget.ids["grading" + self.numstr].set_point_list(param.get('grading' + self.numstr, (None, True)))
         widget.ids["grading" + self.numstr + "_color_picker"].ids['slider_hue'].set_slider_value(param.get('grading' + self.numstr + '_hue', 0))
-        widget.ids["grading" + self.numstr + "_color_picker"].ids['slider_lum'].set_slider_value(param.get('grading' + self.numstr + '_lum', 0))
+        widget.ids["grading" + self.numstr + "_color_picker"].ids['slider_lum'].set_slider_value(param.get('grading' + self.numstr + '_lum', 50))
         widget.ids["grading" + self.numstr + "_color_picker"].ids['slider_sat'].set_slider_value(param.get('grading' + self.numstr + '_sat', 0))
 
     def set2param(self, param, widget):
@@ -1164,11 +1163,11 @@ class GradingEffect(Effect):
         param["grading" + self.numstr + "_sat"] = widget.ids["grading" + self.numstr + "_color_picker"].ids['slider_sat'].value
 
     def make_diff(self, rgb, param):
-        pl = param.get("grading" + self.numstr, None)
+        pl, reset = param.get("grading" + self.numstr, (None, True))
         gh = param.get("grading" + self.numstr + "_hue", 0)
         gl = param.get("grading" + self.numstr + "_lum", 0)
         gs = param.get("grading" + self.numstr + "_sat", 0)
-        if pl is None and gh == 0 and gl == 0 and gs == 0:
+        if reset == True and gh == 0 and gl == 0 and gs == 0:
             self.diff = None
             self.hash = None
         else:
@@ -1226,17 +1225,16 @@ class VSandSaturationEffect(Effect):
 class HuevsHueEffect(Effect):
 
     def set2widget(self, widget, param):
-        widget.ids["HuevsHue"].set_point_list(param.get('HuevsHue', None))
+        widget.ids["HuevsHue"].set_point_list(param.get('HuevsHue', (None, True)))
 
     def set2param(self, param, widget):
         param['HuevsHue'] = widget.ids["HuevsHue"].get_point_list()
 
     def make_diff(self, hls_h, param):
-        hh = param.get("HuevsHue", None)
-        if hh is None:
+        hh, reset = param.get("HuevsHue", (None, True))
+        if reset == True:
             self.diff = None
             self.hash = None
-
         else:
             param_hash = hash(np.sum(hh))
             if self.hash != param_hash:
@@ -1252,17 +1250,16 @@ class HuevsHueEffect(Effect):
 class HuevsLumEffect(Effect):
 
     def set2widget(self, widget, param):
-        widget.ids["HuevsLum"].set_point_list(param.get('HuevsLum', None))
+        widget.ids["HuevsLum"].set_point_list(param.get('HuevsLum', (None, True)))
 
     def set2param(self, param, widget):
         param['HuevsLum'] = widget.ids["HuevsLum"].get_point_list()
 
     def make_diff(self, hls_l, param):
-        hl = param.get("HuevsLum", None)
-        if hl is None:
+        hl, reset = param.get("HuevsLum", (None, True))
+        if reset == True:
             self.diff = None
             self.hash = None
-
         else:
             param_hash = hash(np.sum(hl))
             if self.hash != param_hash:
@@ -1278,17 +1275,16 @@ class HuevsLumEffect(Effect):
 class HuevsSatEffect(Effect):
 
     def set2widget(self, widget, param):
-        widget.ids["HuevsSat"].set_point_list(param.get('HuevsSat', None))
+        widget.ids["HuevsSat"].set_point_list(param.get('HuevsSat', (None, True)))
 
     def set2param(self, param, widget):
         param['HuevsSat'] = widget.ids["HuevsSat"].get_point_list()
 
     def make_diff(self, hls_s, param):
-        hs = param.get("HuevsSat", None)
-        if hs is None:
+        hs, reset = param.get("HuevsSat", (None, True))
+        if reset == True:
             self.diff = None
             self.hash = None
-
         else:
             param_hash = hash(np.sum(hs))
             if self.hash != param_hash:
@@ -1304,17 +1300,16 @@ class HuevsSatEffect(Effect):
 class LumvsLumEffect(Effect):
 
     def set2widget(self, widget, param):
-        widget.ids["LumvsLum"].set_point_list(param.get('LumvsLum', None))
+        widget.ids["LumvsLum"].set_point_list(param.get('LumvsLum', (None, True)))
 
     def set2param(self, param, widget):
         param['LumvsLum'] = widget.ids["LumvsLum"].get_point_list()
 
     def make_diff(self, hls_l, param):
-        ll = param.get("LumvsLum", None)
-        if ll is None:
+        ll, reset = param.get("LumvsLum", (None, True))
+        if reset == True:
             self.diff = None
             self.hash = None
-
         else:
             param_hash = hash(np.sum(ll))
             if self.hash != param_hash:
@@ -1330,17 +1325,16 @@ class LumvsLumEffect(Effect):
 class LumvsSatEffect(Effect):
 
     def set2widget(self, widget, param):
-        widget.ids["LumvsSat"].set_point_list(param.get('LumvsSat', None))
+        widget.ids["LumvsSat"].set_point_list(param.get('LumvsSat', (None, True)))
 
     def set2param(self, param, widget):
         param['LumvsSat'] = widget.ids["LumvsSat"].get_point_list()
 
     def make_diff(self, hls_l, param):
-        ls = param.get("LumvsSat", None)
-        if ls is None:
+        ls, reset = param.get("LumvsSat", (None, True))
+        if reset == True:
             self.diff = None
             self.hash = None
-
         else:
             param_hash = hash(np.sum(ls))
             if self.hash != param_hash:
@@ -1356,17 +1350,16 @@ class LumvsSatEffect(Effect):
 class SatvsLumEffect(Effect):
 
     def set2widget(self, widget, param):
-        widget.ids["SatvsLum"].set_point_list(param.get('SatvsLum', None))
+        widget.ids["SatvsLum"].set_point_list(param.get('SatvsLum', (None, True)))
 
     def set2param(self, param, widget):
         param['SatvsLum'] = widget.ids["SatvsLum"].get_point_list()
 
     def make_diff(self, hls_s, param):
-        sl = param.get("SatvsLum", None)
-        if sl is None:
+        sl, reset = param.get("SatvsLum", (None, True))
+        if reset == True:
             self.diff = None
             self.hash = None
-
         else:
             param_hash = hash(np.sum(sl))
             if self.hash != param_hash:
@@ -1382,17 +1375,16 @@ class SatvsLumEffect(Effect):
 class SatvsSatEffect(Effect):
 
     def set2widget(self, widget, param):
-        widget.ids["SatvsSat"].set_point_list(param.get('SatvsSat', None))
+        widget.ids["SatvsSat"].set_point_list(param.get('SatvsSat', (None, True)))
 
     def set2param(self, param, widget):
         param['SatvsSat'] = widget.ids["SatvsSat"].get_point_list()
 
     def make_diff(self, hls_s, param):
-        ss = param.get("SatvsSat", None)
-        if ss is None:
+        ss, reset = param.get("SatvsSat", (None, True))
+        if reset == True:
             self.diff = None
             self.hash = None
-
         else:
             param_hash = hash(np.sum(ss))
             if self.hash != param_hash:
@@ -1664,8 +1656,11 @@ def create_effects():
     lv2['contrast'] = ContrastEffect()
     lv2['microcontrast'] = MicroContrastEffect()
     lv2['tone'] = ToneEffect()
-
+    
     lv2['highlight_compress'] = HighlightCompressEffect()
+
+    # ここでクリッピング
+    
     lv2['level'] = LevelEffect()
     lv2['clahe'] = CLAHEEffect()
 
