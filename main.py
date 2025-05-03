@@ -34,7 +34,7 @@ from export_dialog import ExportDialog, ExportConfirmDialog
 import color
 import file_cache_system
 import hover_spinner
-import integer_input
+import switchable_float_input
 
 class MainWidget(MDBoxLayout):
 

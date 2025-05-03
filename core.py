@@ -1524,16 +1524,18 @@ def resize_bicubic_fully_vectorized(image, target_height, target_width):
     
     return output
 
+@partial(jit, static_argnums=(1,2,))
 def smooth_step(x, edge0, edge1):
     """
     エルミート補間を用いた滑らかなステップ関数
     x が edge0 未満なら0、edge1 以上なら1、その間は滑らかな補間を行う
     """
     # クランプ
-    t = np.clip((x - edge0) / (edge1 - edge0), 0.0, 1.0)
+    t = jnp.clip((x - edge0) / (edge1 - edge0), 0.0, 1.0)
     # エルミート補間
     return t * t * (3.0 - 2.0 * t)
 
+@partial(jit, static_argnums=(1,2,3))
 def circular_smooth_step(hue, center, width, fade_width):
     """
     円環上の色相空間で滑らかな重みを計算する
@@ -1548,21 +1550,22 @@ def circular_smooth_step(hue, center, width, fade_width):
         0-1の重み
     """
     # 色相の円環性を考慮して距離を計算
-    dist = np.abs((((hue - center) % 360) + 180) % 360 - 180)
+    dist = jnp.abs((((hue - center) % 360) + 180) % 360 - 180)
     
     # 完全適用領域なら1.0
     full_region = dist <= width
     
     # フェード領域なら徐々に減衰
-    fade_region = np.logical_and(dist > width, dist <= width + fade_width)
+    fade_region = jnp.logical_and(dist > width, dist <= width + fade_width)
     
     # フェード領域では滑らかなステップ関数を適用
     fade_weight = smooth_step(dist, width + fade_width, width)
     
     # 条件に応じた重みを返す
-    return np.where(full_region, 1.0, 
-                     np.where(fade_region, fade_weight, 0.0))
+    return jnp.where(full_region, 1.0, jnp.where(fade_region, fade_weight, 0.0))
 
+#@partial(jit, static_argnums=(1,2,))
+@jit
 def adjust_hls_with_weight(hls_img, weight, adjust):
     """
     重み付きでHLS値を調整する
@@ -1590,8 +1593,9 @@ def adjust_hls_with_weight(hls_img, weight, adjust):
     s = hls_img[..., 2:3] * s_factor
     
     # 結果を結合
-    return np.concatenate([h, l, s], axis=-1)
+    return jnp.concatenate([h, l, s], axis=-1)
 
+@partial(jit, static_argnums=(1,2,))
 def calculate_ls_weight(hls_img, l_range=(0.0, 1.0), s_range=(0.0, 1.0)):
     """
     輝度と彩度に基づく重みを計算
@@ -1622,6 +1626,7 @@ def calculate_ls_weight(hls_img, l_range=(0.0, 1.0), s_range=(0.0, 1.0)):
     # 明度と彩度の重みを組み合わせる
     return l_weight * s_weight
 
+@jit
 def adjust_hls_colors(hls_img, color_settings):
     """
     複数の色相範囲を一度に調整する
@@ -1657,13 +1662,13 @@ def adjust_hls_colors(hls_img, color_settings):
         s_range = setting.get('s_range', (0.0, 1.0))
         
         # 輝度と彩度に基づく重みを計算
-        ls_weight = calculate_ls_weight(result, l_range, s_range)
+        #ls_weight = calculate_ls_weight(result, l_range, s_range)
         
         # 最終的な重みを計算
         final_weight = hue_weight# * ls_weight
 
         # 重みをぼかす
-        final_weight = gaussian_blur(final_weight, (127, 127), 0)
+        final_weight = __gaussian_blur(final_weight, (127, 127), 0)
         
         # 重みを使って調整
         result = adjust_hls_with_weight(result, final_weight, adjust)
