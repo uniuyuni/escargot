@@ -195,7 +195,7 @@ class ImageSet:
                 Ev = math.log2((Av**2)/Tv)
                 Sv = math.log2(exif_data.get('ISO', 100)/100.0)
                 Ev = Ev + Sv
-                img_array = img_array * core.calc_exposure(img_array, core.calculate_correction_value(source_ev, Ev))
+                img_array = core.adjust_exposure(img_array, core.calculate_correction_value(source_ev, Ev))
             
             # 情報の設定
             core.set_image_param(param, exif_data)

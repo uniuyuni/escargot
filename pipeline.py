@@ -141,6 +141,8 @@ def pipeline_lv1(img, effects, param):
 
     return rgb
 
+import jax
+import jax.numpy as jnp
 
 def pipeline_lv2(rgb, effects, param):
     lv2 = effects[2]
@@ -150,6 +152,11 @@ def pipeline_lv2(rgb, effects, param):
     for i, n in enumerate(lv2):
         if lv1reset == True:
             lv2[n].reeffect()
+        
+        f1 = rgb[..., 0] < 0.0
+        f2 = rgb[..., 1] < 0.0
+        f3 = rgb[..., 2] < 0.0
+        jax.debug.print("{nn} minus = {x1}, {x2}, {x3}", nn=n, x1=jnp.sum(f1), x2=jnp.sum(f2), x3=jnp.sum(f3))
             
         pre_diff = lv2[n].diff
         diff = lv2[n].make_diff(rgb, param)

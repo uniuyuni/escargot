@@ -19,6 +19,7 @@ import config
 import sigmoid
 import dng_sdk
 import crop_editor
+import util
 #from scipyjax import interpolate
 
 jax.config.update("jax_platform_name", "METAL")
@@ -234,7 +235,7 @@ def lensblur_filter(image, radius):
     return blurred_image
 
 @partial(jit, static_argnums=1)
-def __lucy_richardson_gauss(srcf, iteration):
+def lucy_richardson_gauss(srcf, iteration):
 
     # 出力用の画像を初期化
     destf = srcf.copy()
@@ -255,12 +256,13 @@ def __lucy_richardson_gauss(srcf, iteration):
     
     return destf
 
-def lucy_richardson_gauss(srcf, iteration):
-    array = __lucy_richardson_gauss(srcf, iteration)
+def _lucy_richardson_gauss(srcf, iteration):
+    array = lucy_richardson_gauss(srcf, iteration)
     array.block_until_ready()
 
     return np.array(array)
 
+@partial(jit, static_argnums=(1,))
 def tone_mapping(x, exposure=1.0):
     # Reinhard トーンマッピング
     return x / (x + exposure)
@@ -382,15 +384,17 @@ def modify_lens(img, exif_data, is_cm=True, is_sd=True, is_gd=True):
 
 
 # 露出補正
-def calc_exposure(img, ev):
+@jit
+def adjust_exposure(rgb, ev):
     # img: 変換元画像
     # ev: 補正値 -4.0〜4.0
 
     #img2 = img*(2.0**ev)
 
-    return (2.0**ev)
+    return rgb * (2.0**ev)
 
 # コントラスト補正
+@partial(jit, static_argnums=(1,2,))
 def adjust_contrast(img, cf, c):
     # img: 変換元画像
     # cf: コントラストファクター -100.0〜100.0
@@ -430,6 +434,7 @@ def apply_curve(image, control_points, control_values):
     return corrected_image.astype(np.float32)
 
 # レベル補正
+@partial(jit, static_argnums=(1,2,3,))
 def apply_level_adjustment(image, black_level, midtone_level, white_level):
     # image: 変換元イメージ
     # black_level: 黒レベル 0〜255
@@ -446,25 +451,25 @@ def apply_level_adjustment(image, black_level, midtone_level, white_level):
     midtone_factor = midtone_level / 32768.0
 
     # ルックアップテーブル (LUT) の作成 (0〜65535)
-    lut = np.linspace(0, max_val, max_val + 1, dtype=np.float32)  # Liner space creation
+    lut = jnp.linspace(0, max_val, max_val + 1, dtype=np.float32)  # Liner space creation
 
     # Pre-calculate constants
     range_inv = 1.0 / (white_level - black_level)
     
     # LUT のスケーリングとクリッピング
-    lut = np.clip((lut - black_level) * range_inv, 0, 1)  # Scale and clip
-    lut = np.power(lut, midtone_factor) * max_val  # Apply midtone factor and scale
-    lut = np.clip(lut, 0, max_val).astype(np.uint16)  # Final clip and type conversion
+    lut = jnp.clip((lut - black_level) * range_inv, 0, 1)  # Scale and clip
+    lut = jnp.power(lut, midtone_factor) * max_val  # Apply midtone factor and scale
+    lut = jnp.clip(lut, 0, max_val).astype(jnp.uint16)  # Final clip and type conversion
     
     # 画像全体にルックアップテーブルを適用
-    adjusted_image = lut[np.clip(image*max_val, 0, max_val).astype(np.uint16)]
+    adjusted_image = lut[jnp.clip(image*max_val, 0, max_val).astype(jnp.uint16)]
     adjusted_image = adjusted_image/max_val
 
     return adjusted_image
 
 # 彩度補正と自然な彩度補正
 @partial(jit, static_argnums=(1, 2))
-def __calc_saturation(s, sat, vib):
+def calc_saturation(s, sat, vib):
 
     # 彩度変更値と自然な彩度変更値を計算
     if sat >= 0:
@@ -494,8 +499,8 @@ def __calc_saturation(s, sat, vib):
 
     return final_s
 
-def calc_saturation(s, sat, vib):
-    array = __calc_saturation(s, sat, vib)
+def _calc_saturation(s, sat, vib):
+    array = calc_saturation(s, sat, vib)
     array.block_until_ready()
 
     return np.array(array)
@@ -573,6 +578,7 @@ def calc_point_list_to_lut(point_list, max_value=1.0):
     
     return lut
 
+@partial(jit, static_argnums=(2,))
 def apply_lut(img, lut, max_value=1.0):
     """
     画像にLUTを適用する関数
@@ -580,32 +586,10 @@ def apply_lut(img, lut, max_value=1.0):
     """
     # スケーリングしてLUTのインデックスに変換
     scale_factor = 65535 / max_value
-    lut_indices = np.clip(np.round(img * scale_factor), 0, 65535).astype(np.uint16)
+    lut_indices = jnp.clip(jnp.round(img * scale_factor), 0, 65535).astype(jnp.uint16)
 
     # LUTを適用
-    result = np.take(lut, lut_indices)
-    
-    return result
-
-def apply_lut_mul(img, lut, max_value=1.0):
-
-    # スケーリングしてLUTのインデックスに変換
-    scale_factor = 65535 / max_value
-    lut_indices = np.clip(np.round(img * scale_factor), 0, 65535).astype(np.uint16)
-    
-    # LUTを適用
-    result = np.take(lut, lut_indices) * img
-    
-    return result
-
-def apply_lut_add(img, lut, max_value=1.0):
-
-    # スケーリングしてLUTのインデックスに変換
-    scale_factor = 65535 / max_value
-    lut_indices = np.clip(np.round(img * scale_factor), 0, 65535).astype(np.uint16)
-    
-    # LUTを適用
-    result = np.take(lut, lut_indices) + img
+    result = jnp.take(lut, lut_indices)
     
     return result
 
@@ -716,240 +700,6 @@ def adjust_hls_magenta(hls_img, magenta_adjust):
 
     return hls_img
 
-
-@partial(jit, static_argnums=(3,))
-def create_smooth_weight(hue_img, center, width, transition=15.0):
-    """
-    滑らかな重み付け関数を作成（GPU対応版）
-    
-    Args:
-        hue_img: 色相画像
-        center: 中心となる色相値
-        width: 色相の範囲の幅
-        transition: 境界のぼかし幅（大きいほど滑らかに）
-    
-    Returns:
-        0〜1の間の重み値の配列
-    """
-
-    # 中心からの距離を計算
-    half_width = width / 2.0
-    
-    # 中心から上下half_width離れた点を境界とする
-    lower = (center - half_width) % 360
-    upper = (center + half_width) % 360
-    
-    # GPU対応：条件分岐を使わず、マスクと重みを計算
-    
-    # 通常ケース用の計算（lower < upper）
-    # コア領域（完全に含まれる領域）のマスク
-    normal_core = (hue_img >= lower) & (hue_img <= upper)
-    
-    # 下側の遷移領域のマスクと重み
-    normal_lower_mask = (hue_img >= (lower - transition)) & (hue_img < lower)
-    normal_lower_weight = (hue_img - (lower - transition)) / transition
-    
-    # 上側の遷移領域のマスクと重み
-    normal_upper_mask = (hue_img > upper) & (hue_img <= (upper + transition))
-    normal_upper_weight = ((upper + transition) - hue_img) / transition
-    
-    # 赤色など0/360度をまたぐケース用の計算（lower > upper）
-    # コア領域が2つに分かれる
-    wrap_core = (hue_img >= lower) | (hue_img <= upper)
-    
-    # 下側の遷移領域のマスクと重み
-    wrap_lower_mask = (hue_img >= ((lower - transition) % 360)) & (hue_img < lower)
-    wrap_lower_weight = (hue_img - ((lower - transition) % 360)) / transition
-    
-    # 上側の遷移領域のマスクと重み
-    wrap_upper_mask = (hue_img > upper) & (hue_img <= ((upper + transition) % 360))
-    wrap_upper_weight = (((upper + transition) % 360) - hue_img) / transition
-    
-    # 通常ケースと0/360度をまたぐケースの選択
-    # lower < upperの場合、use_normal=1.0、それ以外は0.0
-    use_normal = jnp.where(lower < upper, 1.0, 0.0)
-    
-    # コア領域のマスク
-    core_mask = normal_core * use_normal + wrap_core * (1.0 - use_normal)
-    
-    # 下側遷移領域のマスクと重み
-    lower_mask = normal_lower_mask * use_normal + wrap_lower_mask * (1.0 - use_normal)
-    lower_weight = normal_lower_weight * normal_lower_mask * use_normal + \
-                   wrap_lower_weight * wrap_lower_mask * (1.0 - use_normal)
-    
-    # 上側遷移領域のマスクと重み
-    upper_mask = normal_upper_mask * use_normal + wrap_upper_mask * (1.0 - use_normal)
-    upper_weight = normal_upper_weight * normal_upper_mask * use_normal + \
-                   wrap_upper_weight * wrap_upper_mask * (1.0 - use_normal)
-    
-    # 最終的な重み計算
-    weight = core_mask * 1.0 + lower_weight + upper_weight
-    
-    # 0〜1の範囲に収める
-    return jnp.clip(weight, 0.0, 1.0)
-
-@jit
-def adjust_hls_smooth(hls_img, weight, adjust):
-    """
-    HLS色空間での色調整を滑らかな重みを使って実装（GPU対応版）
-    
-    Args:
-        hls_img: HLS形式の画像配列
-        weight: 各ピクセルの調整重み（0〜1）
-        adjust: 調整値の配列 [色相, 明度, 彩度]
-    """
-    # 3次元の重みを計算（チャンネル数に合わせる）
-    weight_3d = weight[..., jnp.newaxis]
-    
-    # 各チャンネルの抽出
-    h = hls_img[..., 0:1]  # 色相
-    l = hls_img[..., 1:2]  # 明度
-    s = hls_img[..., 2:3]  # 彩度
-    
-    # 彩度が低い部分（グレースケールに近い）で色相変更を抑制
-    # 彩度が低いほど、色相の変化が目立たなくなるため、彩度に比例して色相調整を適用
-    saturation_factor = jnp.clip(s * 3.0, 0.0, 1.0)  # 彩度が0.33以上で最大効果
-    
-    # 極端な明度（非常に暗いor明るい）でも色相/彩度変更を抑制
-    # 明度0.5を中心にした二次関数で、L=0またはL=1で0になる係数
-    luminance_factor = 1.0 - 4.0 * (l - 0.5) ** 2
-    luminance_factor = jnp.clip(luminance_factor, 0.0, 1.0)
-    
-    # 彩度と明度の両方の要素を考慮した最終的な保護係数
-    # この係数が低いほど、ハイライトやシャドウ、無彩色部分が保護される
-    protection_factor = saturation_factor * luminance_factor
-    
-    # 各チャンネルの調整（保護係数を適用）
-    # 色相調整：保護係数と重みの両方を適用
-    h_adjusted = h + adjust[0] * weight_3d * protection_factor
-    
-    # 明度調整：明度の調整は通常通り適用（保護係数を考慮）
-    # 明度調整時の境界をより滑らかにするため、重みを2乗して適用
-    # これにより境界部分での変化が緩やかになる
-    l_factor = adjust[1] / 100.0 * 2.0  # スケーリング調整
-    smoothed_weight = weight_3d * weight_3d  # 重みを2乗して境界を滑らかに
-    
-    # 明度調整の適用方法を変更
-    # 明度が高い/低い領域での急激な変化を防ぐため、より滑らかな関数を使用
-    # jaxでは条件分岐を避けるため、条件に基づいて両方の計算を行い、条件に応じて選択する
-    # 明度を上げる場合の計算
-    l_increase = l + (1.0 - l) * l_factor * smoothed_weight
-    # 明度を下げる場合の計算
-    l_decrease = l + l * l_factor * smoothed_weight
-    # 条件に基づいて選択（jaxの条件付き選択を使用）
-    l_adjusted = jnp.where(l_factor >= 0, l_increase, l_decrease)
-    l_adjusted = jnp.clip(l_adjusted, 0.0, 1.0)
-    
-    # 彩度調整：保護係数に反比例して抑制
-    # これにより、元々彩度が低い部分では彩度上昇が抑えられる
-    s_factor = adjust[2] / 100.0 * 2.0  # スケーリング調整
-    s_adjusted = s * (1.0 + s_factor * weight_3d * jnp.sqrt(luminance_factor))
-    s_adjusted = jnp.clip(s_adjusted, 0.0, 1.0)
-    
-    # 結果を結合
-    return jnp.concatenate([h_adjusted, l_adjusted, s_adjusted], axis=-1)
-
-# 各色の調整関数（JITで事前コンパイル）
-@partial(jit, static_argnums=(2,))
-def adjust_hls_red_smooth(hls_img, red_adjust, transition=30.0):
-    """
-    赤色領域の調整を滑らかに実装（GPU対応版）
-    
-    Args:
-        hls_img: HLS形式の画像配列
-        red_adjust: 赤色の調整値 [色相, 明度, 彩度]
-        transition: 境界のぼかし幅（度数）
-    """
-    hue_img = hls_img[..., 0]
-    
-    # 赤色は0度を中心とし、幅45度の範囲
-    red_weight = create_smooth_weight(hue_img, 0, 45, transition)
-    
-    return adjust_hls_smooth(hls_img, red_weight, jnp.array(red_adjust))
-
-@partial(jit, static_argnums=(2,))
-def adjust_hls_orange_smooth(hls_img, orange_adjust, transition=30.0):
-    """
-    オレンジ色領域の調整を滑らかに実装（GPU対応版）
-    """
-    hue_img = hls_img[..., 0]
-    
-    # オレンジは33.75度を中心とし、幅22.5度の範囲
-    orange_weight = create_smooth_weight(hue_img, 33.75, 22.5, transition)
-    
-    return adjust_hls_smooth(hls_img, orange_weight, jnp.array(orange_adjust))
-
-@partial(jit, static_argnums=(2,))
-def adjust_hls_yellow_smooth(hls_img, yellow_adjust, transition=30.0):
-    """
-    黄色領域の調整を滑らかに実装（GPU対応版）
-    """
-    hue_img = hls_img[..., 0]
-    
-    # 黄色は60度を中心とし、幅30度の範囲
-    yellow_weight = create_smooth_weight(hue_img, 60, 30, transition)
-    
-    return adjust_hls_smooth(hls_img, yellow_weight, jnp.array(yellow_adjust))
-
-@partial(jit, static_argnums=(2,))
-def adjust_hls_green_smooth(hls_img, green_adjust, transition=30.0):
-    """
-    緑色領域の調整を滑らかに実装（GPU対応版）
-    """
-    hue_img = hls_img[..., 0]
-    
-    # 緑は112.5度を中心とし、幅75度の範囲
-    green_weight = create_smooth_weight(hue_img, 112.5, 75, transition)
-    
-    return adjust_hls_smooth(hls_img, green_weight, jnp.array(green_adjust))
-
-@partial(jit, static_argnums=(2,))
-def adjust_hls_cyan_smooth(hls_img, cyan_adjust, transition=30.0):
-    """
-    シアン色領域の調整を滑らかに実装（GPU対応版）
-    """
-    hue_img = hls_img[..., 0]
-    
-    # シアンは180度を中心とし、幅60度の範囲
-    cyan_weight = create_smooth_weight(hue_img, 180, 60, transition)
-    
-    return adjust_hls_smooth(hls_img, cyan_weight, jnp.array(cyan_adjust))
-
-@partial(jit, static_argnums=(2,))
-def adjust_hls_blue_smooth(hls_img, blue_adjust, transition=30.0):
-    """
-    青色領域の調整を滑らかに実装（GPU対応版）
-    """
-    hue_img = hls_img[..., 0]
-    
-    # 青は240度を中心とし、幅60度の範囲
-    blue_weight = create_smooth_weight(hue_img, 240, 60, transition)
-    
-    return adjust_hls_smooth(hls_img, blue_weight, jnp.array(blue_adjust))
-
-@partial(jit, static_argnums=(2,))
-def adjust_hls_purple_smooth(hls_img, purple_adjust, transition=30.0):
-    """
-    紫色領域の調整を滑らかに実装（GPU対応版）
-    """
-    hue_img = hls_img[..., 0]
-    
-    # 紫は285度を中心とし、幅30度の範囲
-    purple_weight = create_smooth_weight(hue_img, 285, 30, transition)
-    
-    return adjust_hls_smooth(hls_img, purple_weight, jnp.array(purple_adjust))
-
-@partial(jit, static_argnums=(2,))
-def adjust_hls_magenta_smooth(hls_img, magenta_adjust, transition=30.0):
-    """
-    マゼンタ色領域の調整を滑らかに実装（GPU対応版）
-    """
-    hue_img = hls_img[..., 0]
-    
-    # マゼンタは318.75度を中心とし、幅37.5度の範囲
-    magenta_weight = create_smooth_weight(hue_img, 318.75, 37.5, transition)
-    
-    return adjust_hls_smooth(hls_img, magenta_weight, jnp.array(magenta_adjust))
 
 # マスクイメージの適用
 @jit
@@ -1195,6 +945,8 @@ def adjust_shape(img):
 
     return img
 
+
+@partial(jit, static_argnums=(1,2,3,4,5,))
 def adjust_tone(img, highlights=0, shadows=0, midtone=0, white_level=0, black_level=0):
     """
     Lightroom風のシャドウ、ハイライト、白レベル、黒レベル調整を行う関数。
@@ -1210,97 +962,102 @@ def adjust_tone(img, highlights=0, shadows=0, midtone=0, white_level=0, black_le
     Returns:
         np.ndarray: 調整後の画像（クリッピングなし）
     """
-    def enhance_midtones_robust(img, C):
-        # 1.0を超える部分は別の処理をする
+
+    def _conditional_operation(x, img, pos_func, neg_func):
+        func = pos_func if x > 0 else neg_func if x < 0 else lambda img, x: img
         
+        return func(img, x)
+
+    # 中間調の調整
+    def enhance_midtones_positive(img, midtone):
+        C = midtone / 100 * midtone_scale
+        return jnp.log(1 + img * C) / jax.lax.log(1 + C)
+
+    def enhance_midtones_negative(img, midtone):
+        C = -midtone / 100 * midtone_scale
+
         # 通常の範囲(0〜1)の計算
-        normal_result = (np.exp(img * math.log(1 + C)) - 1) / C
+        normal_result = (jnp.exp(img * jax.lax.log(1 + C)) - 1) / C
         
         # 1.0の時の関数値と傾きを計算
         f_1 = ((1 + C) - 1) / C  # (np.exp(1.0 * math.log(1 + C)) - 1) / C を簡略化
-        derivative_at_1 = (1 + C) * math.log(1 + C) / C
+        derivative_at_1 = (1 + C) * jax.lax.log(1 + C) / C
         
         # 1.0超の範囲 - 線形拡張する
         extended_result = f_1 + derivative_at_1 * (img - 1.0)
         
         # 条件マスクを使って結果を組み合わせる
-        return np.where(img <= 1.0, normal_result, extended_result)
+        return jnp.where(img <= 1.0, normal_result, extended_result)
 
-    # 中間調の調整
     midtone_scale = 4
-    if midtone > 0:
-        C = midtone / 100 * midtone_scale
-        img = np.log(1 + img * C) / math.log(1 + C)
-
-    elif midtone < 0:
-        C = -midtone / 100 * midtone_scale
-        #img = (1 - np.exp(-img * math.log(1 + C))) / C
-        #img = (np.exp(img * math.log(1 + C)) - 1) / C
-        img = enhance_midtones_robust(img, C)
+    img = _conditional_operation(midtone, img, enhance_midtones_positive, enhance_midtones_negative)
 
     # シャドウ（暗部）の調整
-    if shadows > 0:
+    def enhance_shadow_positive(img, shadows):
         factor = shadows / 100
-        influence = np.exp(-5 * img)
-        img = img * (1 + factor * influence)
+        influence = jnp.exp(-5 * img)
+        return img * (1 + factor * influence)
     
-    elif shadows < 0:
+    def enhance_shadow_negative(img, shadows):
         factor = shadows / 100
-        influence = np.exp(-5 * img)
+        influence = jnp.exp(-5 * img)
         min_val = img * 0.1;  # 最小でも元の値の10%は維持
         raw_result = img * (1 + factor * influence)
-        img = np.maximum(raw_result, min_val)
+        return jnp.maximum(raw_result, min_val)
+
+    img = _conditional_operation(shadows, img, enhance_shadow_positive, enhance_shadow_negative)
     
     # ハイライト（明部）の調整
-    highlight_scale = 4
-    if highlights > 0:
+    def enhance_highlight_positive(img, highlights):
         factor = highlights / 100 * highlight_scale
-        max_val = np.max(img)
+        max_val = jnp.max(img)
         base = img / max_val  # 0-1に正規化
-        expansion = 1 + factor * (np.log1p(np.log1p(base)) / math.log1p(math.log1p(max(max_val, 2))))
-        img = img * expansion
+        expansion = 1 + factor * (jnp.log1p(jnp.log1p(base)) / jax.lax.log1p(jax.lax.log1p(jax.lax.max(max_val, 2.0))))
+        return img * expansion
 
-    elif highlights < 0:
-        """
-        max_val = np.max(img)
-        n = np.round((np.log2(0.5 / max_val) + np.log2(1.0 / max_val)) / 2)
-        img = img * (2 ** n)
-        """
+    def enhance_highlight_negative(img, highlights):
         factor = -highlights / 100
-        max_val = np.max(img)
-        target = np.log1p(np.log1p(img)) / math.log1p(math.log1p(max(max_val, 2)))
-        img = img * (1-factor) + target * factor
+        max_val = jnp.max(img)
+        target = jnp.log1p(jnp.log1p(img)) / jax.lax.log1p(jax.lax.log1p(jax.lax.max(max_val, 2.0)))
+        return img * (1-factor) + target * factor
+
+    highlight_scale = 4
+    img = _conditional_operation(highlights, img, enhance_highlight_positive, enhance_highlight_negative)
 
     # 黒レベル（全体の暗い部分の引き下げ）
-    black_level_const = -1
-    if black_level > 0:
+    def enhance_black_positive(img, black_level):
         factor = black_level / 100
-        influence = np.exp(black_level_const * img)
-        img = img * (1 + factor * influence)
+        influence = jnp.exp(black_level_const * img)
+        return img * (1 + factor * influence)
     
-    elif black_level < 0:
+    def enhance_black_negative(img, black_level):
         factor = black_level / 100
-        influence = np.exp(black_level_const * img)
+        influence = jnp.exp(black_level_const * img)
         min_val = img * 0.05;  # 最小でも元の値の5%は維持
         raw_result = img * (1 + factor * influence)
-        img = np.maximum(raw_result, min_val)
+        return jnp.maximum(raw_result, min_val)
+
+    black_level_const = -1
+    img = _conditional_operation(black_level, img, enhance_black_positive, enhance_black_negative)
 
     # 白レベル（全体の明るい部分の引き上げ）
-    white_level_scale = 4
-    if white_level > 0:
+    def enhance_white_positive(img, white_level):
         factor = white_level / 100 * white_level_scale
-        max_val = np.max(img)
+        max_val = jnp.max(img)
         base = img / max_val  # 0-1に正規化
-        expansion = 1 + factor * (np.log1p(np.log1p(np.log1p(base))) / math.log1p(math.log1p(math.log1p(max(max_val, 2)))))
-        img = img * expansion
-
-    elif white_level < 0:
+        expansion = 1 + factor * (jnp.log1p(jnp.log1p(jnp.log1p(base))) / jax.lax.log1p(jax.lax.log1p(jax.lax.log1p(jax.lax.max(max_val, 2.0)))))
+        return img * expansion
+    
+    def enhance_white_negative(img, white_level):
         factor = -white_level / 100
-        max_val = np.max(img)
-        target = np.log1p(np.log1p(np.log1p(img))) / math.log1p(math.log1p(math.log1p(max(max_val, 2))))
-        img = img * (1-factor) + target * factor
+        max_val = jnp.max(img)
+        target = jnp.log1p(jnp.log1p(jnp.log1p(img))) / jax.lax.log1p(jax.lax.log1p(jax.lax.log1p(jax.lax.max(max_val, 2.0))))
+        return img * (1-factor) + target * factor
 
-    return img  # クリッピングなし
+    white_level_scale = 4
+    img = _conditional_operation(white_level, img, enhance_white_positive, enhance_white_negative)
+
+    return img
 
 def recover_saturated_pixels(rgb_data: np.ndarray, 
                            exposure_time: float,
@@ -1478,6 +1235,7 @@ def _estimate_transmission(depth_map, strength=0.5, lower_bound=0.1):
     transmission = np.maximum(transmission, lower_bound)
     
     return transmission
+
 
 def dehaze_image(img, strength=0.5):
     """
@@ -1765,4 +1523,242 @@ def resize_bicubic_fully_vectorized(image, target_height, target_width):
         output = output[:, :, 0]
     
     return output
+
+def smooth_step(x, edge0, edge1):
+    """
+    エルミート補間を用いた滑らかなステップ関数
+    x が edge0 未満なら0、edge1 以上なら1、その間は滑らかな補間を行う
+    """
+    # クランプ
+    t = np.clip((x - edge0) / (edge1 - edge0), 0.0, 1.0)
+    # エルミート補間
+    return t * t * (3.0 - 2.0 * t)
+
+def circular_smooth_step(hue, center, width, fade_width):
+    """
+    円環上の色相空間で滑らかな重みを計算する
+    
+    Args:
+        hue: 入力色相 (0-360)
+        center: 中心色相
+        width: 完全に適用する幅 (半分)
+        fade_width: フェードする幅
+    
+    Returns:
+        0-1の重み
+    """
+    # 色相の円環性を考慮して距離を計算
+    dist = np.abs((((hue - center) % 360) + 180) % 360 - 180)
+    
+    # 完全適用領域なら1.0
+    full_region = dist <= width
+    
+    # フェード領域なら徐々に減衰
+    fade_region = np.logical_and(dist > width, dist <= width + fade_width)
+    
+    # フェード領域では滑らかなステップ関数を適用
+    fade_weight = smooth_step(dist, width + fade_width, width)
+    
+    # 条件に応じた重みを返す
+    return np.where(full_region, 1.0, 
+                     np.where(fade_region, fade_weight, 0.0))
+
+def adjust_hls_with_weight(hls_img, weight, adjust):
+    """
+    重み付きでHLS値を調整する
+    
+    Args:
+        hls_img: HLS形式の画像配列
+        weight: 各ピクセルの調整の重み (0-1)
+        adjust: 調整値の配列 [色相(-180〜180), 明度(-4〜4), 彩度(-1〜1)]
+    """
+    # 重みを適用した調整
+    # 色相: -180〜180度の範囲で直接適用
+    h_adj = weight[..., None] * adjust[0]
+    
+    # 明度: 露出係数として -4〜4 の範囲で適用 (2^adjust[1])
+    l_factor = 2.0 ** (weight[..., None] * adjust[1])
+    
+    # 彩度: -1.0なら彩度*0、0なら変化なし、1.0なら彩度*2
+    s_factor = 1.0 + weight[..., None] * adjust[2]
+    
+    # 各チャンネルに適用
+    h = (hls_img[..., 0:1] + h_adj) % 360
+    #l = np.clip(hls_img[..., 1:2] * l_factor, None, None)  # クリップして0-1の範囲に収める
+    #s = np.clip(hls_img[..., 2:3] * s_factor, None, None)  # クリップして0-1の範囲に収める
+    l = hls_img[..., 1:2] * l_factor
+    s = hls_img[..., 2:3] * s_factor
+    
+    # 結果を結合
+    return np.concatenate([h, l, s], axis=-1)
+
+def calculate_ls_weight(hls_img, l_range=(0.0, 1.0), s_range=(0.0, 1.0)):
+    """
+    輝度と彩度に基づく重みを計算
+    
+    Args:
+        hls_img: HLS形式の画像配列
+        l_range: 明度の有効範囲 (min, max)
+        s_range: 彩度の有効範囲 (min, max)
+    
+    Returns:
+        輝度と彩度に基づく0-1の重み
+    """
+    l = hls_img[..., 1]
+    s = hls_img[..., 2]
+    
+    # 明度に基づく重み (フェードイン、フェードアウト)
+    l_min, l_max = l_range
+    l_fade_in = smooth_step(l, l_min, l_min + 0.1)
+    l_fade_out = 1.0 - smooth_step(l, l_max - 0.1, l_max)
+    l_weight = l_fade_in * l_fade_out
+    
+    # 彩度に基づく重み (フェードイン、フェードアウト)
+    s_min, s_max = s_range
+    s_fade_in = smooth_step(s, s_min, s_min + 0.1)
+    s_fade_out = 1.0 - smooth_step(s, s_max - 0.1, s_max)
+    s_weight = s_fade_in * s_fade_out
+    
+    # 明度と彩度の重みを組み合わせる
+    return l_weight * s_weight
+
+def adjust_hls_colors(hls_img, color_settings):
+    """
+    複数の色相範囲を一度に調整する
+    
+    Args:
+        hls_img: HLS形式の画像配列
+        color_settings: 色設定の辞書のリスト。各辞書には以下のキーが必要：
+            - name: 色の名前
+            - center: 中心色相
+            - width: 完全適用幅 (半径)
+            - fade_width: フェード幅
+            - adjust: [色相調整, 明度調整, 彩度調整]
+            - l_range: (オプション) 明度の有効範囲 (min, max)
+            - s_range: (オプション) 彩度の有効範囲 (min, max)
+    
+    Returns:
+        調整されたHLS画像
+    """
+    result = hls_img.copy()
+    
+    for setting in color_settings:
+        hue = result[..., 0]
+        center = setting['center']
+        width = setting['width']
+        fade_width = setting['fade_width']
+        adjust = setting['adjust']
+        
+        # 色相に基づく重みを計算
+        hue_weight = circular_smooth_step(hue, center, width, fade_width)
+        
+        # 輝度と彩度の範囲を取得（指定がなければデフォルト）
+        l_range = setting.get('l_range', (0.0, 1.0))
+        s_range = setting.get('s_range', (0.0, 1.0))
+        
+        # 輝度と彩度に基づく重みを計算
+        ls_weight = calculate_ls_weight(result, l_range, s_range)
+        
+        # 最終的な重みを計算
+        final_weight = hue_weight# * ls_weight
+
+        # 重みをぼかす
+        final_weight = gaussian_blur(final_weight, (127, 127), 0)
+        
+        # 重みを使って調整
+        result = adjust_hls_with_weight(result, final_weight, adjust)
+    
+    return result
+
+# 使用例
+def adjust_hls_color_one(hls_img, color_name, h, l, s):
+    # 色相の設定
+    COLOR_SETTING = {
+        'red': {
+            'center': 22.65,  # 赤の中心値
+            'width': 22.5,  # 完全適用幅 (±10度)
+            'fade_width': 22.5/2,  # フェード幅 (10-22.5度でフェード)
+            'l_range': (0.1, 0.9),  # 明度の有効範囲
+            's_range': (0.2, 1.0),  # 彩度の有効範囲
+            'adjust': [0.1, 0.05, 0.1],  # [色相, 明度, 彩度] の調整値
+        },
+        'orange': {
+            'center': 33.75,
+            'width': 11.25,
+            'fade_width': 11.25/2,
+            'l_range': (0.1, 0.9),  # 明度の有効範囲
+            's_range': (0.1, 0.9),  # 彩度の有効範囲
+            'adjust': [0.05, 0.1, 0.1],
+        },
+        'yellow': {
+            'center': 60,
+            'width': 15,
+            'fade_width': 15/2,
+            'l_range': (0.1, 0.9),  # 明度の有効範囲
+            's_range': (0.2, 1.0),  # 彩度の有効範囲
+            'adjust': [0, 0.1, 0.05],
+        },
+        'green': {
+            'center': 112.5,
+            'width': 37.5,
+            'fade_width': 37.5/2,
+            'l_range': (0.1, 0.9),  # 明度の有効範囲
+            's_range': (0.2, 1.0),  # 彩度の有効範囲
+            'adjust': [-0.05, 0, 0.1],
+        },
+        'cyan': {
+            'center': 180,
+            'width': 30,
+            'fade_width': 30/2,
+            'l_range': (0.1, 0.9),  # 明度の有効範囲
+            's_range': (0.2, 1.0),  # 彩度の有効範囲
+            'adjust': [0, -0.05, 0],
+        },
+        'blue': {
+            'center': 240,
+            'width': 30,
+            'fade_width': 30/2,
+            'l_range': (0.1, 0.9),  # 明度の有効範囲
+            's_range': (0.2, 1.0),  # 彩度の有効範囲
+            'adjust': [0.05, 0, 0.15],
+        },
+        'purple': {
+            'center': 285,
+            'width': 15,
+            'fade_width': 15/2,
+            'l_range': (0.1, 0.9),  # 明度の有効範囲
+            's_range': (0.2, 1.0),  # 彩度の有効範囲
+            'adjust': [0.1, 0.05, 0],
+        },
+        'magenta': {
+            'center': 318.75,
+            'width': 18.75,
+            'fade_width': 18.75/2,
+            'l_range': (0.1, 0.9),  # 明度の有効範囲
+            's_range': (0.2, 1.0),  # 彩度の有効範囲
+            'adjust': [0.05, 0.1, 0.05],
+        },
+        'sky': {
+            'center': 210,
+            'width': 30,
+            'fade_width': 20,
+            'l_range': (0.3, 0.9),
+            's_range': (0.4, 1.0),
+            'adjust': [5, 0.2, 0.1],  # [色相, 輝度, 彩度]
+        },
+        'skin': {
+            'center': 30,
+            'width': 20,
+            'fade_width': 15,
+            'l_range': (0.2, 0.8),
+            's_range': (0.3, 0.7),
+            'adjust': [-2, 0.1, -0.05],
+        }
+    }
+
+    color_setting_one = [COLOR_SETTING[color_name]]
+    color_setting_one[0]['adjust'] = [h, l, s]
+    adjusted_hls = adjust_hls_colors(hls_img, color_setting_one)
+
+    return adjusted_hls
 

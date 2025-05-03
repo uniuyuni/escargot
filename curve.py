@@ -53,7 +53,7 @@ class CurveWidget(Widget):
     def on_kv_post(self, *args, **kwargs):
         super().on_kv_post(*args, **kwargs)
 
-        self.set_point_list((None, True))
+        self.set_point_list(None)
         
         self.bind(size=self.update_grid)
         self.bind(pos=self.update_grid)
@@ -159,13 +159,17 @@ class CurveWidget(Widget):
             # 変換行列をポップして元に戻す
             PopMatrix()
     
-    def get_point_list(self):
-        reset = True if len(self.points) == 2 and self.points[0].x == self.start_x and self.points[0].y == self.start_y and self.points[1].x == self.end_x and self.points[1].y == self.end_y else False
+    def get_point_list(self, flag=False):
         point_list = [(p.x, p.y) for p in self.points]
-        return (point_list, reset)
+        if flag == False:
+            if self.is_init_curve(point_list) == True:
+                return None
+        return point_list
+    
+    def is_init_curve(self, point_list):
+        return True if len(point_list) == 2 and point_list[0][0] == self.start_x and point_list[0][1] == self.start_y and point_list[1][0] == self.end_x and point_list[1][1] == self.end_y else False
 
-    def set_point_list(self, p):
-        point_list, reset = p
+    def set_point_list(self, point_list):
         if point_list is not None:
             point_list = sorted((pl[0], pl[1]) for pl in point_list)
             self.points = [DraggablePoint(x=pl[0], y=pl[1]) for pl in point_list]
