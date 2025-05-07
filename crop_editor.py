@@ -516,7 +516,7 @@ class CropEditor(KVFloatLayout):
         return (padw, padh, padw+input_width, padh+input_height)
 
     @staticmethod
-    def get_initial_crop_info(input_width, input_height, scale):
+    def get_initial_disp_info(input_width, input_height, scale):
         # 上下反転させて返す、パディングも付与
         x1, y1, x2, y2 = 0, 0, input_width, input_height
         maxsize = max(input_width, input_height)
@@ -545,7 +545,7 @@ class CropEditor(KVFloatLayout):
         cy2 = cy1 + int((y2 - y1) / self.scale)
         return (cx1, cy1, cx2, cy2)
     
-    def get_crop_info(self):
+    def get_disp_info(self):
         # 上下反転させて返す、パディングも付与。グローバル座標へも変換
         x1, y1, x2, y2 = self.crop_rect
         maxsize = max(self.input_width, self.input_height)

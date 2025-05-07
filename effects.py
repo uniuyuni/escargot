@@ -107,7 +107,7 @@ class SubpixelShiftEffect(Effect):
     
 class InpaintDiff:
     def __init__(self, **kwargs):
-        self.crop_info = kwargs.get('crop_info', None)
+        self.disp_info = kwargs.get('disp_info', None)
         self.image = kwargs.get('image', None)
 
     def image2list(self):
@@ -136,7 +136,7 @@ class InpaintEffect(Effect):
             inpaint_diff_list_dumps = []
             for inpaint_diff in inpaint_diff_list:
                 inpaint_diff.image2list()
-                inpaint_diff_list_dumps.append((inpaint_diff.crop_info, inpaint_diff.image))
+                inpaint_diff_list_dumps.append((inpaint_diff.disp_info, inpaint_diff.image))
             param['inpaint_diff_list'] = inpaint_diff_list_dumps
 
     @staticmethod
@@ -145,7 +145,7 @@ class InpaintEffect(Effect):
         if inpaint_diff_list_dumps is not None:
             inpaint_diff_list = []
             for inpaint_diff_dump in inpaint_diff_list_dumps:
-                inpaint_diff = InpaintDiff(crop_info=inpaint_diff_dump[0], image=inpaint_diff_dump[1])
+                inpaint_diff = InpaintDiff(disp_info=inpaint_diff_dump[0], image=inpaint_diff_dump[1])
                 inpaint_diff.list2image()
                 inpaint_diff_list.append(inpaint_diff)
             param['inpaint_diff_list'] = inpaint_diff_list
@@ -161,7 +161,7 @@ class InpaintEffect(Effect):
         if param['inpaint'] > 0:
             if self.mask_editor is None:
                 self.mask_editor = mask_editor.MaskEditor(param['img_size'][0], param['img_size'][1])
-                self.mask_editor.zoom = param['crop_info'][4]
+                self.mask_editor.zoom = param['disp_info'][4]
                 self.mask_editor.pos = [0, 0]
                 widget.ids["preview_widget"].add_widget(self.mask_editor)
             
@@ -186,7 +186,7 @@ class InpaintEffect(Effect):
             img2 = img2 #/ param.get('white_balance', [1, 1, 1])
             bboxes = core.get_multiple_mask_bbox(self.mask_editor.get_mask())
             for bbox in bboxes:
-                self.inpaint_diff_list.append(InpaintDiff(crop_info=(bbox[0] + x, bbox[1] + y, bbox[2], bbox[3]), image=img2[bbox[1]:bbox[1]+bbox[3], bbox[0]:bbox[0]+bbox[2]]))
+                self.inpaint_diff_list.append(InpaintDiff(disp_info=(bbox[0] + x, bbox[1] + y, bbox[2], bbox[3]), image=img2[bbox[1]:bbox[1]+bbox[3], bbox[0]:bbox[0]+bbox[2]]))
             param['inpaint_diff_list'] = self.inpaint_diff_list
             self.mask_editor.clear_mask()
             self.mask_editor.update_canvas()
@@ -194,7 +194,7 @@ class InpaintEffect(Effect):
         if len(self.inpaint_diff_list) > 0:
             img2 = img.copy()
             for inpaint_diff in self.inpaint_diff_list:
-                cx, cy, cw, ch = inpaint_diff.crop_info
+                cx, cy, cw, ch = inpaint_diff.disp_info
                 img2[cy:cy+ch, cx:cx+cw] = inpaint_diff.image
             self.diff = img2
         else:
@@ -268,7 +268,7 @@ class CropEffect(Effect):
         param['crop_enable'] = False if widget.ids["effects"].current_tab.text != "Geometry" else True
         param['aspect_ratio'] = widget.ids["spinner_acpect_ratio"].text
 
-        # crop_info がないのはマスク
+        # disp_info がないのはマスク
         if param.get('crop_rect', None) is not None:
 
             # クロップエディタを開く
@@ -291,19 +291,19 @@ class CropEffect(Effect):
 
     def make_diff(self, img, param):
         ce = param.get('crop_enable', False)
-        crop_info = param.get('crop_info', None)
-        if ce == True or crop_info is None:
+        disp_info = param.get('disp_info', None)
+        if ce == True or disp_info is None:
             self.diff = None
             self.hash = None
             param['img_size'] = (param['original_img_size'][0], param['original_img_size'][1])
             msize = max(param['original_img_size'][0], param['original_img_size'][1])
-            param['crop_info'] = (0, 0, msize, msize, crop_info[4])
+            param['disp_info'] = (0, 0, msize, msize, disp_info[4])
         else:
             param_hash = hash((ce))
             if self.hash != param_hash:
-                self.diff = crop_info
+                self.diff = disp_info
                 self.hash = param_hash
-                param['img_size'] = (crop_info[2], crop_info[3])
+                param['img_size'] = (disp_info[2], disp_info[3])
         return self.diff
     
     def apply_diff(self, img):
@@ -318,12 +318,12 @@ class CropEffect(Effect):
             widget.ids["preview_widget"].add_widget(self.crop_editor)
 
             # 編集中は一時的に変更
-            param['crop_info'] = crop_editor.CropEditor.get_initial_crop_info(input_width, input_height, scale)
+            param['disp_info'] = crop_editor.CropEditor.get_initial_disp_info(input_width, input_height, scale)
 
     def _close_crop_editor(self, param, widget):
         if self.crop_editor is not None:
             param['crop_rect'] = self.crop_editor.get_crop_rect()
-            param['crop_info'] = self.crop_editor.get_crop_info()
+            param['disp_info'] = self.crop_editor.get_disp_info()
 
             widget.ids["preview_widget"].remove_widget(self.crop_editor)
             self.crop_editor = None
@@ -1623,24 +1623,25 @@ class VignetteEffect(Effect):
         param['vignette_intensity'] = widget.ids["slider_vignette_intensity"].value
         param['vignette_radius_percent'] = widget.ids["slider_vignette_radius_percent"].value
 
-    def make_diff(self, rgb, crop_info, param):
+    def make_diff(self, rgb, disp_info, param):
         vi = param.get('vignette_intensity', 0)
         vr = param.get('vignette_radius_percent', 0)
-        param_hash = hash((vi, vr))
         if vi == 0 and vr == 0:
             self.diff = None
             self.hash = None
 
-        elif self.hash != param_hash:
-            self.diff = (vi, vr, param['original_img_size'])
-            self.hash = param_hash
+        else:
+            param_hash = hash((vi, vr))
+            if self.hash != param_hash or param.get('crop_enable', False) == True:
+                #if param.get('crop_enable', False) == False:
+                if False:
+                    self.diff = core.apply_vignette(rgb, vi, vr, None)
+                else:
+                    self.diff = core.apply_vignette(rgb, vi, vr, disp_info, param.get('crop_rect'))
+                self.hash = param_hash
         
         return self.diff
     
-    def apply_diff(self, rgb, crop_info):
-        imax = max(self.diff[2])
-        return core.apply_vignette(rgb, self.diff[0], self.diff[1], crop_info, (self.diff[2][0], self.diff[2][1]))
-
 
 def create_effects():
     effects = [{}, {}, {}, {}, {}]

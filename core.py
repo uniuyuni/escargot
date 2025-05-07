@@ -717,56 +717,49 @@ def apply_mask(img1, msk, img2):
 
     return np.array(array)
 
-def apply_vignette(image, intensity=0, radius_percent=100, crop_info=None, original_size=None, gradient_softness=3.0):
+def apply_vignette(image, intensity, radius_percent, disp_info, crop_rect, gradient_softness=3.0):
     """
-    完全修正版 周辺光量落ち効果
+    修正版 周辺光量落ち効果
     - 中心位置が正確にクロップ中心に一致
     - 効果の向きが正しく適用（負の値で周辺暗く、正の値で周辺明るく）
     - 滑らかなグラデーション
+    - scaleを適切に考慮した効果適用
+    - 元画像の座標系でのビネット中心を正確に反映
     
     Parameters:
         image: 入力画像 (float32, 0-1)
         intensity: 効果の強さ (-100 to 100)
         radius_percent: 効果の半径 (1-100%)
-        crop_info: [x, y, w, h, scale]
-        original_size: (orig_w, orig_h)
+        disp_info: [x, y, w, h, scale] - 元画像における切り抜き情報
         gradient_softness: グラデーションの滑らかさ
     """
 
-    intensity = np.clip(intensity, -100, 100) / 100.0
-    radius_percent = np.clip(radius_percent, 1, 100)
+    intensity = intensity / 100.0
+    radius_percent = radius_percent / 100.0
     gradient_softness = max(0.1, gradient_softness)
     
     h, w = image.shape[:2]
     
-    if crop_info is None:
-        # クロップなしの場合
+    if crop_rect is None:
+        # クロップ情報がない場合は従来通り
         center_x, center_y = w/2, h/2
-        max_radius = np.sqrt(w**2 + h**2) / 2
-    else:
-        # クロップ情報がある場合
-        if len(crop_info) != 5 or original_size is None:
-            raise ValueError("Invalid crop_info or original_size")
+
+        mm = max(w, h)
+        max_radius = np.sqrt(mm**2 + mm**2) / 2
+    else:        
+        dx, dy, _, _, scale = disp_info
+        x1, y1, x2, y2 = crop_rect
+        _, _, offset_x, offset_y = crop_size_and_offset_from_texture(config.get_config('preview_size'), config.get_config('preview_size'), disp_info)
+            
+        # クロップ画像内での元画像中心の位置
+        center_x = (x1 + (x2 - x1) / 2 - dx) * scale + offset_x
+        center_y = (y1 + (y2 - y1) / 2 - dy) * scale + offset_y
         
-        x, y, crop_w, crop_h, scale = crop_info
-        orig_w, orig_h = original_size
-        
-        # 現在の画像における中心座標を直接計算
-        center_x = w/2  # クロップ画像の中心は常に画像中心
-        center_y = h/2
-        
-        # 元画像の中心からのオフセットを考慮した半径計算
-        orig_center_x = orig_w / 2
-        orig_center_y = orig_h / 2
-        crop_center_x = x + crop_w/2
-        crop_center_y = y + crop_h/2
-        
-        # 元画像の対角線に対する相対的な位置を計算
-        dx = (crop_center_x - orig_center_x) / orig_w
-        dy = (crop_center_y - orig_center_y) / orig_h
-        max_radius = np.sqrt(1 + dx**2 + dy**2) * np.sqrt(w**2 + h**2) / 2
+        mm = max((x2 - x1), (y2 - y1)) * scale
+        max_radius = np.sqrt(mm**2 + mm**2) / 2
     
-    radius = max_radius * (radius_percent / 100)
+    # 指定された半径パーセントに基づいて実際の半径を計算
+    radius = max_radius * radius_percent
     
     # 距離マップ作成
     y_indices, x_indices = np.ogrid[:h, :w]
@@ -777,12 +770,7 @@ def apply_vignette(image, intensity=0, radius_percent=100, crop_info=None, origi
     mask = np.power(mask, gradient_softness)  # グラデーション調整
     
     # 効果適用（intensityの符号で方向を制御）
-    if intensity < 0:
-        # 周辺を暗くする
-        vignette = 1.0 + intensity * mask
-    else:
-        # 周辺を明るくする
-        vignette = 1.0 - intensity * mask
+    vignette = np.where(intensity < 0, 1.0 + intensity * mask, 1.0 - intensity * mask)
     
     # カラー画像対応
     if len(image.shape) == 3:
@@ -793,10 +781,10 @@ def apply_vignette(image, intensity=0, radius_percent=100, crop_info=None, origi
     return result.astype(np.float32)
 
 # テクスチャサイズとクロップ情報から、新しい描画サイズと余白の大きさを得る
-def crop_size_and_offset_from_texture(texture_width, texture_height, crop_info):
+def crop_size_and_offset_from_texture(texture_width, texture_height, disp_info):
 
     # アスペクト比を計算
-    crop_aspect = crop_info[2] / crop_info[3]
+    crop_aspect = disp_info[2] / disp_info[3]
     texture_aspect = texture_width / texture_height
 
     if crop_aspect > texture_aspect:
@@ -814,29 +802,29 @@ def crop_size_and_offset_from_texture(texture_width, texture_height, crop_info):
 
     return (new_width, new_height, offset_x, offset_y)
 
-def crop_image(image, crop_info, texture_width, texture_height, click_x, click_y, offset, is_zoomed):
+def crop_image(image, disp_info, crop_rect, texture_width, texture_height, click_x, click_y, offset, is_zoomed):
 
     # 画像のサイズを取得
     image_height, image_width = image.shape[:2]
 
-    new_width, new_height, offset_x, offset_y = crop_size_and_offset_from_texture(texture_width, texture_height, crop_info)
+    new_width, new_height, offset_x, offset_y = crop_size_and_offset_from_texture(texture_width, texture_height, disp_info)
 
     # スケールを求める
-    if crop_info[2] >= crop_info[3]:
-        scale = texture_width/crop_info[2]
+    if disp_info[2] >= disp_info[3]:
+        scale = texture_width/disp_info[2]
     else:
-        scale = texture_height/crop_info[3]
+        scale = texture_height/disp_info[3]
 
     if not is_zoomed:
         # リサイズ
-        cx, cy, cw, ch, _ = crop_info
-        resized_img = cv2.resize(image[cy:cy+ch, cx:cx+cw], (new_width, new_height), interpolation=cv2.INTER_CUBIC)
+        dx, dy, dw, dh, _ = disp_info
+        resized_img = cv2.resize(image[dy:dy+dh, dx:dx+dw], (new_width, new_height), interpolation=cv2.INTER_CUBIC)
 
         # リサイズした画像を中央に配置
         result = np.pad(resized_img, ((offset_y, texture_height-(offset_y+new_height)), (offset_x, texture_width-(offset_x+new_width)), (0, 0)), constant_values=0)
 
         # 再設定
-        crop_info = (cx, cy, cw, ch, scale)
+        disp_info = (dx, dy, dw, dh, scale)
 
     else:
         # クリック位置を元の画像の座標系に変換
@@ -851,38 +839,40 @@ def crop_image(image, crop_info, texture_width, texture_height, click_x, click_y
 
         if offset == (0, 0):
             # クリック位置を中心にする
-            crop_x = crop_info[0] + click_image_x - crop_width // 2
-            crop_y = crop_info[1] + click_image_y - crop_height // 2
+            crop_x = disp_info[0] + click_image_x - crop_width // 2
+            crop_y = disp_info[1] + click_image_y - crop_height // 2
         else:
             # スクロール
-            crop_x = crop_info[0]
-            crop_y = crop_info[1]
+            crop_x = disp_info[0]
+            crop_y = disp_info[1]
 
         # クロップ
-        result, crop_info = crop_image_info(image, (crop_x, crop_y, crop_width, crop_height, 1.0), offset)
+        result, disp_info = crop_image_info(image, (crop_x, crop_y, crop_width, crop_height, 1.0), crop_rect, offset)
     
-    return result, crop_info
+    return result, disp_info
 
 
-def crop_image_info(image, crop_info, offset=(0, 0)):
+def crop_image_info(image, disp_info, crop_rect, offset=(0, 0)):
     
     # 情報取得
     image_height, image_width = image.shape[:2]
-    crop_x, crop_y, crop_width, crop_height, scale = crop_info
+    disp_x, disp_y, disp_width, disp_height, scale = disp_info
 
     # オフセット適用
-    crop_x = int(crop_x + offset[0])
-    crop_y = int(crop_y + offset[1])
+    x = int(disp_x + offset[0])
+    y = int(disp_y + offset[1])
 
     # 画像の範囲外にならないように調整
-    crop_x = max(0, min(crop_x, image_width - crop_width))
-    crop_y = max(0, min(crop_y, image_height - crop_height))
+    #x = int(max(0, min(x, image_width - disp_width)))
+    #y = int(max(0, min(y, image_height - disp_height)))
+    x = int(max(crop_rect[0], min(x, crop_rect[2] - disp_width)))
+    y = int(max(crop_rect[1], min(y, crop_rect[3] - disp_height)))
 
     # 画像を切り抜く
-    #cropped_img = jax.lax.slice(image, (crop_y, crop_x, 0), (crop_y+crop_height, crop_x+crop_width, 3))
-    cropped_img = image[crop_y:crop_y+crop_height, crop_x:crop_x+crop_width]
+    #cropped_img = jax.lax.slice(image, (disp_y, disp_x, 0), (disp_y+disp_height, disp_x+disp_width, 3))
+    cropped_img = image[y:y+disp_height, x:x+disp_width]
 
-    return cropped_img, (crop_x, crop_y, crop_width, crop_height, scale)
+    return cropped_img, (x, y, disp_width, disp_height, scale)
 
 
 def get_multiple_mask_bbox(mask):
@@ -929,7 +919,7 @@ def set_image_param(param, exif_data):
     param['original_img_size'] = (width, height)
     param['img_size'] = (width, height)
     param['crop_rect'] = param.get('crop_rect', crop_editor.CropEditor.get_initial_crop_rect(width, height))
-    param['crop_info'] = crop_editor.CropEditor.convert_rect_to_info(param['crop_rect'], config.get_config('preview_size')/max(param['original_img_size']))
+    param['disp_info'] = crop_editor.CropEditor.convert_rect_to_info(param['crop_rect'], config.get_config('preview_size')/max(param['original_img_size']))
 
     return (width, height)
 

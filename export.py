@@ -63,7 +63,7 @@ SPECIAL_PARAM = [
     #'original_img_size',
     'img_size',
     #'crop_rect',
-    'crop_info',
+    'disp_info',
     # for imageset._set_temperature
     'color_temerature_switch',
     'color_temperature_reset',
@@ -100,7 +100,7 @@ def _serialize_param(param):
     effects.InpaintEffect.dump(param)
 
 def _deserialize_param(param):
-    param['crop_info'] = crop_editor.CropEditor.convert_rect_to_info(param['crop_rect'], config.get_config('preview_size')/max(param['original_img_size']))
+    param['disp_info'] = crop_editor.CropEditor.convert_rect_to_info(param['crop_rect'], config.get_config('preview_size')/max(param['original_img_size']))
     effects.InpaintEffect.load(param)
 
 def serialize(param, mask_editor2):
@@ -301,7 +301,7 @@ class ExportFile():
         #self.mask_editor2.set_orientation(self.param.get('rotation', 0), self.param.get('rotation2', 0), self.param.get('flip_mode', 0))
         self.imgset.img.shape[1], self.imgset.img.shape[0]
         self.mask_editor2.set_texture_size(self.imgset.img.shape[1], self.imgset.img.shape[0])
-        self.mask_editor2.set_image(self.param['original_img_size'], self.param.get('crop_info', None))
+        self.mask_editor2.set_image(self.param['original_img_size'], self.param.get('disp_info', None))
         #self.mask_editor2.update()
 
         load_json(self.file_path, self.param, self.mask_editor2)

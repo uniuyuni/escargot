@@ -203,7 +203,7 @@ class MainWidget(MDBoxLayout):
                 self.is_zoomed = not self.is_zoomed
                 if self.is_zoomed == False:
                     self.click_x, self.click_y = 0, 0
-                    self.primary_param['crop_info'] = None
+                    self.primary_param['disp_info'] = None
                 else:
                     # ウィンドウ座標からローカルイメージ座標に変換
                     self.click_x, self.click_y = util.to_texture(touch.pos, self.ids['preview'])
@@ -304,7 +304,7 @@ class MainWidget(MDBoxLayout):
     def _set_image_for_mask2(self, param):
         self.ids['mask_editor2'].set_orientation(param.get('rotation', 0), param.get('rotation2', 0), param.get('flip_mode', 0))
         self.ids['mask_editor2'].set_texture_size(self.texture_width, self.texture_height)
-        self.ids['mask_editor2'].set_image(param['original_img_size'], param.get('crop_info', None))
+        self.ids['mask_editor2'].set_image(param['original_img_size'], param.get('disp_info', None))
         self.ids['mask_editor2'].update()
 
     def _enable_mask2(self):

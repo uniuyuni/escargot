@@ -191,8 +191,8 @@ class BaseMask(Widget):
         pass
 
     def draw_mask_to_fbo(self):
-        if not self.editor.crop_info:
-            Logger.warning(f"{self.__class__.__name__}: crop_infoが未設定。")
+        if not self.editor.disp_info:
+            Logger.warning(f"{self.__class__.__name__}: disp_infoが未設定。")
             return
 
         if self.active == True:
@@ -1427,8 +1427,8 @@ class SegmentMask(BaseMask):
         result = SegmentMask.__iopaint_predict.predict_plugin(img, SegmentMask.__iopaint_plugins.InteractiveSeg.name, click=center)
         result = ((result > 0) * 1).astype(np.float32)
 
-        nw, nh, ox, oy = core.crop_size_and_offset_from_texture(self.editor.texture_size[0], self.editor.texture_size[1], self.editor.crop_info)
-        cx, cy ,cw, ch, scale = self.editor.crop_info
+        nw, nh, ox, oy = core.crop_size_and_offset_from_texture(self.editor.texture_size[0], self.editor.texture_size[1], self.editor.disp_info)
+        cx, cy ,cw, ch, scale = self.editor.disp_info
         result = cv2.resize(result[cy:cy+ch, cx:cx+cw], (nw, nh))
         if scale < 1:
             result = np.pad(result, ((oy, self.editor.texture_size[0]-(oy+nh)), (ox, self.editor.texture_size[1]-(ox+nw))), constant_values=0)
@@ -1472,7 +1472,7 @@ class MaskEditor2(FloatLayout):
     mask_layers = ListProperty([])
     active_mask = ObjectProperty(None, allownone=True)
     image_size = ListProperty([0, 0])  # 画像のサイズを保持
-    crop_info = Property((0, 0, 0, 0, 1))
+    disp_info = Property((0, 0, 0, 0, 1))
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -1520,7 +1520,7 @@ class MaskEditor2(FloatLayout):
         else:
             scale = self.size[1] / self.image_size[1]
         self.texture_size = (self.size[0], self.size[0])
-        self.crop_info = (0, 0, self.size[0], self.size[1], scale)
+        self.disp_info = (0, 0, self.size[0], self.size[1], scale)
         self.__set_image_info()
         return True
     
@@ -1531,12 +1531,12 @@ class MaskEditor2(FloatLayout):
     def set_texture_size(self, tx, ty):
         self.texture_size = (tx, ty)
 
-    def set_image(self, size, crop_info):
+    def set_image(self, size, disp_info):
         self.image_widget.source = None
         self.image_widget.opacity = 0
 
         self.image_size[0], self.image_size[1] = size
-        self.crop_info = crop_info
+        self.disp_info = disp_info
 
         self.__set_image_info()
     
@@ -1545,7 +1545,7 @@ class MaskEditor2(FloatLayout):
         self.orientation = (math.radians(rotation2), flip)
 
     def get_hash_items(self):
-        return (self.crop_info, self.center_rotate_rad, self.orientation)
+        return (self.disp_info, self.center_rotate_rad, self.orientation)
 
     def __set_image_info(self):
         self.margin = ((self.size[0]-self.texture_size[0])/2, (self.size[1]-self.texture_size[1])/2)
@@ -1777,10 +1777,10 @@ class MaskEditor2(FloatLayout):
         return self.center_rotate_rad + rad + rotate_rad
     
     def world_to_tcg_scale(self, x, y):
-        return (x / self.crop_info[4], y / self.crop_info[4])
+        return (x / self.disp_info[4], y / self.disp_info[4])
     
     def tcg_to_world_scale(self, x, y):
-        return (x * self.crop_info[4], y * self.crop_info[4])
+        return (x * self.disp_info[4], y * self.disp_info[4])
 
     # ワールド座標からテクスチャのグローバル座標に
     def window_to_tcg(self, cx, cy):
@@ -1788,10 +1788,10 @@ class MaskEditor2(FloatLayout):
         cx, cy = cx - wx, cy - wy
         cx, cy = cx - self.margin[0], cy - self.margin[1]
         cx, cy = cx, self.texture_size[1] - cy
-        _, _, offset_x, offset_y = core.crop_size_and_offset_from_texture(*self.texture_size, self.crop_info)
+        _, _, offset_x, offset_y = core.crop_size_and_offset_from_texture(*self.texture_size, self.disp_info)
         cx, cy = cx - offset_x, cy - offset_y
-        cx, cy = cx / self.crop_info[4], cy / self.crop_info[4]
-        cx, cy = cx + self.crop_info[0], cy + self.crop_info[1]
+        cx, cy = cx / self.disp_info[4], cy / self.disp_info[4]
+        cx, cy = cx + self.disp_info[0], cy + self.disp_info[1]
         imax = max(self.image_size[0]/2, self.image_size[1]/2)
         cx, cy = cx - imax, cy - imax
         cx, cy = self.center_rotate_invert(cx, cy, self.center_rotate_rad)
@@ -1801,9 +1801,9 @@ class MaskEditor2(FloatLayout):
         imax = max(self.image_size[0]/2, self.image_size[1]/2)
         cx, cy = self.center_rotate(cx, cy, self.center_rotate_rad)
         cx, cy = cx + imax, cy + imax
-        cx, cy = cx - self.crop_info[0], cy - self.crop_info[1]
-        cx, cy = cx * self.crop_info[4], cy * self.crop_info[4]        
-        _, _, offset_x, offset_y = core.crop_size_and_offset_from_texture(*self.texture_size, self.crop_info)
+        cx, cy = cx - self.disp_info[0], cy - self.disp_info[1]
+        cx, cy = cx * self.disp_info[4], cy * self.disp_info[4]        
+        _, _, offset_x, offset_y = core.crop_size_and_offset_from_texture(*self.texture_size, self.disp_info)
         cx, cy = cx + offset_x, cy + offset_y
         cx, cy = cx, self.texture_size[1] - cy
         cx, cy = cx + self.margin[0], cy + self.margin[1]
@@ -1815,9 +1815,9 @@ class MaskEditor2(FloatLayout):
         imax = max(self.image_size[0]/2, self.image_size[1]/2)
         cx, cy = self.center_rotate(cx, cy, self.center_rotate_rad)
         cx, cy = cx + imax, cy + imax
-        cx, cy = cx - self.crop_info[0], cy - self.crop_info[1]
-        cx, cy = cx * self.crop_info[4], cy * self.crop_info[4]        
-        _, _, offset_x, offset_y = core.crop_size_and_offset_from_texture(*self.texture_size, self.crop_info)
+        cx, cy = cx - self.disp_info[0], cy - self.disp_info[1]
+        cx, cy = cx * self.disp_info[4], cy * self.disp_info[4]        
+        _, _, offset_x, offset_y = core.crop_size_and_offset_from_texture(*self.texture_size, self.disp_info)
         cx, cy = cx + offset_x, cy + offset_y
         return (cx, cy)
 
@@ -1865,24 +1865,24 @@ class MaskEditor2(FloatLayout):
 
     def _on_keyboard_down(self, keyboard, keycode, text, modifiers):
         if keycode[1] == 'z':
-            if self.crop_info[4] == 1.0:
-                self.crop_info[0], self.crop_info[1] = 0, 0
+            if self.disp_info[4] == 1.0:
+                self.disp_info[0], self.disp_info[1] = 0, 0
                 if self.image_size[0] >= self.image_size[1]:
                     scale = self.size[0] / self.image_size[0]
                 else:
                     scale = self.size[1] / self.image_size[1]
-                self.crop_info[4] = scale
+                self.disp_info[4] = scale
             else:
-                self.crop_info[0], self.crop_info[1] = self.image_size[0]/2, self.image_size[1]/2
-                self.crop_info[4] = 1.0
+                self.disp_info[0], self.disp_info[1] = self.image_size[0]/2, self.image_size[1]/2
+                self.disp_info[4] = 1.0
         elif keycode[1] == 'up':
-            self.crop_info[1] -= 100
+            self.disp_info[1] -= 100
         elif keycode[1] == 'down':
-            self.crop_info[1] += 100
+            self.disp_info[1] += 100
         elif keycode[1] == 'left':
-            self.crop_info[0] -= 100
+            self.disp_info[0] -= 100
         elif keycode[1] == 'right':
-            self.crop_info[0] += 100
+            self.disp_info[0] += 100
         elif keycode[1] == 't':
             for mask in reversed(self.mask_layers):
                 dict = mask.serialize()        

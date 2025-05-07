@@ -8,23 +8,23 @@ import crop_editor
 def process_pipeline(img, offset, crop_image, is_zoomed, texture_width, texture_height, click_x, click_y, primary_effects, primary_param, mask_editor2):
     
     # クロップ情報を得る、ない場合元のクロップ情報から展開
-    crop_info = primary_param.get('crop_info', None)
-    if crop_info is None:
-        crop_info = primary_param['crop_info'] = crop_editor.CropEditor.convert_rect_to_info(primary_param['crop_rect'], config.get_config('preview_size')/max(primary_param['original_img_size']))
+    disp_info = primary_param.get('disp_info', None)
+    if disp_info is None:
+        disp_info = primary_param['disp_info'] = crop_editor.CropEditor.convert_rect_to_info(primary_param['crop_rect'], config.get_config('preview_size')/max(primary_param['original_img_size']))
 
     # 背景レイヤー
     img0, reset = pipeline_lv0(img, primary_effects, primary_param)
-    crop_info = primary_param['crop_info'] # Cropによって値が更新されてるかも
+    disp_info = primary_param['disp_info'] # Cropによって値が更新されてるかも
 
     if crop_image is None or reset == True:
-        imgc, crop_info2 = core.crop_image(img0, crop_info, texture_width, texture_height, click_x, click_y, offset, is_zoomed)
+        imgc, disp_info2 = core.crop_image(img0, disp_info, primary_param['crop_rect'], texture_width, texture_height, click_x, click_y, offset, is_zoomed)
         mask_editor2.set_orientation(primary_param.get('rotation', 0), primary_param.get('rotation2', 0), primary_param.get('flip_mode', 0))
         #mask_editor2.set_texture_size(texture_width, texture_height)
-        mask_editor2.set_image(primary_param['original_img_size'], crop_info2)
-        primary_param['crop_info'] = crop_info2
+        mask_editor2.set_image(primary_param['original_img_size'], disp_info2)
+        primary_param['disp_info'] = disp_info2
     else:
         imgc = crop_image
-        crop_info2 = crop_info
+        disp_info2 = disp_info
     #mask_editor2.set_ref_image(effects.ColorTemperatureEffect.apply_color_temperature(imgc, primary_param),
     #                           effects.ColorTemperatureEffect.apply_color_temperature(img0, primary_param))
     mask_editor2.set_ref_image(imgc, img0)
@@ -38,9 +38,9 @@ def process_pipeline(img, offset, crop_image, is_zoomed, texture_width, texture_
     #    split_img[i] = MainWidget._process_pipeline2(img, height*i, height, primary_effects, primary_param, mask_editor2)
     #result_img = joblib.Parallel(n_jobs=-1, require='sharedmem')(joblib.delayed(MainWidget._process_pipeline2)(img, height*i, height, primary_effects, primary_param, mask_editor2) for i, img in enumerate(split_img))
     #img2 = np.vstack(result_img)        
-    img2 = pipeline2(imgc, 0, 1024, crop_info2, primary_effects, primary_param, mask_editor2)
+    img2 = pipeline2(imgc, 0, 1024, disp_info2, primary_effects, primary_param, mask_editor2)
 
-    img2 = pipeline_last(img2, crop_info2, primary_effects, primary_param)
+    img2 = pipeline_last(img2, disp_info2, primary_effects, primary_param)
 
     return img2, imgc
 
@@ -50,12 +50,12 @@ def export_pipeline(img, primary_effects, primary_param, mask_editor2):
     img0, _ = pipeline_lv0(img, primary_effects, primary_param)
     x1, y1, x2, y2 = primary_param.get('crop_rect')
     imgc = img0[y1:y2, x1:x2] # ただのクロップ
-    crop_info = crop_editor.CropEditor.convert_rect_to_info(primary_param.get('crop_rect'), 1)
-    #imgc, crop_info2 = core.crop_image(img0, crop_info, *primary_param['original_img_size'], 0, 0, (0, 0), False)
+    disp_info = crop_editor.CropEditor.convert_rect_to_info(primary_param.get('crop_rect'), 1)
+    #imgc, disp_info2 = core.crop_image(img0, disp_info, *primary_param['original_img_size'], 0, 0, (0, 0), False)
     mask_editor2.set_orientation(primary_param.get('rotation', 0), primary_param.get('rotation2', 0), primary_param.get('flip_mode', 0))
     imax = max(imgc.shape[1], imgc.shape[0])
     mask_editor2.set_texture_size(imax, imax)
-    mask_editor2.set_image(primary_param['original_img_size'], crop_info)
+    mask_editor2.set_image(primary_param['original_img_size'], disp_info)
     #mask_editor2.set_ref_image(effects.ColorTemperatureEffect.apply_color_temperature(imgc, primary_param),
     #                           effects.ColorTemperatureEffect.apply_color_temperature(img0, primary_param))
     mask_editor2.set_ref_image(imgc, img0)
@@ -63,11 +63,11 @@ def export_pipeline(img, primary_effects, primary_param, mask_editor2):
 
     img2 = pipeline2(imgc, 0, imgc.shape[0], None, primary_effects, primary_param, mask_editor2)
 
-    img2 = pipeline_last(img2, crop_info, primary_effects, primary_param)
+    img2 = pipeline_last(img2, disp_info, primary_effects, primary_param)
     
     return img2
 
-def pipeline2(imgc, slice_y, slice_h, crop_info, primary_effects, primary_param, mask_editor2):
+def pipeline2(imgc, slice_y, slice_h, disp_info, primary_effects, primary_param, mask_editor2):
     img1 = pipeline_lv1(imgc, primary_effects, primary_param)
     img2 = pipeline_lv2(img1, primary_effects, primary_param)
     img3 = pipeline_lv3(img2, primary_effects, primary_param)
@@ -241,13 +241,13 @@ def pipeline_lv3(rgb, effects, param):
 
     return rgb
 
-def pipeline_last(rgb, crop_info, effects, param):
+def pipeline_last(rgb, disp_info, effects, param):
     lv4 = effects[4]
 
     for i, n in enumerate(lv4):            
-        diff = lv4[n].make_diff(rgb, crop_info, param)
+        diff = lv4[n].make_diff(rgb, disp_info, param)
         if diff is not None:
-            rgb = lv4[n].apply_diff(rgb, crop_info)
+            rgb = lv4[n].apply_diff(rgb)
 
     return rgb
 
