@@ -127,7 +127,7 @@ class CropEditor(KVFloatLayout):
             line.points = [x1, y1 + third, x2, y1 + third]
         
         # 大きさ表示
-        self.label.x, self.label.y = int(self.translate.x), int(self.translate.y)
+        self.label.x, self.label.y = 0, 0 #int(self.translate.x), int(self.translate.y)
         self.label.text = str(int(width / self.scale)) + " x " + str(int(height / self.scale))
 
     def update_centering(self, *args):
@@ -325,75 +325,189 @@ class CropEditor(KVFloatLayout):
     def __resize_by_corner(self, touch):
         x1, y1, x2, y2 = self.crop_rect
         new_x1, new_y1, new_x2, new_y2 = x1, y1, x2, y2
-        
+
+        # 現在の値を保存
+        old_x1, old_y1, old_x2, old_y2 = new_x1, new_y1, new_x2, new_y2
+
         if self.corner_dragging == 'top_left':
             new_x1 = touch.x - self.translate.x
             new_y1 = touch.y - self.translate.y
-            fix_corners = ['bottom_right', 'top_right', 'bottom_left']
+            fix_corners = ['bottom_right']
             
         elif self.corner_dragging == 'top_right':
             new_x2 = touch.x - self.translate.x
             new_y1 = touch.y - self.translate.y
-            fix_corners = ['bottom_left', 'top_left', 'bottom_right']
+            fix_corners = ['bottom_left']
 
         elif self.corner_dragging == 'bottom_left':
             new_x1 = touch.x - self.translate.x
             new_y2 = touch.y - self.translate.y
-            fix_corners = ['top_right', 'top_left', 'bottom_right']
+            fix_corners = ['top_right']
 
         elif self.corner_dragging == 'bottom_right':
             new_x2 = touch.x - self.translate.x
             new_y2 = touch.y - self.translate.y
-            fix_corners = ['top_left', 'top_right', 'bottom_left']
+            fix_corners = ['top_left']
         else:
             return self.__resize_crop(touch)
 
-        while True:
+        # 収束するまでループする（最大10回まで試行）
+        max_iterations = 10
+        iterations = 0
+        was_corrected = True
+        
+        while was_corrected and iterations < max_iterations:
+            was_corrected = False
+            iterations += 1    
+
+            f1, f2, f3, f4 = False, False, False, False
+            
             # 縦横入れ替え？
             if self.aspect_ratio > 0:
-                current_ratio = abs(new_x2 - new_x1) / abs(new_y2 - new_y1)
+                current_ratio = abs(new_x2 - new_x1) / max(abs(new_y2 - new_y1), 0.001)  # ゼロ除算防止
                 current_aspect_ratio = self.aspect_ratio if current_ratio >= 1 else 1 / self.aspect_ratio
             else:
                 current_aspect_ratio = self.aspect_ratio
             
-            # クリップ先の画像の中に収める
-            new_x1, new_y1, f = rotate_and_correct_point(new_x1, new_y1, x1, y1, self.input_width * self.scale, self.input_height * self.scale, self.input_angle)
-            if f == True and self.corner_dragging != 'bottom_right':
-                new_x2, new_y2 = x2, y2
-            new_x2, new_y1, f = rotate_and_correct_point(new_x2, new_y1, x2, y1, self.input_width * self.scale, self.input_height * self.scale, self.input_angle)
-            if f == True and self.corner_dragging != 'bottom_left':
-                new_x1, new_y2 = x1, y2
-            new_x1, new_y2, f = rotate_and_correct_point(new_x1, new_y2, x1, y2, self.input_width * self.scale, self.input_height * self.scale, self.input_angle)
-            if f == True and self.corner_dragging != 'top_right':
-                new_y1, new_x2 = y1, x2
-            new_x2, new_y2, f = rotate_and_correct_point(new_x2, new_y2, x2, y2, self.input_width * self.scale, self.input_height * self.scale, self.input_angle)
-            if f == True and self.corner_dragging != 'top_left':
-                new_x1, new_y1 = x1, y1
+            # クリップ先の画像の中に収める - 各角を個別に補正
+            if not 'top_left' in fix_corners:
+                new_x1, new_y1, f1 = rotate_and_correct_point(
+                    new_x1, new_y1, old_x1, old_y1, 
+                    self.input_width * self.scale, 
+                    self.input_height * self.scale, 
+                    self.input_angle
+                )
+                was_corrected |= f1
+                
+            if not 'top_right' in fix_corners:
+                new_x2, new_y1, f2 = rotate_and_correct_point(
+                    new_x2, new_y1, old_x2, old_y1, 
+                    self.input_width * self.scale, 
+                    self.input_height * self.scale, 
+                    self.input_angle
+                )
+                was_corrected |= f2
+                
+            if not 'bottom_left' in fix_corners:
+                new_x1, new_y2, f3 = rotate_and_correct_point(
+                    new_x1, new_y2, old_x1, old_y2, 
+                    self.input_width * self.scale, 
+                    self.input_height * self.scale, 
+                    self.input_angle
+                )
+                was_corrected |= f3
+                
+            if not 'bottom_right' in fix_corners:
+                new_x2, new_y2, f4 = rotate_and_correct_point(
+                    new_x2, new_y2, old_x2, old_y2, 
+                    self.input_width * self.scale, 
+                    self.input_height * self.scale, 
+                    self.input_angle
+                )
+                was_corrected |= f4
 
+            """
+            # 固定点を保持
+            if self.corner_dragging == 'top_left':
+                if f1:  # 左上が補正された場合
+                    new_x2, new_y2 = old_x2, old_y2  # 右下を元に戻す
+            elif self.corner_dragging == 'top_right':
+                if f2:  # 右上が補正された場合
+                    new_x1, new_y2 = old_x1, old_y2  # 左下を元に戻す
+            elif self.corner_dragging == 'bottom_left':
+                if f3:  # 左下が補正された場合
+                    new_x2, new_y1 = old_x2, old_y1  # 右上を元に戻す
+            elif self.corner_dragging == 'bottom_right':
+                if f4:  # 右下が補正された場合
+                    new_x1, new_y1 = old_x1, old_y1  # 左上を元に戻す
+            """
             # 縦横比を考慮
-            new_x1, new_y1, new_x2, new_y2, carf = correct_aspect_ratio(new_x1, new_y1, new_x2, new_y2, current_aspect_ratio, self.minimum_rect, self.minimum_rect, fix_corners)
-            if carf == False:
+            old_x1, old_y1, old_x2, old_y2 = new_x1, new_y1, new_x2, new_y2
+            new_x1, new_y1, new_x2, new_y2, carf = correct_aspect_ratio(
+                new_x1, new_y1, new_x2, new_y2, 
+                current_aspect_ratio, 
+                self.minimum_rect, 
+                self.minimum_rect, 
+                fix_corners
+            )
+            was_corrected |= carf
+            
+            # 変化が小さい場合は収束したとみなす
+            if (abs(old_x1 - new_x1) < 0.2 and 
+                abs(old_y1 - new_y1) < 0.2 and 
+                abs(old_x2 - new_x2) < 0.2 and 
+                abs(old_y2 - new_y2) < 0.2):
                 break
 
         self.crop_rect = [new_x1, new_y1, new_x2, new_y2]
 
+
     def __resize_crop(self, touch):
+        """
+        アスペクト比と画像の境界に従ってクロップ矩形全体をリサイズする
+        """
         x1, y1, x2, y2 = self.crop_rect
         new_x1, new_y1, new_x2, new_y2 = x1, y1, x2, y2
         
-        while True:
-            new_x1, new_y1, f = rotate_and_correct_point(new_x1, new_y1, x1, y1, self.input_width * self.scale, self.input_height * self.scale, self.input_angle)
-            new_x2, new_y1, f = rotate_and_correct_point(new_x2, new_y1, x2, y1, self.input_width * self.scale, self.input_height * self.scale, self.input_angle)
-            new_x1, new_y2, f = rotate_and_correct_point(new_x1, new_y2, x1, y2, self.input_width * self.scale, self.input_height * self.scale, self.input_angle)
-            new_x2, new_y2, f = rotate_and_correct_point(new_x2, new_y2, x2, y2, self.input_width * self.scale, self.input_height * self.scale, self.input_angle)
+        # 収束するまでループする（最大5回まで試行）
+        max_iterations = 5
+        iterations = 0
+        was_corrected = True
+        
+        while was_corrected and iterations < max_iterations:
+            was_corrected = False
+            iterations += 1
+            
+            # 現在の値を保存
+            old_x1, old_y1, old_x2, old_y2 = new_x1, new_y1, new_x2, new_y2
+            
+            # 位置補正 - 各角を画像の範囲内に収める
+            new_x1, new_y1, f1 = rotate_and_correct_point(
+                new_x1, new_y1, old_x1, old_y1, 
+                self.input_width * self.scale, 
+                self.input_height * self.scale, 
+                self.input_angle
+            )
+            new_x2, new_y1, f2 = rotate_and_correct_point(
+                new_x2, new_y1, old_x2, old_y1, 
+                self.input_width * self.scale, 
+                self.input_height * self.scale, 
+                self.input_angle
+            )
+            new_x1, new_y2, f3 = rotate_and_correct_point(
+                new_x1, new_y2, old_x1, old_y2, 
+                self.input_width * self.scale, 
+                self.input_height * self.scale, 
+                self.input_angle
+            )
+            new_x2, new_y2, f4 = rotate_and_correct_point(
+                new_x2, new_y2, old_x2, old_y2, 
+                self.input_width * self.scale, 
+                self.input_height * self.scale, 
+                self.input_angle
+            )
+            was_corrected = f1 or f2 or f3 or f4
 
             # 縦横比を考慮
-            new_x1, new_y1, new_x2, new_y2, carf = correct_aspect_ratio(new_x1, new_y1, new_x2, new_y2, self.aspect_ratio, self.minimum_rect, self.minimum_rect, [])
-            if carf == False:
+            old_x1, old_y1, old_x2, old_y2 = new_x1, new_y1, new_x2, new_y2
+            new_x1, new_y1, new_x2, new_y2, carf = correct_aspect_ratio(
+                new_x1, new_y1, new_x2, new_y2, 
+                self.aspect_ratio, 
+                self.minimum_rect, 
+                self.minimum_rect, 
+                []  # 固定点なし - 中心を維持
+            )
+            was_corrected |= carf
+            
+            # 変化が小さい場合は収束したとみなす
+            if (abs(old_x1 - new_x1) < 0.5 and 
+                abs(old_y1 - new_y1) < 0.5 and 
+                abs(old_x2 - new_x2) < 0.5 and 
+                abs(old_y2 - new_y2) < 0.5):
                 break
 
         self.crop_rect = [new_x1, new_y1, new_x2, new_y2]
-
+        
     @staticmethod
     def get_initial_crop_rect(input_width, input_height):
         maxsize = max(input_width, input_height)
@@ -704,6 +818,7 @@ def rotate_and_correct_point(point_x, point_y, old_px, old_py, rect_width, rect_
         if dist < min_dist:
             min_dist = dist
             nearest = edge_point
+
     return nearest[0] + rect_width/2, nearest[1] + rect_height/2, True
 
 

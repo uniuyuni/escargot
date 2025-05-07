@@ -738,9 +738,9 @@
                                         start_y: 0.0
                                         end_y: 1.0
                                         on_curve: root.apply_effects_lv(2, 'curve')
-
-                            VSeparator:
                                 
+                            VSpacer:
+                            
                             HeadLabel:
                                 text: ' Color Grading'
 
@@ -785,8 +785,8 @@
                                         CWColorPicker:
                                             id: grading2_color_picker
                                             on_current_color: root.apply_effects_lv(2, 'curve')
-
-                            VSeparator:
+                            
+                            VSpacer:
                             
                             CurveTabbedPanel:
                                 ref_tab_width: 100
@@ -1133,8 +1133,8 @@
                                 max: 45.0
                                 value: 0
                                 step: 0.1
-                                on_slider: root.apply_effects_lv(0, 'crop')
                                 on_slider: root.apply_effects_lv(0, 'rotation')
+                                on_slider: root.apply_effects_lv(0, 'crop')
 
                             VSpacer:
                             
@@ -1146,26 +1146,26 @@
                                     pos_hint: {'center_x': .5, 'center_y': .5}
                                     ref_height: 20
                                     text: "L"
-                                    on_press: root.apply_effects_lv(0, 'crop')
                                     on_press: root.set_effect_param(0, 'rotation', 90)
+                                    on_press: root.apply_effects_lv(0, 'crop')
                                 Button:
                                     pos_hint: {'center_x': .5, 'center_y': .5}
                                     ref_height: 20
                                     text: "R"
-                                    on_press: root.apply_effects_lv(0, 'crop')
                                     on_press: root.set_effect_param(0, 'rotation', -90)
+                                    on_press: root.apply_effects_lv(0, 'crop')
                                 Button:
                                     pos_hint: {'center_x': .5, 'center_y': .5}
                                     ref_height: 20
                                     text: "H"
-                                    on_press: root.apply_effects_lv(0, 'crop')
                                     on_press: root.set_effect_param(0, 'rotation', 'hflip')
+                                    on_press: root.apply_effects_lv(0, 'crop')
                                 Button:
                                     pos_hint: {'center_x': .5, 'center_y': .5}
                                     ref_height: 20
                                     text: "V"
-                                    on_press: root.apply_effects_lv(0, 'crop')
                                     on_press: root.set_effect_param(0, 'rotation', 'vflip')
+                                    on_press: root.apply_effects_lv(0, 'crop')
 
                             VSeparator:
 

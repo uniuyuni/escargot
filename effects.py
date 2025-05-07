@@ -257,6 +257,10 @@ class CropEffect(Effect):
         
         self.crop_editor = None
 
+    def _param_to_aspect_ratio(self, param):
+        ar = param.get('aspect_ratio', "None")
+        return eval(ar if ar != "None" else "0")
+
     def set2widget(self, widget, param):
         widget.ids["spinner_acpect_ratio"].text = param.get('aspect_ratio', "None")
 
@@ -282,15 +286,18 @@ class CropEffect(Effect):
                     self.crop_editor.update_crop_size()
 
                 self.crop_editor.input_angle = param.get('rotation', 0) + param.get('rotation2', 0)
+                self.crop_editor.aspect_ratio = self._param_to_aspect_ratio(param)
 
 
     def make_diff(self, img, param):
         ce = param.get('crop_enable', False)
-        crop_info = param.get('crop_info', (0, 0, 0, 0, 1))
-        if ce == True or crop_info == (0, 0, 0, 0, 1):
+        crop_info = param.get('crop_info', None)
+        if ce == True or crop_info is None:
             self.diff = None
             self.hash = None
             param['img_size'] = (param['original_img_size'][0], param['original_img_size'][1])
+            msize = max(param['original_img_size'][0], param['original_img_size'][1])
+            param['crop_info'] = (0, 0, msize, msize, crop_info[4])
         else:
             param_hash = hash((ce))
             if self.hash != param_hash:
@@ -307,7 +314,7 @@ class CropEffect(Effect):
             input_width, input_height = param['original_img_size']
             x1, y1, x2, y2 = param['crop_rect']
             scale = config.get_config('preview_size')/max(input_width, input_height)
-            self.crop_editor = crop_editor.CropEditor(input_width=input_width, input_height=input_height, scale=scale, crop_rect=(x1, y1, x2, y2))
+            self.crop_editor = crop_editor.CropEditor(input_width=input_width, input_height=input_height, scale=scale, crop_rect=(x1, y1, x2, y2), aspect_ratio=self._param_to_aspect_ratio(param))
             widget.ids["preview_widget"].add_widget(self.crop_editor)
 
             # 編集中は一時的に変更
@@ -1625,7 +1632,7 @@ class VignetteEffect(Effect):
             self.hash = None
 
         elif self.hash != param_hash:
-            self.diff = (vi, vr, param['img_size'])
+            self.diff = (vi, vr, param['original_img_size'])
             self.hash = param_hash
         
         return self.diff

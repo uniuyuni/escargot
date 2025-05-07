@@ -830,7 +830,7 @@ def crop_image(image, crop_info, texture_width, texture_height, click_x, click_y
     if not is_zoomed:
         # リサイズ
         cx, cy, cw, ch, _ = crop_info
-        resized_img = cv2.resize(image[cy:cy+ch, cx:cx+cw], (new_width, new_height), interpolation=cv2.INTER_LINEAR)
+        resized_img = cv2.resize(image[cy:cy+ch, cx:cx+cw], (new_width, new_height), interpolation=cv2.INTER_CUBIC)
 
         # リサイズした画像を中央に配置
         result = np.pad(resized_img, ((offset_y, texture_height-(offset_y+new_height)), (offset_x, texture_width-(offset_x+new_width)), (0, 0)), constant_values=0)
@@ -1155,14 +1155,28 @@ def get_exif_image_size(exif_data):
     return (top, left, width, height)
 
 def set_exif_image_size(exif_data, top, left, width, height):
+    setflag = False
+    
     if exif_data.get("RawImageCropTopLeft", None) is not None:
         exif_data["RawImageCropTopLeft"] = str(top) + " " + str(left)
 
     if exif_data.get("RawImageCroppedSize", None) is not None:
         exif_data["RawImageCroppedSize"] = str(width) + "x" + str(height)
+        setflag = True
 
-    exif_data["ImageSize"] = str(width) + "x" + str(height)
+    if setflag == False:
+        exif_data["ImageSize"] = str(width) + "x" + str(height)
     
+def get_exif_image_size_with_orientation(exif_data):
+        # クロップとexifデータの回転
+        top, left, width, height = get_exif_image_size(exif_data)
+        if "Orientation" in exif_data:
+            rad, flip = util.split_orientation(util.str_to_orientation(exif_data.get("Orientation", "")))
+            if rad < 0.0:
+                top, left = left, top
+                width, height = height, width
+
+        return (top, left, width, height)
 
 def _estimate_depth_map(img, params=(0.121779, 0.959710, -0.780245), sigma=0.5):
     """

@@ -1,22 +1,21 @@
 
-import cv2
 import numpy as np
 
 import core
-import export
 import config
 import crop_editor
-import effects
 
 def process_pipeline(img, offset, crop_image, is_zoomed, texture_width, texture_height, click_x, click_y, primary_effects, primary_param, mask_editor2):
-
+    
     # クロップ情報を得る、ない場合元のクロップ情報から展開
     crop_info = primary_param.get('crop_info', None)
     if crop_info is None:
         crop_info = primary_param['crop_info'] = crop_editor.CropEditor.convert_rect_to_info(primary_param['crop_rect'], config.get_config('preview_size')/max(primary_param['original_img_size']))
-    
+
     # 背景レイヤー
     img0, reset = pipeline_lv0(img, primary_effects, primary_param)
+    crop_info = primary_param['crop_info'] # Cropによって値が更新されてるかも
+
     if crop_image is None or reset == True:
         imgc, crop_info2 = core.crop_image(img0, crop_info, texture_width, texture_height, click_x, click_y, offset, is_zoomed)
         mask_editor2.set_orientation(primary_param.get('rotation', 0), primary_param.get('rotation2', 0), primary_param.get('flip_mode', 0))
@@ -41,9 +40,7 @@ def process_pipeline(img, offset, crop_image, is_zoomed, texture_width, texture_
     #img2 = np.vstack(result_img)        
     img2 = pipeline2(imgc, 0, 1024, crop_info2, primary_effects, primary_param, mask_editor2)
 
-    img2 = pipeline_last(img2, crop_info2,  primary_effects, primary_param)
-
-    #img2 = lens_simulator.process_image(img2, "helios_44_2")
+    img2 = pipeline_last(img2, crop_info2, primary_effects, primary_param)
 
     return img2, imgc
 
@@ -53,11 +50,12 @@ def export_pipeline(img, primary_effects, primary_param, mask_editor2):
     img0, _ = pipeline_lv0(img, primary_effects, primary_param)
     x1, y1, x2, y2 = primary_param.get('crop_rect')
     imgc = img0[y1:y2, x1:x2] # ただのクロップ
+    crop_info = crop_editor.CropEditor.convert_rect_to_info(primary_param.get('crop_rect'), 1)
     #imgc, crop_info2 = core.crop_image(img0, crop_info, *primary_param['original_img_size'], 0, 0, (0, 0), False)
     mask_editor2.set_orientation(primary_param.get('rotation', 0), primary_param.get('rotation2', 0), primary_param.get('flip_mode', 0))
     imax = max(imgc.shape[1], imgc.shape[0])
     mask_editor2.set_texture_size(imax, imax)
-    mask_editor2.set_image(primary_param['original_img_size'], crop_editor.CropEditor.convert_rect_to_info(primary_param.get('crop_rect'), 1))
+    mask_editor2.set_image(primary_param['original_img_size'], crop_info)
     #mask_editor2.set_ref_image(effects.ColorTemperatureEffect.apply_color_temperature(imgc, primary_param),
     #                           effects.ColorTemperatureEffect.apply_color_temperature(img0, primary_param))
     mask_editor2.set_ref_image(imgc, img0)
@@ -65,7 +63,7 @@ def export_pipeline(img, primary_effects, primary_param, mask_editor2):
 
     img2 = pipeline2(imgc, 0, imgc.shape[0], None, primary_effects, primary_param, mask_editor2)
 
-    img2 = pipeline_last(img2, (0, 0, imgc.shape[1], imgc.shape[0]),  primary_effects, primary_param)
+    img2 = pipeline_last(img2, crop_info, primary_effects, primary_param)
     
     return img2
 
@@ -152,12 +150,12 @@ def pipeline_lv2(rgb, effects, param):
     for i, n in enumerate(lv2):
         if lv1reset == True:
             lv2[n].reeffect()
-        
+        """
         f1 = rgb[..., 0] < 0.0
         f2 = rgb[..., 1] < 0.0
         f3 = rgb[..., 2] < 0.0
         jax.debug.print("{nn} minus = {x1}, {x2}, {x3}", nn=n, x1=jnp.sum(f1), x2=jnp.sum(f2), x3=jnp.sum(f3))
-            
+        """    
         pre_diff = lv2[n].diff
         diff = lv2[n].make_diff(rgb, param)
         if diff is not None:

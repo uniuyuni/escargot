@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "python.h": "c",
+        "stdlib.h": "c",
+        "arrayobject.h": "c"
+    },
+    "git.ignoreLimitWarning": true
+}

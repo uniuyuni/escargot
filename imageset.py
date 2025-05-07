@@ -55,17 +55,12 @@ class ImageSet:
         return img_array
 
     def _delete_exif_orientation(self, exif_data):
-            # クロップとexifデータの回転
-            top, left, width, height = core.get_exif_image_size(exif_data)
-            if "Orientation" in exif_data:
-                rad, flip = util.split_orientation(util.str_to_orientation(exif_data.get("Orientation", "")))
-                if rad < 0.0:
-                    top, left = left, top
-                    width, height = height, width
-                    core.set_exif_image_size(exif_data, top, left, width, height)
-                del exif_data["Orientation"]
+        top, left, width, height = core.get_exif_image_size_with_orientation(exif_data)
+        core.set_exif_image_size(exif_data, top, left, width, height)
+        if exif_data.get("Orientation", None) is not None:
+            del exif_data["Orientation"]
 
-            return (top, left, width, height)
+        return (top, left, width, height)
 
 
     def _load_raw_preview(self, file_path, exif_data, param):
@@ -154,8 +149,11 @@ class ImageSet:
             raw_image = raw_image.astype(np.float32) / ((1<<exif_data.get('BitsPerSample', 14))-1)
             """
 
+            # クロップとexifデータの回転
+            top, left, width, height = self._delete_exif_orientation(exif_data)
+
             # サイズを整える
-            top, left, width, height = core.get_exif_image_size(exif_data)
+            #top, left, width, height = core.get_exif_image_size(exif_data)
             img_array = img_array[top:top+height, left:left+width]
 
             # float32へ
@@ -164,8 +162,6 @@ class ImageSet:
             # 色空間変換
             img_array = color.rgb_to_xyz(img_array, "Adobe RGB")
 
-            # クロップとexifデータの回転
-            _, _, _, _ = self._delete_exif_orientation(exif_data)
 
             # 飽和ピクセル復元
             """
