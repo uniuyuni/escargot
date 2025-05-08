@@ -98,7 +98,7 @@ def invert_RGB2TempTint(rgb, ref_temp=5000.0):
 
     invert_temp, invert_tint = __invert_temp_tint(temp, tint, ref_temp)
 
-    return invert_temp, invert_tint, Y
+    return (invert_temp, invert_tint, Y)
 
 
 def convert_TempTint2RGB(temp, tint, Y):
@@ -717,7 +717,8 @@ def apply_mask(img1, msk, img2):
 
     return np.array(array)
 
-def apply_vignette(image, intensity, radius_percent, disp_info, crop_rect, gradient_softness=3.0):
+@partial(jit, static_argnums=(1,2,5))
+def apply_vignette(image, intensity, radius_percent, disp_info, crop_rect, offset, gradient_softness=3.0):
     """
     修正版 周辺光量落ち効果
     - 中心位置が正確にクロップ中心に一致
@@ -744,41 +745,41 @@ def apply_vignette(image, intensity, radius_percent, disp_info, crop_rect, gradi
         # クロップ情報がない場合は従来通り
         center_x, center_y = w/2, h/2
 
-        mm = max(w, h)
-        max_radius = np.sqrt(mm**2 + mm**2) / 2
+        mm = jax.lax.max(w, h)
+        max_radius = jax.lax.sqrt(mm**2 + mm**2) / 2
     else:        
         dx, dy, _, _, scale = disp_info
         x1, y1, x2, y2 = crop_rect
-        _, _, offset_x, offset_y = crop_size_and_offset_from_texture(config.get_config('preview_size'), config.get_config('preview_size'), disp_info)
+        offset_x, offset_y = offset
             
         # クロップ画像内での元画像中心の位置
         center_x = (x1 + (x2 - x1) / 2 - dx) * scale + offset_x
         center_y = (y1 + (y2 - y1) / 2 - dy) * scale + offset_y
         
-        mm = max((x2 - x1), (y2 - y1)) * scale
-        max_radius = np.sqrt(mm**2 + mm**2) / 2
+        mm = jax.lax.max((x2 - x1), (y2 - y1)) * scale
+        max_radius = jax.lax.sqrt(mm**2 + mm**2) / 2
     
     # 指定された半径パーセントに基づいて実際の半径を計算
     radius = max_radius * radius_percent
     
     # 距離マップ作成
-    y_indices, x_indices = np.ogrid[:h, :w]
-    dist = np.sqrt((x_indices - center_x)**2 + (y_indices - center_y)**2)
+    y_indices, x_indices = jnp.ogrid[:h, :w]
+    dist = jnp.sqrt((x_indices - center_x)**2 + (y_indices - center_y)**2)
     
     # マスク作成（0が中心、1が端）
-    mask = np.clip(dist / radius, 0, 1)
-    mask = np.power(mask, gradient_softness)  # グラデーション調整
+    mask = jnp.clip(dist / radius, 0, 1)
+    mask = jnp.power(mask, gradient_softness)  # グラデーション調整
     
     # 効果適用（intensityの符号で方向を制御）
-    vignette = np.where(intensity < 0, 1.0 + intensity * mask, 1.0 - intensity * mask)
+    vignette = jnp.where(intensity < 0, 1.0 + intensity * mask, 1.0 - intensity * mask)
     
     # カラー画像対応
     if len(image.shape) == 3:
-        vignette = vignette[..., np.newaxis]
+        vignette = vignette[..., jnp.newaxis]
     
     # 効果適用
-    result = np.clip(image * vignette, 0, 1) if intensity < 0 else np.clip(image + (1-image)*(1-vignette), 0, 1)
-    return result.astype(np.float32)
+    result = jnp.clip(image * vignette, 0, 1) if intensity < 0 else jnp.clip(image + (1-image)*(1-vignette), 0, 1)
+    return result.astype(jnp.float32)
 
 # テクスチャサイズとクロップ情報から、新しい描画サイズと余白の大きさを得る
 def crop_size_and_offset_from_texture(texture_width, texture_height, disp_info):
@@ -922,6 +923,13 @@ def set_image_param(param, exif_data):
     param['disp_info'] = crop_editor.CropEditor.convert_rect_to_info(param['crop_rect'], config.get_config('preview_size')/max(param['original_img_size']))
 
     return (width, height)
+
+def set_temperature_to_param(param, temp, tint, Y):
+    param['color_temperature_reset'] = temp
+    param['color_temperature'] = temp
+    param['color_tint_reset'] = tint
+    param['color_tint'] = tint
+    param['color_Y'] = Y
 
 # 上下または左右の余白を追加
 @jit

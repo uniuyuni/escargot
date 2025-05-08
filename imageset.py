@@ -28,13 +28,6 @@ class ImageSet:
         self.file_path = None
         self.img = None
 
-    def _set_temperature_to_param(self, param, temp, tint, Y):
-        param['color_temperature_reset'] = temp
-        param['color_temperature'] = temp
-        param['color_tint_reset'] = tint
-        param['color_tint'] = tint
-        param['color_Y'] = Y
-
     def _black(self, in_img, black_level):
         in_img[in_img < black_level] = black_level
         out_img = in_img - black_level
@@ -50,8 +43,7 @@ class ImageSet:
         """
         wb[1] = np.sqrt(wb[1])
         #img_array /= wb
-        temp, tint, Y, = core.invert_RGB2TempTint(wb)
-        self._set_temperature_to_param(param, temp, tint, Y)
+        core.set_temperature_to_param(param, *core.invert_RGB2TempTint(wb))
         return img_array
 
     def _delete_exif_orientation(self, exif_data):
@@ -224,8 +216,7 @@ class ImageSet:
             img_array = color.rgb_to_xyz(img_array, "sRGB", True)
             
             # 画像からホワイトバランスパラメータ取得
-            temp, tint, Y, = core.invert_RGB2TempTint((1.0, 1.0, 1.0))
-            self._set_temperature_to_param(param, temp, tint, Y)
+            core.set_temperature_to_param(param, *core.invert_RGB2TempTint((1.0, 1.0, 1.0)))
             
             # クロップとexifデータの回転
             self._delete_exif_orientation(exif_data)

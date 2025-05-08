@@ -65,7 +65,7 @@ SPECIAL_PARAM = [
     #'crop_rect',
     'disp_info',
     # for imageset._set_temperature
-    'color_temerature_switch',
+    #'color_temperature_switch',
     'color_temperature_reset',
     'color_tint_reset',
     'color_Y',

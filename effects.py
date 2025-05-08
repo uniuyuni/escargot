@@ -256,6 +256,10 @@ class CropEffect(Effect):
         super().__init__(**kwargs)
         
         self.crop_editor = None
+        self.crop_editor_callback = None
+
+    def set_editing_callback(self, callback):
+        self.crop_editor_callback = callback
 
     def _param_to_aspect_ratio(self, param):
         ar = param.get('aspect_ratio', "None")
@@ -315,10 +319,14 @@ class CropEffect(Effect):
             x1, y1, x2, y2 = param['crop_rect']
             scale = config.get_config('preview_size')/max(input_width, input_height)
             self.crop_editor = crop_editor.CropEditor(input_width=input_width, input_height=input_height, scale=scale, crop_rect=(x1, y1, x2, y2), aspect_ratio=self._param_to_aspect_ratio(param))
+            self.crop_editor.set_editing_callback(self._crop_editing)
             widget.ids["preview_widget"].add_widget(self.crop_editor)
 
             # 編集中は一時的に変更
             param['disp_info'] = crop_editor.CropEditor.get_initial_disp_info(input_width, input_height, scale)
+
+            # 保存しておく
+            self.param = param
 
     def _close_crop_editor(self, param, widget):
         if self.crop_editor is not None:
@@ -327,6 +335,11 @@ class CropEffect(Effect):
 
             widget.ids["preview_widget"].remove_widget(self.crop_editor)
             self.crop_editor = None
+
+    def _crop_editing(self):
+        self.param['crop_rect'] = self.crop_editor.get_crop_rect()
+        if self.crop_editor_callback is not None:
+            self.crop_editor_callback()
 
     def finalize(self, param, widget):
         self._close_crop_editor(param, widget)
@@ -523,11 +536,10 @@ class ColorTemperatureEffect(Effect):
         return rgb * core.invert_TempTint2RGB(temp, tint, Y, 5000)
 
     def make_diff(self, rgb, param):
-        sw = param.get('color_temperature_switch', True)
         temp = param.get('color_temperature', param.get('color_temperature_reset', 5000))
         tint = param.get('color_tint', param.get('color_tint_reset', 0))
         Y = param.get('color_Y', 1.0)
-        if sw == False:
+        if False:
             self.diff = None
             self.hash = None
         else:
@@ -1626,18 +1638,16 @@ class VignetteEffect(Effect):
     def make_diff(self, rgb, disp_info, param):
         vi = param.get('vignette_intensity', 0)
         vr = param.get('vignette_radius_percent', 0)
-        if vi == 0 and vr == 0:
+        pce = param.get('crop_enable', False)
+        if (vi == 0 and vr == 0) or pce == True:
             self.diff = None
             self.hash = None
 
         else:
             param_hash = hash((vi, vr))
-            if self.hash != param_hash or param.get('crop_enable', False) == True:
-                #if param.get('crop_enable', False) == False:
-                if False:
-                    self.diff = core.apply_vignette(rgb, vi, vr, None)
-                else:
-                    self.diff = core.apply_vignette(rgb, vi, vr, disp_info, param.get('crop_rect'))
+            if self.hash != param_hash:
+                _, _, offset_x, offset_y = core.crop_size_and_offset_from_texture(config.get_config('preview_size'), config.get_config('preview_size'), disp_info)
+                self.diff = core.apply_vignette(rgb, vi, vr, disp_info, param.get('crop_rect'), (offset_x, offset_y))
                 self.hash = param_hash
         
         return self.diff

@@ -27,6 +27,7 @@ class CropEditor(KVFloatLayout):
         self.edge_dragging = None
         self.moving = False
         self.last_touch_pos = None
+        self.callback = None
 
         # スケール座標をローカル座標に変換
         self.set_to_local_crop_rect(self.crop_rect)
@@ -129,6 +130,9 @@ class CropEditor(KVFloatLayout):
         # 大きさ表示
         self.label.x, self.label.y = 0, 0 #int(self.translate.x), int(self.translate.y)
         self.label.text = str(int(width / self.scale)) + " x " + str(int(height / self.scale))
+
+        if self.callback is not None:
+            self.callback()
 
     def update_centering(self, *args):
         # 中心に移動するためのトランスレーションを設定
@@ -556,6 +560,9 @@ class CropEditor(KVFloatLayout):
         crop_width = int((x2 - x1) / self.scale)
         crop_height = int((y2 - y1) / self.scale)
         return (crop_x, crop_y, crop_width, crop_height, self.scale)
+    
+    def set_editing_callback(self, callback):
+        self.callback = callback
 
 class PointPosition(Enum):
     INSIDE = "inside"       # 内側
