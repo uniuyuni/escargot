@@ -52,6 +52,7 @@ class MainWidget(MDBoxLayout):
         self.drag_start_point = None
         self.primary_param = {}
         self.primary_effects = effects.create_effects()
+        #self.primary_effects[0]['crop'].set_editing_callback(self.crop_editing)
         self.apply_thread = None
         self.is_draw_image = False
         self.cache_system = cache_system
@@ -117,6 +118,9 @@ class MainWidget(MDBoxLayout):
         #self.apply_thread = threading.Thread(target=self.draw_image, daemon=True)
         #self.apply_thread.start()
     
+    def crop_editing(self):
+        self.apply_effects_lv(4, 'vignette')
+
     def apply_effects_lv(self, lv, effect):
         mask = self.ids['mask_editor2'].get_active_mask()
         if mask is None:
@@ -239,6 +243,7 @@ class MainWidget(MDBoxLayout):
         self.save_current_sidecar()
 
         dialog = ExportDialog(callback=self.handle_export_dialog)
+        dialog.bind(pos=MDApp.get_running_app().on_widget_pos)
         dialog.open()
 
     def handle_export_dialog(self, preset):
@@ -448,11 +453,11 @@ class MainApp(MDApp):
         self.main_widget.save_current_sidecar()
         self.main_widget.shutdown()
 
-
-    def on_window_resize(self, window, width, height):
+    @staticmethod
+    def _traverse_widget(root):
         # すべてのスケールが必要なウィジェットを更新
-        if self.root:
-            for child in util.get_entire_widget_tree(self.root):
+        if root:
+            for child in util.get_entire_widget_tree(root):
                 if hasattr(child, 'ref_width'):
                     child.width = util.dpi_scale_width(child.ref_width)
                 if hasattr(child, 'ref_height'):
@@ -465,6 +470,12 @@ class MainApp(MDApp):
                     child.tab_width = util.dpi_scale_width(child.ref_tab_width)
                 if hasattr(child, 'ref_tab_height'):
                     child.tab_height = util.dpi_scale_height(child.ref_tab_height)
+
+    def on_window_resize(self, window, width, height):
+        self._traverse_widget(self.root)
+
+    def on_widget_pos(self, root, pos):
+        self._traverse_widget(root)
 
 if __name__ == '__main__':
     multiprocessing.freeze_support()

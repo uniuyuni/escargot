@@ -8,12 +8,15 @@ from kivy.uix.modalview import ModalView
 from kivy.uix.textinput import TextInput
 from kivy.uix.button import Button
 from kivy.metrics import dp
+from functools import partial
 import json
 
 import macos
+import util
 
 import param_slider
 import spacer
+import switchable_float_input
 
 class PresetNameDialog(Popup):
     def __init__(self, save_callback, **kwargs):
@@ -223,9 +226,11 @@ class DummyWidget(BoxLayout):
         super().__init__(**kwargs)
 
         dialog = ExportDialog(None)
+        dialog.bind(pos=MDApp.get_running_app().on_window_resize)
         dialog.open()
 
 class Export_DialogApp(MDApp):
+
     def build(self):
         self.theme_cls.theme_style = 'Dark'
         self.theme_cls.primary_palette = 'Blue'
@@ -233,6 +238,27 @@ class Export_DialogApp(MDApp):
         Window.size = (dp(300), dp(200))
 
         return DummyWidget()
+
+    def on_start(self):
+        #Window.bind(on_resize=self.on_window_resize)
+        return super().on_start()
+
+    def on_window_resize(self, root, pos):
+        # すべてのスケールが必要なウィジェットを更新
+        if root:
+            for child in util.get_entire_widget_tree(root):
+                if hasattr(child, 'ref_width'):
+                    child.width = util.dpi_scale_width(child.ref_width)
+                if hasattr(child, 'ref_height'):
+                    child.height = util.dpi_scale_height(child.ref_height)
+                if hasattr(child, 'ref_padding'):
+                    child.padding = util.dpi_scale_width(child.ref_padding)
+                if hasattr(child, 'ref_spacing'):
+                    child.spacing = util.dpi_scale_width(child.ref_spacing)
+                if hasattr(child, 'ref_tab_width'):
+                    child.tab_width = util.dpi_scale_width(child.ref_tab_width)
+                if hasattr(child, 'ref_tab_height'):
+                    child.tab_height = util.dpi_scale_height(child.ref_tab_height)
 
 if __name__ == '__main__':
     Export_DialogApp().run()
