@@ -125,20 +125,20 @@
 
                 FloatLayout:
                     id: preview_widget
+                    pos_hint: {'x':0, 'y': 0}
                     size_hint_y: 0.95
-                    pos_hint: {'x':0, 'top': 1}
                     on_touch_down: root.on_image_touch_down(args[1])
                     on_touch_move: root.on_image_touch_move(args[1])
                     on_touch_up: root.on_image_touch_up(args[1])
                
                     Image:
-                        pos_hint: {'x':0, 'top': 1}
                         id: preview
+                        pos_hint: {'x':0, 'y': 0}
  
                     MaskEditor2:
+                        id: mask_editor2
                         root: root
                         pos_hint: {'x':0, 'top': 1}
-                        id: mask_editor2
                         canvas.before:
                             Color:
                                 rgba: 0, 0, 0, 0
@@ -1132,7 +1132,7 @@
                                 min: -45.0
                                 max: 45.0
                                 value: 0
-                                step: 0.1
+                                step: 1
                                 on_slider: root.apply_effects_lv(0, 'rotation')
                                 on_slider: root.apply_effects_lv(0, 'crop')
 
@@ -1146,26 +1146,26 @@
                                     pos_hint: {'center_x': .5, 'center_y': .5}
                                     ref_height: 20
                                     text: "L"
-                                    on_press: root.set_effect_param(0, 'rotation', 90)
                                     on_press: root.apply_effects_lv(0, 'crop')
+                                    on_press: root.set_effect_param(0, 'rotation', 90)
                                 Button:
                                     pos_hint: {'center_x': .5, 'center_y': .5}
                                     ref_height: 20
                                     text: "R"
-                                    on_press: root.set_effect_param(0, 'rotation', -90)
                                     on_press: root.apply_effects_lv(0, 'crop')
+                                    on_press: root.set_effect_param(0, 'rotation', -90)
                                 Button:
                                     pos_hint: {'center_x': .5, 'center_y': .5}
                                     ref_height: 20
                                     text: "H"
-                                    on_press: root.set_effect_param(0, 'rotation', 'hflip')
                                     on_press: root.apply_effects_lv(0, 'crop')
+                                    on_press: root.set_effect_param(0, 'rotation', 'hflip')
                                 Button:
                                     pos_hint: {'center_x': .5, 'center_y': .5}
                                     ref_height: 20
                                     text: "V"
-                                    on_press: root.set_effect_param(0, 'rotation', 'vflip')
                                     on_press: root.apply_effects_lv(0, 'crop')
+                                    on_press: root.set_effect_param(0, 'rotation', 'vflip')
 
                             VSeparator:
 

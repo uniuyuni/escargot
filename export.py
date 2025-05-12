@@ -100,7 +100,7 @@ def _serialize_param(param):
     effects.InpaintEffect.dump(param)
 
 def _deserialize_param(param):
-    param['disp_info'] = crop_editor.CropEditor.convert_rect_to_info(param['crop_rect'], config.get_config('preview_size')/max(param['original_img_size']))
+    param['disp_info'] = crop_editor.CropEditor.convert_rect_to_info(param['crop_rect'], param['original_img_size'], config.get_config('preview_size')/max(param['original_img_size']))
     effects.InpaintEffect.load(param)
 
 def serialize(param, mask_editor2):

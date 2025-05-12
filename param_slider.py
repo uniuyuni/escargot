@@ -11,7 +11,7 @@ class ParamSlider(KVBoxLayout):
     value = KVNumericProperty(0)
     step = KVNumericProperty(1)
     for_float = KVBooleanProperty(False)
-    slider = KVNumericProperty(0)
+    slider = KVNumericProperty(float('inf')) #　最初の変更は必ずコールバックが呼ばれるようにする
     #label_width = KVNumericProperty(dp(100))
 
     def __init__(self, **kwargs):
@@ -63,6 +63,7 @@ class ParamSlider(KVBoxLayout):
                 self.ids['slider'].value = self.reset_value
 
     def set_slider_value(self, value):
+        from kivy.event import EventDispatcher
         self.disabled = True
         self.ids['slider'].value = value
         self.disabled = False

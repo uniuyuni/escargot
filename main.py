@@ -87,7 +87,7 @@ class MainWidget(MDBoxLayout):
         if self.is_draw_image == False:
             if self.imgset == imgset:
                 self.crop_image = None
-                effects.reeffect_all(self.primary_effects)
+                #effects.reeffect_all(self.primary_effects)
                 self.start_draw_image(offset)
 
     # @mainthread
@@ -212,7 +212,7 @@ class MainWidget(MDBoxLayout):
                     # ウィンドウ座標からローカルイメージ座標に変換
                     self.click_x, self.click_y = util.to_texture(touch.pos, self.ids['preview'])
 
-                effects.reeffect_all(self.primary_effects)
+                effects.reeffect_all(self.primary_effects, 1)
                 self.start_draw_image_and_crop(self.imgset)
 
             # ドラッグ操作
@@ -226,6 +226,7 @@ class MainWidget(MDBoxLayout):
                     offset_x = touch.pos[0] - self.drag_start_point[0]
                     offset_y = touch.pos[1] - self.drag_start_point[1]
                     offset_x = -offset_x
+                    effects.reeffect_all(self.primary_effects, 1)
                     self.start_draw_image_and_crop(self.imgset, (offset_x, offset_y))
 
                     self.drag_start_point = touch.pos

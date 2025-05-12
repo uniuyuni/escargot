@@ -24,6 +24,12 @@ import config
 import pipeline
 import hlsrgb
 
+class EffectConfig():
+
+    def __init__(self, **kwargs):
+        self.scale = 1.0
+        self.is_zoom = False
+
 # 補正基底クラス
 class Effect():
 
@@ -286,11 +292,11 @@ class CropEffect(Effect):
             # クロップ範囲をリセット
             if self.crop_editor is not None:
                 if widget.ids["button_crop_reset"].state == "down":
-                    self.crop_editor.set_to_local_crop_rect([0, 0, 0, 0])
+                    self.crop_editor._set_to_local_crop_rect([0, 0, 0, 0])
                     self.crop_editor.update_crop_size()
 
                 self.crop_editor.input_angle = param.get('rotation', 0) + param.get('rotation2', 0)
-                self.crop_editor.aspect_ratio = self._param_to_aspect_ratio(param)
+                self.crop_editor.set_aspect_ratio(self._param_to_aspect_ratio(param))
 
 
     def make_diff(self, img, param):
@@ -318,7 +324,7 @@ class CropEffect(Effect):
             input_width, input_height = param['original_img_size']
             x1, y1, x2, y2 = param['crop_rect']
             scale = config.get_config('preview_size')/max(input_width, input_height)
-            self.crop_editor = crop_editor.CropEditor(input_width=input_width, input_height=input_height, scale=scale, crop_rect=(x1, y1, x2, y2), aspect_ratio=self._param_to_aspect_ratio(param))
+            self.crop_editor = crop_editor.CropEditor(input_width=input_width, input_height=input_height, scale=scale, crop_rect=[x1, y1, x2, y2], aspect_ratio=self._param_to_aspect_ratio(param))
             self.crop_editor.set_editing_callback(self._crop_editing)
             widget.ids["preview_widget"].add_widget(self.crop_editor)
 
@@ -1717,10 +1723,11 @@ def set2widget_all(widget, effects, param):
             #l.set2param(param, self)
             l.reeffect()
 
-def reeffect_all(effects):
-    for dict in effects:
-        for l in dict.values():
-            l.reeffect()
+def reeffect_all(effects, lv=0):
+    for i, dict in enumerate(effects):
+        if i >= lv:
+            for l in dict.values():
+               l.reeffect()
 
 def finalize_all(effects, param, widget):
     for dict in effects:

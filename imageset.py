@@ -148,6 +148,11 @@ class ImageSet:
             #top, left, width, height = core.get_exif_image_size(exif_data)
             img_array = img_array[top:top+height, left:left+width]
 
+            # 下位2bit補完
+            if config.get_config('raw_auto_exposure') == True:
+                img_array = img_array >> 2
+                img_array = bit_depth_expansion.process_rgb_image(img_array)
+
             # float32へ
             img_array = util.convert_to_float32(img_array)
 

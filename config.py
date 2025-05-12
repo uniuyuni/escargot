@@ -5,6 +5,7 @@ import json
 _config = {
     'preview_size': 1024,
     'raw_auto_exposure': True,
+    'raw_depth_expansion': False,
     'iopaint_model': "lama",
     'iopaint_resize_limit': 1280,
     'iopaint_use_realesrgan': True,

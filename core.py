@@ -231,7 +231,7 @@ def lensblur_filter(image, radius):
     kernel /= np.sum(kernel)
 
     # レンズブラーを適用
-    blurred_image = cv2.filter2D(image, -1, kernel)
+    blurred_image = cv2.filter2D(np.array(image), -1, kernel)
     return blurred_image
 
 @partial(jit, static_argnums=1)
@@ -718,7 +718,7 @@ def apply_mask(img1, msk, img2):
     return np.array(array)
 
 @partial(jit, static_argnums=(1,2,5))
-def apply_vignette(image, intensity, radius_percent, disp_info, crop_rect, offset, gradient_softness=3.0):
+def apply_vignette(image, intensity, radius_percent, disp_info, crop_rect, offset, gradient_softness=4.0):
     """
     修正版 周辺光量落ち効果
     - 中心位置が正確にクロップ中心に一致
@@ -756,7 +756,7 @@ def apply_vignette(image, intensity, radius_percent, disp_info, crop_rect, offse
         center_x = (x1 + (x2 - x1) / 2 - dx) * scale + offset_x
         center_y = (y1 + (y2 - y1) / 2 - dy) * scale + offset_y
         
-        mm = jax.lax.max((x2 - x1), (y2 - y1)) * scale
+        mm = jax.lax.max((x2 - x1), (y2 - y1)) * scale.astype(jnp.float32)
         max_radius = jax.lax.sqrt(mm**2 + mm**2) / 2
     
     # 指定された半径パーセントに基づいて実際の半径を計算
@@ -766,9 +766,14 @@ def apply_vignette(image, intensity, radius_percent, disp_info, crop_rect, offse
     y_indices, x_indices = jnp.ogrid[:h, :w]
     dist = jnp.sqrt((x_indices - center_x)**2 + (y_indices - center_y)**2)
     
+    def smoothstep(x):
+        return x * x * (3 - 2 * x)  # 3次多項式
+
     # マスク作成（0が中心、1が端）
     mask = jnp.clip(dist / radius, 0, 1)
-    mask = jnp.power(mask, gradient_softness)  # グラデーション調整
+    #mask = __gaussian_blur(mask, (64, 64), 0)
+    #mask = jnp.power(mask, gradient_softness)  # グラデーション調整
+    mask = smoothstep(mask)
     
     # 効果適用（intensityの符号で方向を制御）
     vignette = jnp.where(intensity < 0, 1.0 + intensity * mask, 1.0 - intensity * mask)
@@ -920,7 +925,7 @@ def set_image_param(param, exif_data):
     param['original_img_size'] = (width, height)
     param['img_size'] = (width, height)
     param['crop_rect'] = param.get('crop_rect', crop_editor.CropEditor.get_initial_crop_rect(width, height))
-    param['disp_info'] = crop_editor.CropEditor.convert_rect_to_info(param['crop_rect'], config.get_config('preview_size')/max(param['original_img_size']))
+    param['disp_info'] = crop_editor.CropEditor.convert_rect_to_info(param['crop_rect'], param['original_img_size'], config.get_config('preview_size')/max(param['original_img_size']))
 
     return (width, height)
 

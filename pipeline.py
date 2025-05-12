@@ -10,7 +10,7 @@ def process_pipeline(img, offset, crop_image, is_zoomed, texture_width, texture_
     # クロップ情報を得る、ない場合元のクロップ情報から展開
     disp_info = primary_param.get('disp_info', None)
     if disp_info is None:
-        disp_info = primary_param['disp_info'] = crop_editor.CropEditor.convert_rect_to_info(primary_param['crop_rect'], config.get_config('preview_size')/max(primary_param['original_img_size']))
+        disp_info = primary_param['disp_info'] = crop_editor.CropEditor.convert_rect_to_info(primary_param['crop_rect'], primary_param['original_img_size'], config.get_config('preview_size')/max(primary_param['original_img_size']))
 
     # 背景レイヤー
     img0, reset = pipeline_lv0(img, primary_effects, primary_param)
@@ -50,7 +50,7 @@ def export_pipeline(img, primary_effects, primary_param, mask_editor2):
     img0, _ = pipeline_lv0(img, primary_effects, primary_param)
     x1, y1, x2, y2 = primary_param.get('crop_rect')
     imgc = img0[y1:y2, x1:x2] # ただのクロップ
-    disp_info = crop_editor.CropEditor.convert_rect_to_info(primary_param.get('crop_rect'), 1)
+    disp_info = crop_editor.CropEditor.convert_rect_to_info(primary_param.get('crop_rect'), primary_param['original_img_size'], 1)
     #imgc, disp_info2 = core.crop_image(img0, disp_info, *primary_param['original_img_size'], 0, 0, (0, 0), False)
     mask_editor2.set_orientation(primary_param.get('rotation', 0), primary_param.get('rotation2', 0), primary_param.get('flip_mode', 0))
     imax = max(imgc.shape[1], imgc.shape[0])

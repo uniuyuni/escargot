@@ -1,4 +1,4 @@
-# 既存のインポート文は維持
+
 import numpy as np
 from kivy.app import App as KVApp
 from kivy.graphics import Color as KVColor, Line as KVLine, PushMatrix as KVPushMatrix, PopMatrix as KVPopMatrix, Translate as KVTranslate, Rotate as KVRotate
@@ -9,6 +9,7 @@ from kivy.metrics import dp
 from kivy.clock import Clock
 from enum import Enum
 from typing import List, Tuple
+import math
 
 class CropEditor(KVFloatLayout):
     input_width = KVNumericProperty(dp(400))
@@ -17,8 +18,7 @@ class CropEditor(KVFloatLayout):
     scale = KVNumericProperty(1.0)
     crop_rect = KVListProperty([0, 0, 0, 0])
     corner_threshold = KVNumericProperty(dp(10))
-    edge_threshold = KVNumericProperty(dp(20))  # 辺のドラッグ判定用の閾値を追加
-    minimum_rect = KVNumericProperty(dp(0))
+    edge_threshold = KVNumericProperty(dp(10))  # 辺のドラッグ判定用の閾値を追加
     aspect_ratio = KVNumericProperty(0)
 
     def __init__(self, **kwargs):
@@ -29,8 +29,10 @@ class CropEditor(KVFloatLayout):
         self.last_touch_pos = None
         self.callback = None
 
+        self.set_aspect_ratio(self.aspect_ratio)
+
         # スケール座標をローカル座標に変換
-        self.set_to_local_crop_rect(self.crop_rect)
+        self._set_to_local_crop_rect(self.crop_rect)
 
         scaled_width = self.input_width * self.scale
         scaled_height = self.input_height * self.scale
@@ -75,29 +77,42 @@ class CropEditor(KVFloatLayout):
         # 初期設定の反映
         self.update_crop_size()
 
-    def set_to_local_crop_rect(self, rect):
+    def set_aspect_ratio(self, aspect_ratio):
+        # アスペクト比変換
+        if aspect_ratio != 0 and self.crop_rect[2] - self.crop_rect[0] < self.crop_rect[3] - self.crop_rect[1]:
+            self.aspect_ratio = 1 / aspect_ratio
+        else:
+            self.aspect_ratio = aspect_ratio
+
+    def _set_to_local_crop_rect(self, crop_rect):
 
         # 矩形のサイズを設定 (初期値は画像のサイズと同じ)
-        if rect == [0, 0, 0, 0]:
-            self.crop_rect = (0, 0, self.input_width, self.input_height)
-        else:
-            crop_x, crop_y, cx, cy = rect
-            crop_width = cx - crop_x
-            crop_height = cy - crop_y
+        if crop_rect == [0, 0, 0, 0]:
+            if int(round(self.input_angle)) // 90 % 2 != 1:
+                w = self.input_width #* self.scale
+                h = self.input_height #* self.scale
+            else:
+                h = self.input_width #* self.scale
+                w = self.input_height #* self.scale
+            crop_rect = self.get_initial_crop_rect(w, h)
 
-            # 最大サイズとパディング計算
-            maxsize = max(self.input_width, self.input_height)
-            padw = (maxsize - self.input_width) / 2
-            padh = (maxsize - self.input_height) / 2
-            
-            # Y座標の変換（Y軸反転）
-            x1 = crop_x - padw          
-            y1 = (self.input_height - (crop_y - padh + crop_height))
-            x2 = x1+crop_width
-            y2 = y1+crop_height
-                        
-            self.crop_rect = tuple(np.array([x1, y1, x2, y2]) * self.scale)
-    
+        crop_x, crop_y, cx, cy = crop_rect
+        crop_width = cx - crop_x
+        crop_height = cy - crop_y
+
+        # 最大サイズとパディング計算
+        maxsize = max(self.input_width, self.input_height)
+        padw = 0#(maxsize - self.input_width) // 2
+        padh = 0#(maxsize - self.input_height) // 2
+        
+        # Y座標の変換（Y軸反転）
+        x1 = (crop_x + padw) * self.scale
+        y1 = ((maxsize - (crop_y + crop_height)) + padh) * self.scale
+        x2 = x1 + crop_width * self.scale
+        y2 = y1 + crop_height * self.scale
+                    
+        self.crop_rect = (x1, y1, x2, y2)
+
     def update_crop_size(self, *args):
 
         # 縦横比補正
@@ -129,7 +144,10 @@ class CropEditor(KVFloatLayout):
         
         # 大きさ表示
         self.label.x, self.label.y = 0, 0 #int(self.translate.x), int(self.translate.y)
-        self.label.text = str(int(width / self.scale)) + " x " + str(int(height / self.scale))
+        w = abs(int(round(width / self.scale)))
+        h = abs(int(round(height / self.scale)))
+        gcd = math.gcd(w, h)
+        self.label.text = str(w) + " x " + str(h) + "  " + str(w / gcd) + ":" + str(h / gcd)
 
         if self.callback is not None:
             self.callback()
@@ -138,10 +156,11 @@ class CropEditor(KVFloatLayout):
         # 中心に移動するためのトランスレーションを設定
         inwidth = self.input_width * self.scale
         inheight = self.input_height * self.scale
-        self.translate.x = self.pos[0] + (self.width - inwidth) / 2
-        self.translate.y = self.pos[1] + (self.height - inheight) / 2
-        self.input_translate.x = self.translate.x + inwidth / 2
-        self.input_translate.y = self.translate.y + inheight / 2
+        inm = max(inwidth, inheight)
+        self.translate.x = self.pos[0] + (self.width - inm) / 2
+        self.translate.y = self.pos[1] + (self.height - inm) / 2
+        self.input_translate.x = self.translate.x + inm / 2
+        self.input_translate.y = self.translate.y + inm / 2
         self.input_rotate.angle = self.input_angle
 
         self.update_rect()
@@ -185,6 +204,15 @@ class CropEditor(KVFloatLayout):
         self.edge_dragging = None
         self.moving = False
         self.last_touch_pos = None
+
+        # 反転処理はここでやる
+        x1, y1, x2, y2 = self.crop_rect
+        if x1 > x2:
+            x1, x2 = x2, x1
+        if y1 > y2:
+            y1, y2 = y2, y1
+        self.crop_rect = (x1, y1, x2, y2)
+        
         return super(CropEditor, self).on_touch_up(touch)
 
     def __get_dragging_corner(self, touch):
@@ -302,24 +330,31 @@ class CropEditor(KVFloatLayout):
         else:
             return self.__resize_crop(touch)
 
-        while True:
+        for i in range(5):
+
+            new_x1, new_y1, new_x2, new_y2, carf = correct_aspect_ratio(new_x1, new_y1, new_x2, new_y2, self.aspect_ratio, fix_corners)
 
             # 位置を補正
-            new_x1, new_y1, f = rotate_and_correct_point(new_x1, new_y1, x1, y1, self.input_width * self.scale, self.input_height * self.scale, self.input_angle)
-            if f == True and self.edge_dragging != 'left' and self.edge_dragging != 'top' :
-                new_x2, new_y2 = x2, y2
-            new_x2, new_y1, f = rotate_and_correct_point(new_x2, new_y1, x2, y1, self.input_width * self.scale, self.input_height * self.scale, self.input_angle)
-            if f == True and self.edge_dragging != 'right' and self.edge_dragging != 'top' :
-                new_x1, new_y2 = x1, y2
-            new_x1, new_y2, f = rotate_and_correct_point(new_x1, new_y2, x1, y2, self.input_width * self.scale, self.input_height * self.scale, self.input_angle)
-            if f == True and self.edge_dragging != 'left' and self.edge_dragging != 'bottom' :
-                new_x2, new_y1 = x2, y1
-            new_x2, new_y2, f = rotate_and_correct_point(new_x2, new_y2, x2, y2, self.input_width * self.scale, self.input_height * self.scale, self.input_angle)
-            if f == True and self.edge_dragging != 'right' and self.edge_dragging != 'bottom' :
-                new_x1, new_y1 = x1, y1
+            _, _, f = rotate_and_correct_point(new_x1, new_y1, x1, y1, self.input_width * self.scale, self.input_height * self.scale, self.input_angle)
+            if f == True:
+                self.__resize_by_corner2(new_x1, new_y1, new_x2, new_y2, x1, y1, x2, y2, 'top_left', ['bottom_right'])
+                return
 
-            # 縦横比を考慮
-            new_x1, new_y1, new_x2, new_y2, carf = correct_aspect_ratio(new_x1, new_y1, new_x2, new_y2, self.aspect_ratio, self.minimum_rect, self.minimum_rect, fix_corners)
+            _, _, f = rotate_and_correct_point(new_x2, new_y1, x2, y1, self.input_width * self.scale, self.input_height * self.scale, self.input_angle)
+            if f == True:
+                self.__resize_by_corner2(new_x1, new_y1, new_x2, new_y2, x1, y1, x2, y2, 'top_right', ['bottom_left'])
+                return
+
+            _, _, f = rotate_and_correct_point(new_x1, new_y2, x1, y2, self.input_width * self.scale, self.input_height * self.scale, self.input_angle)
+            if f == True:
+                self.__resize_by_corner2(new_x1, new_y1, new_x2, new_y2, x1, y1, x2, y2, 'bottom_left', ['top_right'])
+                return
+
+            _, _, f = rotate_and_correct_point(new_x2, new_y2, x2, y2, self.input_width * self.scale, self.input_height * self.scale, self.input_angle)
+            if f == True:
+                self.__resize_by_corner2(new_x1, new_y1, new_x2, new_y2, x1, y1, x2, y2, 'bottom_right', ['top_left'])
+                return
+            
             if carf == False:
                 break
 
@@ -329,9 +364,6 @@ class CropEditor(KVFloatLayout):
     def __resize_by_corner(self, touch):
         x1, y1, x2, y2 = self.crop_rect
         new_x1, new_y1, new_x2, new_y2 = x1, y1, x2, y2
-
-        # 現在の値を保存
-        old_x1, old_y1, old_x2, old_y2 = new_x1, new_y1, new_x2, new_y2
 
         if self.corner_dragging == 'top_left':
             new_x1 = touch.x - self.translate.x
@@ -355,6 +387,9 @@ class CropEditor(KVFloatLayout):
         else:
             return self.__resize_crop(touch)
 
+        return self.__resize_by_corner2(new_x1, new_y1, new_x2, new_y2, x1, y1, x2, y2, self.corner_dragging, fix_corners)
+
+    def __resize_by_corner2(self, new_x1, new_y1, new_x2, new_y2, old_x1, old_y1, old_x2, old_y2, corner_dragging, fix_corners):
         # 収束するまでループする（最大10回まで試行）
         max_iterations = 10
         iterations = 0
@@ -369,9 +404,14 @@ class CropEditor(KVFloatLayout):
             # 縦横入れ替え？
             if self.aspect_ratio > 0:
                 current_ratio = abs(new_x2 - new_x1) / max(abs(new_y2 - new_y1), 0.001)  # ゼロ除算防止
-                current_aspect_ratio = self.aspect_ratio if current_ratio >= 1 else 1 / self.aspect_ratio
+
+                # アスペクト比が1以上か未満かに関わらず同じロジックで処理
+                if (self.aspect_ratio >= 1.0 and current_ratio >= 1) or (self.aspect_ratio < 1.0 and current_ratio <= 1):
+                    target_aspect_ratio = self.aspect_ratio
+                else:
+                    target_aspect_ratio = 1 / self.aspect_ratio
             else:
-                current_aspect_ratio = self.aspect_ratio
+                target_aspect_ratio = self.aspect_ratio
             
             # クリップ先の画像の中に収める - 各角を個別に補正
             if not 'top_left' in fix_corners:
@@ -410,37 +450,34 @@ class CropEditor(KVFloatLayout):
                 )
                 was_corrected |= f4
 
-            """
             # 固定点を保持
-            if self.corner_dragging == 'top_left':
+            if corner_dragging == 'top_left':
                 if f1:  # 左上が補正された場合
                     new_x2, new_y2 = old_x2, old_y2  # 右下を元に戻す
-            elif self.corner_dragging == 'top_right':
+            elif corner_dragging == 'top_right':
                 if f2:  # 右上が補正された場合
                     new_x1, new_y2 = old_x1, old_y2  # 左下を元に戻す
-            elif self.corner_dragging == 'bottom_left':
+            elif corner_dragging == 'bottom_left':
                 if f3:  # 左下が補正された場合
                     new_x2, new_y1 = old_x2, old_y1  # 右上を元に戻す
-            elif self.corner_dragging == 'bottom_right':
+            elif corner_dragging == 'bottom_right':
                 if f4:  # 右下が補正された場合
                     new_x1, new_y1 = old_x1, old_y1  # 左上を元に戻す
-            """
+
             # 縦横比を考慮
             old_x1, old_y1, old_x2, old_y2 = new_x1, new_y1, new_x2, new_y2
             new_x1, new_y1, new_x2, new_y2, carf = correct_aspect_ratio(
                 new_x1, new_y1, new_x2, new_y2, 
-                current_aspect_ratio, 
-                self.minimum_rect, 
-                self.minimum_rect, 
+                target_aspect_ratio, 
                 fix_corners
             )
             was_corrected |= carf
             
             # 変化が小さい場合は収束したとみなす
-            if (abs(old_x1 - new_x1) < 0.2 and 
-                abs(old_y1 - new_y1) < 0.2 and 
-                abs(old_x2 - new_x2) < 0.2 and 
-                abs(old_y2 - new_y2) < 0.2):
+            if (abs(old_x1 - new_x1) < 0.02 and 
+                abs(old_y1 - new_y1) < 0.02 and 
+                abs(old_x2 - new_x2) < 0.02 and 
+                abs(old_y2 - new_y2) < 0.02):
                 break
 
         self.crop_rect = [new_x1, new_y1, new_x2, new_y2]
@@ -458,56 +495,60 @@ class CropEditor(KVFloatLayout):
         iterations = 0
         was_corrected = True
         
+        mm = max(self.input_width * self.scale, self.input_height * self.scale) / 2
+        old_x1, old_y1, old_x2, old_y2 = mm, mm, mm, mm
+
         while was_corrected and iterations < max_iterations:
             was_corrected = False
             iterations += 1
-            
-            # 現在の値を保存
-            old_x1, old_y1, old_x2, old_y2 = new_x1, new_y1, new_x2, new_y2
-            
+                        
             # 位置補正 - 各角を画像の範囲内に収める
-            new_x1, new_y1, f1 = rotate_and_correct_point(
+            new1_x1, new1_y1, f1 = rotate_and_correct_point(
                 new_x1, new_y1, old_x1, old_y1, 
                 self.input_width * self.scale, 
                 self.input_height * self.scale, 
                 self.input_angle
             )
-            new_x2, new_y1, f2 = rotate_and_correct_point(
+            new2_x2, new2_y1, f2 = rotate_and_correct_point(
                 new_x2, new_y1, old_x2, old_y1, 
                 self.input_width * self.scale, 
                 self.input_height * self.scale, 
                 self.input_angle
             )
-            new_x1, new_y2, f3 = rotate_and_correct_point(
+            new3_x1, new3_y2, f3 = rotate_and_correct_point(
                 new_x1, new_y2, old_x1, old_y2, 
                 self.input_width * self.scale, 
                 self.input_height * self.scale, 
                 self.input_angle
             )
-            new_x2, new_y2, f4 = rotate_and_correct_point(
+            new4_x2, new4_y2, f4 = rotate_and_correct_point(
                 new_x2, new_y2, old_x2, old_y2, 
                 self.input_width * self.scale, 
                 self.input_height * self.scale, 
                 self.input_angle
             )
-            was_corrected = f1 or f2 or f3 or f4
+            was_corrected = f1 | f2 | f3 | f4
+
+            new_x1 = max(new1_x1, new3_x1, new_x1)
+            new_y1 = max(new1_y1, new2_y1, new_y1)
+            new_x2 = min(new2_x2, new4_x2, new_x2)
+            new_y2 = min(new3_y2, new4_y2, new_y2)
 
             # 縦横比を考慮
             old_x1, old_y1, old_x2, old_y2 = new_x1, new_y1, new_x2, new_y2
+            
             new_x1, new_y1, new_x2, new_y2, carf = correct_aspect_ratio(
                 new_x1, new_y1, new_x2, new_y2, 
                 self.aspect_ratio, 
-                self.minimum_rect, 
-                self.minimum_rect, 
                 []  # 固定点なし - 中心を維持
             )
             was_corrected |= carf
             
             # 変化が小さい場合は収束したとみなす
-            if (abs(old_x1 - new_x1) < 0.5 and 
-                abs(old_y1 - new_y1) < 0.5 and 
-                abs(old_x2 - new_x2) < 0.5 and 
-                abs(old_y2 - new_y2) < 0.5):
+            if (abs(old_x1 - new_x1) < 0.02 and 
+                abs(old_y1 - new_y1) < 0.02 and 
+                abs(old_x2 - new_x2) < 0.02 and 
+                abs(old_y2 - new_y2) < 0.02):
                 break
 
         self.crop_rect = [new_x1, new_y1, new_x2, new_y2]
@@ -521,42 +562,49 @@ class CropEditor(KVFloatLayout):
 
     @staticmethod
     def get_initial_disp_info(input_width, input_height, scale):
-        # 上下反転させて返す、パディングも付与
-        x1, y1, x2, y2 = 0, 0, input_width, input_height
+        # パディング付与
+        x1, y1, crop_width, crop_height = 0, 0, input_width, input_height
         maxsize = max(input_width, input_height)
-        padw = (maxsize - input_width) / 2 
-        padh = (maxsize - input_height) / 2
+        padw = (maxsize - input_width) // 2 
+        padh = (maxsize - input_height) // 2
         crop_x = int(x1 + padw)
-        crop_y = int(input_height - (y1 + (y2-y1)) + padh)
-        crop_width = int(x2 - x1)
-        crop_height = int(y2 - y1)
+        crop_y = int(y1 + padh)
         return (crop_x, crop_y, crop_width, crop_height, scale)
     
     @staticmethod
-    def convert_rect_to_info(crop_rect, scale):
+    def convert_rect_to_info(crop_rect, input_size, scale):
+        inw, inh = input_size
+        maxsize = max(inw, inh)
+        padw = 0#(maxsize - inw) // 2
+        padh = 0#(maxsize - inh) // 2
+        
         x1, y1, x2, y2 = crop_rect
-        return (x1, y1, x2-x1, y2-y1, scale)
+        w = x2 - x1
+        h = y2 - y1        
+        x1 = x1 + padw
+        y1 = y1 + padh
+        return (x1, y1, w, h, scale)
     
     def get_crop_rect(self):
-        # 上下反転させて返す、パディングも付与。グローバル座標へも変換
+        # 上下反転させて返す、パディング削除
         x1, y1, x2, y2 = self.crop_rect
         maxsize = max(self.input_width, self.input_height)
-        padw = (maxsize - self.input_width) // 2 
-        padh = (maxsize - self.input_height) // 2
-        cx1 = int(x1 / self.scale + padw)
-        cy1 = int(self.input_height - (y1 + (y2-y1)) / self.scale + padh)
-        cx2 = int(x2 / self.scale + padw)
+        padw = 0#(maxsize - self.input_width) // 2 
+        padh = 0#(maxsize - self.input_height) // 2
+        cx1 = int(x1 / self.scale - padw)
+        cy1 = int(maxsize - (y1 + (y2-y1)) / self.scale - padh)
+        cx2 = int(x2 / self.scale - padw)
         cy2 = cy1 + int((y2 - y1) / self.scale)
         return (cx1, cy1, cx2, cy2)
     
     def get_disp_info(self):
-        # 上下反転させて返す、パディングも付与。グローバル座標へも変換
+        # 上下反転させて返す。グローバル座標へも変換
         x1, y1, x2, y2 = self.crop_rect
         maxsize = max(self.input_width, self.input_height)
-        padw = (maxsize - self.input_width) / 2 
-        padh = (maxsize - self.input_height) / 2
+        padw = 0#(maxsize - self.input_width)
+        padh = 0#(maxsize - self.input_height)
         crop_x = int(x1 / self.scale + padw)
-        crop_y = int(self.input_height - (y1 + (y2-y1)) / self.scale + padh)
+        crop_y = int(maxsize - (y1 + (y2-y1)) / self.scale + padh)
         crop_width = int((x2 - x1) / self.scale)
         crop_height = int((y2 - y1) / self.scale)
         return (crop_x, crop_y, crop_width, crop_height, self.scale)
@@ -744,8 +792,10 @@ def rotate_and_correct_point(point_x, point_y, old_px, old_py, rect_width, rect_
     tuple: 補正後の (x, y) 座標
     Bool: 補正されたかフラグ
     """
-    px = point_x - rect_width/2
-    py = point_y - rect_height/2
+    rect_mm = max(rect_height, rect_width)
+    
+    px = point_x - rect_mm/2
+    py = point_y - rect_mm/2
 
     # 点が既に内部にある場合は補正不要
     position, _ = get_point_position_in_rotated_rectangle(px, py, rect_width, rect_height, angle_degrees)
@@ -773,8 +823,8 @@ def rotate_and_correct_point(point_x, point_y, old_px, old_py, rect_width, rect_
     rotated_corners = np.dot(corners, rotation_matrix.T)
 
     # 移動ベクトルを計算し十分な長さまで延長
-    ox = old_px - rect_width/2
-    oy = old_py - rect_height/2
+    ox = old_px - rect_mm/2
+    oy = old_py - rect_mm/2
     move_vector = np.array([px - ox, py - oy])
     if np.all(move_vector == 0):
         # 移動がない場合は最近接点を探す
@@ -787,18 +837,19 @@ def rotate_and_correct_point(point_x, point_y, old_px, old_py, rect_width, rect_
             if dist < min_dist:
                 min_dist = dist
                 nearest = edge_point
-        return nearest[0] + rect_width/2, nearest[1] + rect_height/2, True
+        return nearest[0] + rect_mm/2, nearest[1] + rect_mm/2, True
 
     # 移動ベクトルを正規化して延長
     length = np.sqrt(np.sum(move_vector ** 2))
-    if length > 0:
-        move_vector = move_vector / length
+    #if length > 0:
+    #    move_vector = move_vector / length
     # 対角線の長さの2倍程度まで延長
-    extension = np.sqrt(rect_width**2 + rect_height**2) * 2
-    extended_point = np.array([ox, oy]) + move_vector * extension
+    extension = np.sqrt(rect_mm**2 + rect_mm**2)
+    extended_point = np.array([ox, oy]) + move_vector * 2#extension
+    #extended_point = np.array([px, py])
 
     # 延長した線分と各辺との交点を探す
-    min_distance = float('inf')
+    min_distance = extension #float('inf')
     intersection_point = None
     
     for i in range(4):
@@ -807,13 +858,13 @@ def rotate_and_correct_point(point_x, point_y, old_px, old_py, rect_width, rect_
                                   rotated_corners[i], rotated_corners[j])
         if lipoint is not None:
             # 元の点に最も近い交点を選択
-            dist = (lipoint[0] - px)**2 + (lipoint[1] - py)**2
+            dist = np.sqrt((lipoint[0] - px)**2 + (lipoint[1] - py)**2)
             if dist < min_distance:
                 min_distance = dist
                 intersection_point = lipoint
 
     if intersection_point is not None:
-        return intersection_point[0] + rect_width/2, intersection_point[1] + rect_height/2, True
+        return intersection_point[0] + rect_mm/2, intersection_point[1] + rect_mm/2, True
 
     # それ以外の場合は最近接点を探す
     min_dist = float('inf')
@@ -826,14 +877,12 @@ def rotate_and_correct_point(point_x, point_y, old_px, old_py, rect_width, rect_
             min_dist = dist
             nearest = edge_point
 
-    return nearest[0] + rect_width/2, nearest[1] + rect_height/2, True
+    return nearest[0] + rect_mm/2, nearest[1] + rect_mm/2, True
 
 
 def correct_aspect_ratio(
     x1: float, y1: float, x2: float, y2: float,
     target_aspect_ratio: float,
-    min_width: float = 0,
-    min_height: float = 0,
     fixed_points: List[str] = []
 ) -> Tuple[float, float, float, float, bool]:
     """
@@ -845,8 +894,6 @@ def correct_aspect_ratio(
         x2: 右下のX座標
         y2: 右下のY座標
         target_aspect_ratio: 目標のアスペクト比 (幅/高さ)
-        min_width: 最小幅
-        min_height: 最小高さ
         fixed_points: 固定する頂点のリスト
             選択肢: 'top_left', 'top_right', 'bottom_left', 'bottom_right'
 
@@ -878,38 +925,64 @@ def correct_aspect_ratio(
 
     # 現在のアスペクト比を計算
     current_ratio = max(current_width, min_width) / max(current_height, min_height)
+    if current_ratio > target_aspect_ratio:
+        min_width = min_height * target_aspect_ratio
+    else:
+        min_height = min_width / target_aspect_ratio
 
     # 補正が必要かどうかの判定
     needs_correction = (
-        abs(current_ratio - target_aspect_ratio) > 0.001 or
+        abs(current_ratio - target_aspect_ratio) > 0.0001 or
         current_width < min_width or
         current_height < min_height
     )
     if not needs_correction:
         return x1, y1, x2, y2, False
 
+    def flip_fixed_points(fixed_points, x=True):
+        if x == True:
+            for i, fp in enumerate(fixed_points):
+                if "left" in fp:
+                    fixed_points[i] = fixed_points[i].replace("left", "right")
+                if "right" in fp:
+                    fixed_points[i] = fixed_points[i].replace("right", "left")
+        else:
+            for i, fp in enumerate(fixed_points):
+                if "top" in fp:
+                    fixed_points[i] = fixed_points[i].replace("top", "bottom")
+                if "bottom" in fp:
+                    fixed_points[i] = fixed_points[i].replace("bottom", "top")
+
     # 反転チェック
+    """
     if x1 > x2:
         x1, x2 = x2, x1
+        #x1 = x2 - min_width
+        flip_fixed_points(fixed_points, x=True)
+        sign_x = np.sign(x2 - x1)
     if y1 > y2:
         y1, y2 = y2, y1
+        #y1 = y2 - min_height
+        flip_fixed_points(fixed_points, x=False)    
+        sign_y = np.sign(y2 - y1)
+    """
+    # 新しいサイズを計算
+    if current_ratio > target_aspect_ratio:
+        new_height = current_height
+        new_width = new_height * target_aspect_ratio
+    else:
+        new_width = current_width
+        new_height = new_width / target_aspect_ratio
+
+    # 最小サイズを確保
+    new_width = max(new_width, min_width)
+    new_height = max(new_height, min_height)
 
     # 固定点なしの場合
     if not fixed_points:
         # 中心を維持しながらアスペクト比を調整
         center_x = (x1 + x2) / 2
         center_y = (y1 + y2) / 2
-
-        if current_ratio > target_aspect_ratio:
-            new_height = max(current_height, min_height)
-            new_width = new_height * target_aspect_ratio
-        else:
-            new_width = max(current_width, min_width)
-            new_height = new_width / target_aspect_ratio
-
-        # 最小サイズを確保
-        new_width = max(new_width, min_width)
-        new_height = max(new_height, min_height)
 
         half_width = new_width / 2
         half_height = new_height / 2
@@ -922,22 +995,11 @@ def correct_aspect_ratio(
             True
         )
 
+
     # 1点が固定の場合
     if len(fixed_points) == 1:
         fixed_point = fixed_points[0]
         
-        # 新しいサイズを計算
-        if current_ratio > target_aspect_ratio:
-            new_height = max(current_height, min_height)
-            new_width = new_height * target_aspect_ratio
-        else:
-            new_width = max(current_width, min_width)
-            new_height = new_width / target_aspect_ratio
-
-        # 最小サイズを確保
-        new_width = max(new_width, min_width)
-        new_height = max(new_height, min_height)
-
         # 固定点を基準に他の点を配置
         if fixed_point == 'top_left':
             return x1, y1, x1 + new_width * sign_x, y1 + new_height * sign_y, True
@@ -950,6 +1012,7 @@ def correct_aspect_ratio(
 
     # 2点が固定（辺が固定）の場合
     if len(fixed_points) == 2:
+
         if 'top_left' in fixed_points and 'top_right' in fixed_points:
             # 上辺が固定 - 高さを維持して幅を中心から均等に調整
             current_height = abs(y2 - y1)
@@ -988,28 +1051,22 @@ def correct_aspect_ratio(
 
 
     # 対角の2点が固定の場合は、最初の固定点を基準に処理（対角でない一点）
-    first_point = fixed_points[0]
-    if current_ratio > target_aspect_ratio:
-        new_height = max(current_height, min_height)
-        new_width = new_height * target_aspect_ratio
-    else:
-        new_width = max(current_width, min_width)
-        new_height = new_width / target_aspect_ratio
-    new_width = max(new_width, min_width)
-    new_height = max(new_height, min_height)
+    unfixed = list(all_points - set(fixed_points))[0]
+    #first_point = fixed_points[0]
 
-    if first_point == 'top_left':
+    if unfixed == 'bottom_right':
         return x1, y1, x1 + new_width * sign_x, y1 + new_height * sign_y, True
 
-    elif first_point == 'top_right':
+    elif unfixed == 'bottom_left':
         return x2 - new_width * sign_x, y1, x2, y1 + new_height * sign_y, True
 
-    elif first_point == 'bottom_left':
+    elif unfixed == 'top_right':
         return x1, y2 - new_height * sign_y, x1 + new_width * sign_x, y2, True
 
-    else:  # bottom_right
+    elif unfixed == 'top_left':
         return x2 - new_width * sign_x, y2 - new_height * sign_y, x2, y2, True
 
+    return x1, y1, x2, y2, False
 
 class CropApp(KVApp):
 
