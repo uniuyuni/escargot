@@ -1,1 +1,1 @@
-{"preview_size": 1024, "raw_auto_exposure": true, "iopaint_model": "lama", "iopaint_resize_limit": 1280, "iopaint_use_realesrgan": true, "display_color_gamut": "sRGB", "import_path": "/Users/uniuyuni/PythonProjects/escargot/picture", "lut_path": "/Users/uniuyuni/Pictures/LUTs"}
+{"preview_size": 1024, "raw_auto_exposure": true, "raw_depth_expansion": false, "iopaint_model": "lama", "iopaint_resize_limit": 1280, "iopaint_use_realesrgan": true, "display_color_gamut": "sRGB", "gpu_type": "mps", "import_path": "/Users/uniuyuni/PythonProjects/escargot/picture"}

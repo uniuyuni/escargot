@@ -2,7 +2,11 @@
     "files.associations": {
         "python.h": "c",
         "stdlib.h": "c",
-        "arrayobject.h": "c"
+        "arrayobject.h": "c",
+        "functional": "cpp",
+        "*.cl": "cpp",
+        "chrono": "cpp",
+        "__locale": "cpp"
     },
     "git.ignoreLimitWarning": true
 }

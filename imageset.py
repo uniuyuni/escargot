@@ -149,7 +149,7 @@ class ImageSet:
             img_array = img_array[top:top+height, left:left+width]
 
             # 下位2bit補完
-            if config.get_config('raw_auto_exposure') == True:
+            if config.get_config('raw_depth_expansion') == True:
                 img_array = img_array >> 2
                 img_array = bit_depth_expansion.process_rgb_image(img_array)
 
@@ -157,8 +157,8 @@ class ImageSet:
             img_array = util.convert_to_float32(img_array)
 
             # 色空間変換
-            img_array = color.rgb_to_xyz(img_array, "Adobe RGB")
-
+            #img_array = color.rgb_to_xyz(img_array, "Adobe RGB")
+            #img_array = cv2.cvtColor(img_array, cv2.COLOR_RGB2XYZ)
 
             # 飽和ピクセル復元
             """

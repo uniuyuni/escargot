@@ -6,6 +6,7 @@ _config = {
     'preview_size': 1024,
     'raw_auto_exposure': True,
     'raw_depth_expansion': False,
+    'scale_threshold': 0.5,
     'iopaint_model': "lama",
     'iopaint_resize_limit': 1280,
     'iopaint_use_realesrgan': True,
@@ -50,7 +51,7 @@ def load_config():
     file_path = os.getcwd() + '/config.json'
     try:
         with open(file_path, 'r') as f:
-            _config = json.load(f)
+            _config.update(json.load(f))
             apply_config()
     except FileNotFoundError as e:
         pass

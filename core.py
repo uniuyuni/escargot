@@ -267,6 +267,20 @@ def tone_mapping(x, exposure=1.0):
     # Reinhard トーンマッピング
     return x / (x + exposure)
 
+def tone_mapping_sync(x, exposure=1.0):
+    array = tone_mapping(x, exposure)
+    array.block_until_ready()
+
+    return np.array(array)
+
+def tone_mapping_np(x, exposure=1.0):
+    # Reinhard トーンマッピング
+    return x / (x + exposure)
+
+def tone_mapping_cv(x, exposure=1.0):
+
+    return cv2.divide(x, cv2.add(x, exposure))
+
 def highlight_compress(image):
 
     return tone_mapping(image)

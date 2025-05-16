@@ -104,7 +104,8 @@ class MainWidget(MDBoxLayout):
             img, self.crop_image = pipeline.process_pipeline(self.imgset.img, offset, self.crop_image, self.is_zoomed, self.texture_width, self.texture_height, self.click_x, self.click_y, self.primary_effects, self.primary_param, self.ids['mask_editor2'])
             #util.print_nan_inf(img)
             
-            img = color.xyz_to_rgb(img, config.get_config('display_color_gamut'), True)
+            #img = color.xyz_to_rgb(img, config.get_config('display_color_gamut'), True)
+            #img = cv2.cvtColor(img, cv2.COLOR_XYZ2RGB)
             img = np.array(img)
             self.draw_histogram(img)
             img = np.clip(img, 0, 1)
@@ -480,6 +481,7 @@ class MainApp(MDApp):
 
 if __name__ == '__main__':
     multiprocessing.freeze_support()
+    cv2.setUseOptimized(True)
     
     # メインプロセスでマネージャーを作成
     cache_system = file_cache_system.FileCacheSystem(max_cache_size=100, max_concurrent_loads=2)

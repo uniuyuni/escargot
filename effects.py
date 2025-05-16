@@ -27,7 +27,7 @@ import hlsrgb
 class EffectConfig():
 
     def __init__(self, **kwargs):
-        self.scale = 1.0
+        self.disp_info = None
         self.is_zoom = False
 
 # 補正基底クラス
@@ -48,7 +48,7 @@ class Effect():
         pass
 
     # 差分の作成
-    def make_diff(self, img, param):
+    def make_diff(self, img, param, efconfig):
         self.diff = img
 
     def apply_diff(self, img):
@@ -73,7 +73,7 @@ class LensModifierEffect(Effect):
         param['subpixel_distortion'] = 0 if widget.ids["switch_subpixel_distortion"].active == False else 1
         param['geometry_distortion'] = 0 if widget.ids["switch_geometry_distortion"].active == False else 1
 
-    def make_diff(self, img, param):
+    def make_diff(self, img, param, efconfig):
         cd = param.get('color_modification', 0)
         sd = param.get('subpixel_distortion', 0)
         gd = param.get('geometry_distortion', 0)
@@ -98,7 +98,7 @@ class SubpixelShiftEffect(Effect):
     def set2param(self, param, widget):
         param['subpixel_shift'] = 0 if widget.ids["switch_subpixel_shift"].active == False else 1
 
-    def make_diff(self, img, param):
+    def make_diff(self, img, param, efconfig):
         ss = param.get('subpixel_shift', 0)
         if ss <= 0:
             self.diff = None
@@ -176,7 +176,7 @@ class InpaintEffect(Effect):
                 widget.ids["preview_widget"].remove_widget(self.mask_editor)
                 self.mask_editor = None
 
-    def make_diff(self, img, param):
+    def make_diff(self, img, param, efconfig):
         self.inpaint_diff_list = param.get('inpaint_diff_list', [])
         ip = param.get('inpaint', 0)
         ipp = param.get('inpaint_predict', 0)
@@ -240,7 +240,7 @@ class RotationEffect(Effect):
         else:
             pass
 
-    def make_diff(self, img, param):
+    def make_diff(self, img, param, efconfig):
         ang = param.get('rotation', 0)
         ang2 = param.get('rotation2', 0)
         flp = param.get('flip_mode', 0)
@@ -299,7 +299,7 @@ class CropEffect(Effect):
                 self.crop_editor.set_aspect_ratio(self._param_to_aspect_ratio(param))
 
 
-    def make_diff(self, img, param):
+    def make_diff(self, img, param, efconfig):
         ce = param.get('crop_enable', False)
         disp_info = param.get('disp_info', None)
         if ce == True or disp_info is None:
@@ -362,9 +362,9 @@ class AINoiseReductonEffect(Effect):
     def set2param(self, param, widget):
         param['ai_noise_reduction'] = 0 if widget.ids["switch_ai_noise_reduction"].active == False else 1
 
-    def make_diff(self, img, param):
+    def make_diff(self, img, param, efconfig):
         nr = param.get('ai_noise_reduction', 0)
-        if nr <= 0:
+        if nr <= 0 or efconfig.disp_info[4] < config.get_config('scale_threshold'):
             self.diff = None
             self.hash = None
         else:
@@ -391,19 +391,28 @@ class NLMNoiseReductionEffect(Effect):
     def set2param(self, param, widget):
         param['nlm_noise_reduction'] = widget.ids["slider_nlm_noise_reduction"].value
 
-    def make_diff(self, img, param):
+    def make_diff(self, img, param, efconfig):
         nlm = int(param.get('nlm_noise_reduction', 0))
-        if nlm == 0:
+        if nlm == 0 or efconfig.disp_info[4] < config.get_config('scale_threshold'):
             self.diff = None
             self.hash = None
         else:
             param_hash = hash((nlm))
             if self.hash != param_hash:
                 if NLMNoiseReductionEffect.__skimage is None:
-                    NLMNoiseReductionEffect.__skimage = importlib.import_module('skimage')
+                    NLMNoiseReductionEffect.__skimage = importlib.import_module('bm3d')
 
-                sigma_est = np.mean(NLMNoiseReductionEffect.__skimage.restoration.estimate_sigma(img, channel_axis=2))
-                self.diff = NLMNoiseReductionEffect.__skimage.restoration.denoise_nl_means(img, h=nlm/100.0*sigma_est, sigma=sigma_est, fast_mode=True, channel_axis=2)
+                #noisy_img0 = img[..., 0]
+                #basic_img0 = NLMNoiseReductionEffect.__skimage.BM3D(noisy_img0)
+                #noisy_img1 = img[..., 1]
+                #basic_img1 = NLMNoiseReductionEffect.__skimage.BM3D(noisy_img1)
+                #noisy_img2 = img[..., 2]
+                #basic_img2 = NLMNoiseReductionEffect.__skimage.BM3D(noisy_img2)
+                #self.diff = np.stack([basic_img0, basic_img1, basic_img2], axis=-1)
+                
+                self.diff = NLMNoiseReductionEffect.__skimage.bm3d(img, nlm/1000.0 * efconfig.disp_info[4])
+                #sigma_est = np.mean(NLMNoiseReductionEffect.__skimage.restoration.estimate_sigma(img, channel_axis=2))
+                #self.diff = NLMNoiseReductionEffect.__skimage.restoration.denoise_nl_means(img, h=nlm/100.0*sigma_est, sigma=sigma_est, fast_mode=True, channel_axis=2)
                 self.hash = param_hash
 
         return self.diff
@@ -418,7 +427,7 @@ class DeblurFilterEffect(Effect):
     def set2param(self, param, widget):
         param['deblur_filter'] = widget.ids["slider_deblur_filter"].value
 
-    def make_diff(self, img, param):
+    def make_diff(self, img, param, efconfig):
         dbfr = int(param.get('deblur_filter', 0))
         if dbfr == 0:
             self.diff = None
@@ -446,7 +455,7 @@ class DefocusEffect(Effect):
     def set2param(self, param, widget):
         param['defocus'] = 0 if widget.ids["switch_defocus"].active == False else 1
 
-    def make_diff(self, img, param):
+    def make_diff(self, img, param, efconfig):
         df = param.get('defocus', 0)
         if df <= 0:
             self.diff = None
@@ -474,7 +483,7 @@ class LensblurFilterEffect(Effect):
     def set2param(self, param, widget):
         param['lensblur_filter'] = widget.ids["slider_lensblur_filter"].value
 
-    def make_diff(self, img, param):
+    def make_diff(self, img, param, efconfig):
         lpfr = int(param.get('lensblur_filter', 0))
         if lpfr == 0:
             self.diff = None
@@ -483,7 +492,7 @@ class LensblurFilterEffect(Effect):
         else:
             param_hash = hash((lpfr))
             if self.hash != param_hash:
-                self.diff = core.lensblur_filter(img, lpfr-1)
+                self.diff = core.lensblur_filter(img, int(round(lpfr-1) * 4 * efconfig.disp_info[4]))
                 self.hash = param_hash
 
         return self.diff
@@ -500,7 +509,7 @@ class GlowEffect(Effect):
         param['glow_gauss'] = widget.ids["slider_glow_gauss"].value
         param['glow_opacity'] = widget.ids["slider_glow_opacity"].value
 
-    def make_diff(self, rgb, param):
+    def make_diff(self, rgb, param, efconfig):
         gb = param.get('glow_black', 0)
         gg = int(param.get('glow_gauss', 0))
         go = param.get('glow_opacity', 0)
@@ -541,7 +550,7 @@ class ColorTemperatureEffect(Effect):
         Y = param.get('color_Y', 1.0)
         return rgb * core.invert_TempTint2RGB(temp, tint, Y, 5000)
 
-    def make_diff(self, rgb, param):
+    def make_diff(self, rgb, param, efconfig):
         temp = param.get('color_temperature', param.get('color_temperature_reset', 5000))
         tint = param.get('color_tint', param.get('color_tint_reset', 0))
         Y = param.get('color_Y', 1.0)
@@ -566,7 +575,7 @@ class DehazeEffect(Effect):
     def set2param(self, param, widget):
         param['dehaze'] = widget.ids["slider_dehaze"].value
 
-    def make_diff(self, rgb, param):
+    def make_diff(self, rgb, param, efconfig):
         de = param.get('dehaze', 0)
         if de == 0:
             self.diff = None
@@ -581,19 +590,18 @@ class DehazeEffect(Effect):
 
 class RGB2HLSEffect(Effect):
 
-    def make_diff(self, rgb, param):
+    def make_diff(self, rgb, param, efconfig):
         if self.diff is None:
-            rgb = np.array(rgb)
-            self.diff = hlsrgb.rgb_to_hls(rgb)
-            #self.diff = cv2.cvtColor(rgb, cv2.COLOR_RGB2HLS_FULL)
+            self.diff = cv2.cvtColor(np.array(rgb), cv2.COLOR_RGB2HLS_FULL)
+            #self.diff = hlsrgb.rgb_to_hls(np.array(rgb))
         return self.diff
 
 class HLS2RGBEffect(Effect):
 
-    def make_diff(self, hls, param):
+    def make_diff(self, hls, param, efconfig):
         if self.diff is None:
-            self.diff = hlsrgb.hls_to_rgb(np.array(hls))
-            #self.diff = cv2.cvtColor(np.array(hls), cv2.COLOR_HLS2RGB_FULL)
+            self.diff = cv2.cvtColor(np.array(hls), cv2.COLOR_HLS2RGB_FULL)
+            #self.diff = hlsrgb.hls_to_rgb(np.array(hls))
         return self.diff
 
 class HLSEffect(Effect):
@@ -624,8 +632,8 @@ class HLSEffect(Effect):
         for n in self.hls_effects.values():
             n.set2param(param, widget)
 
-    def make_diff(self, hls, param):
-        self.diff = pipeline.pipeline_hls(hls, self.hls_effects, param)
+    def make_diff(self, hls, param, efconfig):
+        self.diff = pipeline.pipeline_hls(hls, self.hls_effects, param, efconfig)
 
         return self.diff
     
@@ -646,7 +654,7 @@ class HLSColorEffect(Effect):
         param["hls_" + self.color_name + "_lum"] = widget.ids["slider_hls_" + self.color_name + "_lum"].value
         param["hls_" + self.color_name + "_sat"] = widget.ids["slider_hls_" + self.color_name + "_sat"].value
 
-    def make_diff(self, hls, param):
+    def make_diff(self, hls, param, efconfig):
         hue = param.get("hls_" + self.color_name + "_hue", 0)
         lum = param.get("hls_" + self.color_name + "_lum", 0)
         sat = param.get("hls_" + self.color_name + "_sat", 0)
@@ -664,216 +672,6 @@ class HLSColorEffect(Effect):
     def apply_diff(self, hls):
         return hls + self.diff
 
-class HLSOrangeEffect(Effect):
-
-    def set2widget(self, widget, param):
-        widget.ids["slider_hls_orange_hue"].set_slider_value(param.get('hls_orange_hue', 0))
-        widget.ids["slider_hls_orange_lum"].set_slider_value(param.get('hls_orange_lum', 0))
-        widget.ids["slider_hls_orange_sat"].set_slider_value(param.get('hls_orange_sat', 0))
-
-    def set2param(self, param, widget):
-        param['hls_orange_hue'] = widget.ids["slider_hls_orange_hue"].value
-        param['hls_orange_lum'] = widget.ids["slider_hls_orange_lum"].value
-        param['hls_orange_sat'] = widget.ids["slider_hls_orange_sat"].value
-
-    def make_diff(self, hls, param):
-        hue = param.get("hls_orange_hue", 0)
-        lum = param.get("hls_orange_lum", 0)
-        sat = param.get("hls_orange_sat", 0)
-        param_hash = hash((hue, lum, sat))
-        if hue == 0 and lum == 0 and sat == 0:
-            self.diff = None
-            self.hash = None
-
-        elif self.hash != param_hash:
-            self.diff = core.adjust_hls_orange(hls, (hue, lum, sat)) - hls
-            self.hash = param_hash
-
-        return self.diff
-    
-    def apply_diff(self, hls):
-        return hls + self.diff
-
-class HLSYellowEffect(Effect):
-
-    def set2widget(self, widget, param):
-        widget.ids["slider_hls_yellow_hue"].set_slider_value(param.get('hls_yellow_hue', 0))
-        widget.ids["slider_hls_yellow_lum"].set_slider_value(param.get('hls_yellow_lum', 0))
-        widget.ids["slider_hls_yellow_sat"].set_slider_value(param.get('hls_yellow_sat', 0))
-
-    def set2param(self, param, widget):
-        param['hls_yellow_hue'] = widget.ids["slider_hls_yellow_hue"].value
-        param['hls_yellow_lum'] = widget.ids["slider_hls_yellow_lum"].value
-        param['hls_yellow_sat'] = widget.ids["slider_hls_yellow_sat"].value
-
-    def make_diff(self, hls, param):
-        hue = param.get("hls_yellow_hue", 0)
-        lum = param.get("hls_yellow_lum", 0)
-        sat = param.get("hls_yellow_sat", 0)
-        param_hash = hash((hue, lum, sat))
-        if hue == 0 and lum == 0 and sat == 0:
-            self.diff = None
-            self.hash = None
-
-        elif self.hash != param_hash:
-            self.diff = core.adjust_hls_yellow(hls, (hue, lum, sat)) - hls
-            self.hash = param_hash
-
-        return self.diff
-
-    def apply_diff(self, hls):
-        return hls + self.diff
-
-class HLSGreenEffect(Effect):
-
-    def set2widget(self, widget, param):
-        widget.ids["slider_hls_green_hue"].set_slider_value(param.get('hls_green_hue', 0))
-        widget.ids["slider_hls_green_lum"].set_slider_value(param.get('hls_green_lum', 0))
-        widget.ids["slider_hls_green_sat"].set_slider_value(param.get('hls_green_sat', 0))
-
-    def set2param(self, param, widget):
-        param['hls_green_hue'] = widget.ids["slider_hls_green_hue"].value
-        param['hls_green_lum'] = widget.ids["slider_hls_green_lum"].value
-        param['hls_green_sat'] = widget.ids["slider_hls_green_sat"].value
-
-    def make_diff(self, hls, param):
-        hue = param.get("hls_green_hue", 0)
-        lum = param.get("hls_green_lum", 0)
-        sat = param.get("hls_green_sat", 0)
-        param_hash = hash((hue, lum, sat))
-        if hue == 0 and lum == 0 and sat == 0:
-            self.diff = None
-            self.hash = None
-
-        elif self.hash != param_hash:
-            self.diff = core.adjust_hls_color_one(hls, 'green', hue, lum/100*4, sat/100) - hls
-            self.hash = param_hash
-
-        return self.diff
-
-    def apply_diff(self, hls):
-        return hls + self.diff
-
-class HLSCyanEffect(Effect):
-
-    def set2widget(self, widget, param):
-        widget.ids["slider_hls_cyan_hue"].set_slider_value(param.get('hls_cyan_hue', 0))
-        widget.ids["slider_hls_cyan_lum"].set_slider_value(param.get('hls_cyan_lum', 0))
-        widget.ids["slider_hls_cyan_sat"].set_slider_value(param.get('hls_cyan_sat', 0))
-
-    def set2param(self, param, widget):
-        param['hls_cyan_hue'] = widget.ids["slider_hls_cyan_hue"].value
-        param['hls_cyan_lum'] = widget.ids["slider_hls_cyan_lum"].value
-        param['hls_cyan_sat'] = widget.ids["slider_hls_cyan_sat"].value
-
-    def make_diff(self, hls, param):
-        hue = param.get("hls_cyan_hue", 0)
-        lum = param.get("hls_cyan_lum", 0)
-        sat = param.get("hls_cyan_sat", 0)
-        param_hash = hash((hue, lum, sat))
-        if hue == 0 and lum == 0 and sat == 0:
-            self.diff = None
-            self.hash = None
-
-        elif self.hash != param_hash:
-            self.diff = core.adjust_hls_cyan_smooth(hls, (hue, lum, sat)) - hls
-            self.hash = param_hash
-
-        return self.diff
-
-    def apply_diff(self, hls):
-        return hls + self.diff
-
-class HLSBlueEffect(Effect):
-
-    def set2widget(self, widget, param):
-        widget.ids["slider_hls_blue_hue"].set_slider_value(param.get('hls_blue_hue', 0))
-        widget.ids["slider_hls_blue_lum"].set_slider_value(param.get('hls_blue_lum', 0))
-        widget.ids["slider_hls_blue_sat"].set_slider_value(param.get('hls_blue_sat', 0))
-
-    def set2param(self, param, widget):
-        param['hls_blue_hue'] = widget.ids["slider_hls_blue_hue"].value
-        param['hls_blue_lum'] = widget.ids["slider_hls_blue_lum"].value
-        param['hls_blue_sat'] = widget.ids["slider_hls_blue_sat"].value
-
-    def make_diff(self, hls, param):
-        hue = param.get("hls_blue_hue", 0)
-        lum = param.get("hls_blue_lum", 0)
-        sat = param.get("hls_blue_sat", 0)
-        param_hash = hash((hue, lum, sat))
-        if hue == 0 and lum == 0 and sat == 0:
-            self.diff = None
-            self.hash = None
-
-        elif self.hash != param_hash:
-            self.diff = core.adjust_hls_blue_smooth(hls, (hue, lum, sat)) - hls
-            self.hash = param_hash
-
-        return self.diff
-
-    def apply_diff(self, hls):
-        return hls + self.diff
-
-class HLSPurpleEffect(Effect):
-
-    def set2widget(self, widget, param):
-        widget.ids["slider_hls_purple_hue"].set_slider_value(param.get('hls_purple_hue', 0))
-        widget.ids["slider_hls_purple_lum"].set_slider_value(param.get('hls_purple_lum', 0))
-        widget.ids["slider_hls_purple_sat"].set_slider_value(param.get('hls_purple_sat', 0))
-
-    def set2param(self, param, widget):
-        param['hls_purple_hue'] = widget.ids["slider_hls_purple_hue"].value
-        param['hls_purple_lum'] = widget.ids["slider_hls_purple_lum"].value
-        param['hls_purple_sat'] = widget.ids["slider_hls_purple_sat"].value
-
-    def make_diff(self, hls, param):
-        hue = param.get("hls_purple_hue", 0)
-        lum = param.get("hls_purple_lum", 0)
-        sat = param.get("hls_purple_sat", 0)
-        param_hash = hash((hue, lum, sat))
-        if hue == 0 and lum == 0 and sat == 0:
-            self.diff = None
-            self.hash = None
-
-        elif self.hash != param_hash:
-            self.diff = core.adjust_hls_purple_smooth(hls, (hue, lum, sat)) - hls
-            self.hash = param_hash
-
-        return self.diff
-
-    def apply_diff(self, hls):
-        return hls + self.diff
-
-class HLSMagentaEffect(Effect):
-
-    def set2widget(self, widget, param):
-        widget.ids["slider_hls_magenta_hue"].set_slider_value(param.get('hls_magenta_hue', 0))
-        widget.ids["slider_hls_magenta_lum"].set_slider_value(param.get('hls_magenta_lum', 0))
-        widget.ids["slider_hls_magenta_sat"].set_slider_value(param.get('hls_magenta_sat', 0))
-
-    def set2param(self, param, widget):
-        param['hls_magenta_hue'] = widget.ids["slider_hls_magenta_hue"].value
-        param['hls_magenta_lum'] = widget.ids["slider_hls_magenta_lum"].value
-        param['hls_magenta_sat'] = widget.ids["slider_hls_magenta_sat"].value
-
-    def make_diff(self, hls, param):
-        hue = param.get("hls_magenta_hue", 0)
-        lum = param.get("hls_magenta_lum", 0)
-        sat = param.get("hls_magenta_sat", 0)
-        param_hash = hash((hue, lum, sat))
-        if hue == 0 and lum == 0 and sat == 0:
-            self.diff = None
-            self.hash = None
-
-        elif self.hash != param_hash:
-            self.diff = core.adjust_hls_magenta_smooth(hls, (hue, lum, sat)) - hls
-            self.hash = param_hash
-
-        return self.diff
-
-    def apply_diff(self, hls):
-        return hls + self.diff
-
 class ExposureEffect(Effect):
 
     def set2widget(self, widget, param):
@@ -882,7 +680,7 @@ class ExposureEffect(Effect):
     def set2param(self, param, widget):
         param['exposure'] = widget.ids["slider_exposure"].value
 
-    def make_diff(self, rgb, param):
+    def make_diff(self, rgb, param, efconfig):
         ev = param.get('exposure', 0)
         param_hash = hash((ev))
         if ev == 0:
@@ -903,7 +701,7 @@ class ContrastEffect(Effect):
     def set2param(self, param, widget):
         param['contrast'] = widget.ids["slider_contrast"].value
 
-    def make_diff(self, rgb, param):
+    def make_diff(self, rgb, param, efconfig):
         con = param.get('contrast', 0)
         param_hash = hash((con))
         if con == 0:
@@ -924,7 +722,7 @@ class MicroContrastEffect(Effect):
     def set2param(self, param, widget):
         param['microcontrast'] = widget.ids["slider_microcontrast"].value
 
-    def make_diff(self, rgb, param):
+    def make_diff(self, rgb, param, efconfig):
         con = param.get('microcontrast', 0)
         param_hash = hash((con))
         if con == 0:
@@ -953,7 +751,7 @@ class ToneEffect(Effect):
         param['highlight'] = widget.ids["slider_highlight"].value
         param['midtone'] = widget.ids["slider_midtone"].value
 
-    def make_diff(self, rgb, param):
+    def make_diff(self, rgb, param, efconfig):
         black = param.get('black', 0)
         white = param.get('white', 0)
         shadow = param.get('shadow', 0)
@@ -977,7 +775,7 @@ class HighlightCompressEffect(Effect):
     def set2param(self, param, widget):
         param['highlight_compress'] = 1 if widget.ids["switch_highlight_compress"].active == True else 0
 
-    def make_diff(self, rgb, param):
+    def make_diff(self, rgb, param, efconfig):
         hc = param.get('highlight_compress', 1)
         if hc <= 0:
             self.diff = None
@@ -1005,7 +803,7 @@ class LevelEffect(Effect):
         param['white_level'] = wl
         param['mid_level'] = ml
 
-    def make_diff(self, rgb, param):
+    def make_diff(self, rgb, param, efconfig):
         bl = param.get('black_level', 0)
         wl = param.get('white_level', 255)
         ml = param.get('mid_level', 127)
@@ -1028,7 +826,7 @@ class CLAHEEffect(Effect):
     def set2param(self, param, widget):
         param['clahe_intensity'] = widget.ids["slider_clahe_intensity"].value
 
-    def make_diff(self, img, param):
+    def make_diff(self, img, param, efconfig):
         ci = param.get('clahe_intensity', 0)
         if ci <= 0:
             self.diff = None
@@ -1074,8 +872,8 @@ class CurveEffect(Effect):
         for n in self.effects.values():
             n.set2param(param, widget)
 
-    def make_diff(self, rgb, param):
-        self.diff = pipeline.pipeline_curve(rgb, self.effects, param)
+    def make_diff(self, rgb, param, efconfig):
+        self.diff = pipeline.pipeline_curve(rgb, self.effects, param, efconfig)
 
         return self.diff
     
@@ -1087,7 +885,7 @@ class TonecurveEffect(Effect):
     def set2param(self, param, widget):
         param['tonecurve'] = widget.ids["tonecurve"].get_point_list()
 
-    def make_diff(self, rgb, param):
+    def make_diff(self, rgb, param, efconfig):
         pl = param.get('tonecurve', None)
         if pl is None:
             self.diff = None
@@ -1111,7 +909,7 @@ class TonecurveRedEffect(Effect):
     def set2param(self, param, widget):
         param['tonecurve_red'] = widget.ids["tonecurve_red"].get_point_list()
 
-    def make_diff(self, rgb_r, param):
+    def make_diff(self, rgb_r, param, efconfig):
         pl = param.get('tonecurve_red', None)
         if pl is None:
             self.diff = None
@@ -1135,7 +933,7 @@ class TonecurveGreenEffect(Effect):
     def set2param(self, param, widget):
         param['tonecurve_green'] = widget.ids["tonecurve_green"].get_point_list()
 
-    def make_diff(self, rgb_g, param):   
+    def make_diff(self, rgb_g, param, efconfig):   
         pl = param.get('tonecurve_green', None)
         if pl is None:
             self.diff = None
@@ -1159,7 +957,7 @@ class TonecurveBlueEffect(Effect):
     def set2param(self, param, widget):
         param['tonecurve_blue'] = widget.ids["tonecurve_blue"].get_point_list()
 
-    def make_diff(self, rgb_b, param):
+    def make_diff(self, rgb_b, param, efconfig):
         pl = param.get('tonecurve_blue', None)
         if pl is None:
             self.diff = None
@@ -1196,7 +994,7 @@ class GradingEffect(Effect):
         param["grading" + self.numstr + "_lum"] = widget.ids["grading" + self.numstr + "_color_picker"].ids['slider_lum'].value
         param["grading" + self.numstr + "_sat"] = widget.ids["grading" + self.numstr + "_color_picker"].ids['slider_sat'].value
 
-    def make_diff(self, rgb, param):
+    def make_diff(self, rgb, param, efconfig):
         pl = param.get("grading" + self.numstr, None)
         gh = param.get("grading" + self.numstr + "_hue", 0)
         gl = param.get("grading" + self.numstr + "_lum", 50)
@@ -1251,8 +1049,8 @@ class VSandSaturationEffect(Effect):
         for n in self.effects.values():
             n.set2param(param, widget)
 
-    def make_diff(self, hls, param):
-        self.diff = pipeline.pipeline_vs_and_saturation(hls, self.effects, param)
+    def make_diff(self, hls, param, efconfig):
+        self.diff = pipeline.pipeline_vs_and_saturation(hls, self.effects, param, efconfig)
 
         return self.diff
     
@@ -1264,7 +1062,7 @@ class HuevsHueEffect(Effect):
     def set2param(self, param, widget):
         param['HuevsHue'] = widget.ids["HuevsHue"].get_point_list()
 
-    def make_diff(self, hls_h, param):
+    def make_diff(self, hls_h, param, efconfig):
         hh = param.get("HuevsHue", None)
         if hh is None:
             self.diff = None
@@ -1289,7 +1087,7 @@ class HuevsLumEffect(Effect):
     def set2param(self, param, widget):
         param['HuevsLum'] = widget.ids["HuevsLum"].get_point_list()
 
-    def make_diff(self, hls_l, param):
+    def make_diff(self, hls_l, param, efconfig):
         hl = param.get("HuevsLum", None)
         if hl is None:
             self.diff = None
@@ -1314,7 +1112,7 @@ class HuevsSatEffect(Effect):
     def set2param(self, param, widget):
         param['HuevsSat'] = widget.ids["HuevsSat"].get_point_list()
 
-    def make_diff(self, hls_s, param):
+    def make_diff(self, hls_s, param, efconfig):
         hs = param.get("HuevsSat", None)
         if hs is None:
             self.diff = None
@@ -1339,7 +1137,7 @@ class LumvsLumEffect(Effect):
     def set2param(self, param, widget):
         param['LumvsLum'] = widget.ids["LumvsLum"].get_point_list()
 
-    def make_diff(self, hls_l, param):
+    def make_diff(self, hls_l, param, efconfig):
         ll = param.get("LumvsLum", None)
         if ll is None:
             self.diff = None
@@ -1364,7 +1162,7 @@ class LumvsSatEffect(Effect):
     def set2param(self, param, widget):
         param['LumvsSat'] = widget.ids["LumvsSat"].get_point_list()
 
-    def make_diff(self, hls_l, param):
+    def make_diff(self, hls_l, param, efconfig):
         ls = param.get("LumvsSat", None)
         if ls is None:
             self.diff = None
@@ -1389,7 +1187,7 @@ class SatvsLumEffect(Effect):
     def set2param(self, param, widget):
         param['SatvsLum'] = widget.ids["SatvsLum"].get_point_list()
 
-    def make_diff(self, hls_s, param):
+    def make_diff(self, hls_s, param, efconfig):
         sl = param.get("SatvsLum", None)
         if sl is None:
             self.diff = None
@@ -1414,7 +1212,7 @@ class SatvsSatEffect(Effect):
     def set2param(self, param, widget):
         param['SatvsSat'] = widget.ids["SatvsSat"].get_point_list()
 
-    def make_diff(self, hls_s, param):
+    def make_diff(self, hls_s, param, efconfig):
         ss = param.get("SatvsSat", None)
         if ss is None:
             self.diff = None
@@ -1441,7 +1239,7 @@ class SaturationEffect(Effect):
         param['saturation'] = widget.ids["slider_saturation"].value
         param['vibrance'] = widget.ids["slider_vibrance"].value
 
-    def make_diff(self, hls_s, param):
+    def make_diff(self, hls_s, param, efconfig):
         sat = param.get('saturation', 0)
         vib = param.get('vibrance', 0)
         param_hash = hash((sat, vib))
@@ -1478,7 +1276,7 @@ class LUTEffect(Effect):
         param['lut_name'] = name
         param['lut_path'] = LUTEffect.file_pathes.get(param['lut_name'], None)
 
-    def make_diff(self, rgb, param):
+    def make_diff(self, rgb, param, efconfig):
         lut_path = param.get('lut_path', None)
         if lut_path is None:
             self.diff = None
@@ -1508,7 +1306,7 @@ class LensSimulatorEffect(Effect):
         param['lens_preset'] = spinner.text if spinner.hovered_item is None else spinner.hovered_item.text
         param['lens_intensity'] = widget.ids["slider_lens_intensity"].value
 
-    def make_diff(self, rgb, param):
+    def make_diff(self, rgb, param, efconfig):
         preset = param.get('lens_preset', 'None')
         intensity = param.get('lens_intensity', 100)
         if preset == 'None' or intensity <= 0:
@@ -1539,7 +1337,7 @@ class FilmSimulationEffect(Effect):
         param['film_preset'] = spinner.text if spinner.hovered_item is None else spinner.hovered_item.text
         param['film_intensity'] = widget.ids["slider_film_intensity"].value
 
-    def make_diff(self, rgb, param):
+    def make_diff(self, rgb, param, efconfig):
         preset = param.get('film_preset', 'None')
         intensity = param.get('film_intensity', 100)
         if preset == 'None' or intensity <= 0:
@@ -1576,7 +1374,7 @@ class Mask2Effect(Effect):
         param['mask2_sat_max'] = widget.ids["slider_mask2_sat_max"].value
         param['mask2_blur'] = widget.ids["slider_mask2_blur"].value
 
-    def make_diff(self, rgb, param):
+    def make_diff(self, rgb, param, efconfig):
         hdis = param.get('mask2_hue_distance', 359)
         lmin = param.get('mask2_lum_min', 0)
         lmax = param.get('mask2_lum_max', 255)
@@ -1611,7 +1409,7 @@ class CorrectOverexposedAreas(Effect):
         param["correct_overexposed_areas_green"] = widget.ids["cp_correct_overexposed_areas"].ids['slider_green'].value
         param["correct_overexposed_areas_blue"] = widget.ids["cp_correct_overexposed_areas"].ids['slider_blue'].value
 
-    def make_diff(self, img, param):
+    def make_diff(self, img, param, efconfig):
         coa = param.get('correct_overexposed_areas', 0)
         coabl = param.get('correct_overexposed_areas_blur', 0)
         coar = param.get("correct_overexposed_areas_red", 0)
@@ -1641,7 +1439,7 @@ class VignetteEffect(Effect):
         param['vignette_intensity'] = widget.ids["slider_vignette_intensity"].value
         param['vignette_radius_percent'] = widget.ids["slider_vignette_radius_percent"].value
 
-    def make_diff(self, rgb, disp_info, param):
+    def make_diff(self, rgb, param, efconfig):
         vi = param.get('vignette_intensity', 0)
         vr = param.get('vignette_radius_percent', 0)
         pce = param.get('crop_enable', False)
@@ -1652,8 +1450,8 @@ class VignetteEffect(Effect):
         else:
             param_hash = hash((vi, vr))
             if self.hash != param_hash:
-                _, _, offset_x, offset_y = core.crop_size_and_offset_from_texture(config.get_config('preview_size'), config.get_config('preview_size'), disp_info)
-                self.diff = core.apply_vignette(rgb, vi, vr, disp_info, param.get('crop_rect'), (offset_x, offset_y))
+                _, _, offset_x, offset_y = core.crop_size_and_offset_from_texture(config.get_config('preview_size'), config.get_config('preview_size'), efconfig.disp_info)
+                self.diff = core.apply_vignette(rgb, vi, vr, efconfig.disp_info, param.get('crop_rect'), (offset_x, offset_y))
                 self.hash = param_hash
         
         return self.diff
