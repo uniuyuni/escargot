@@ -232,3 +232,31 @@ def dpi_scale_width(ref):
 def dpi_scale_height(ref):
     return ref * (KVWindow.dpi / 96)
     #return ref * (KVWindow.height / 800)
+
+
+def adjust_to_multiple(image, size=8, mode='constant'):
+    # 画像の高さと幅を取得
+    h, w = image.shape[:2]
+    
+    # 8の倍数に切り上げた新しいサイズを計算
+    new_h = (h + size-1) // size * size
+    new_w = (w + size-1) // size * size
+    
+    # パディング量を計算
+    pad_h = new_h - h
+    pad_w = new_w - w
+    
+    # パディング幅を設定（次元ごとに指定）
+    pad_width = [(0, pad_h), (0, pad_w)] + [(0, 0)] * (image.ndim - 2)
+    
+    # 画像の下側と右側をエッジ値でパディング
+    padded_image = np.pad(image, pad_width=pad_width, mode=mode)
+    
+    return padded_image, (h, w)
+
+def restore_original_size(padded_image, original_size):
+    # 元のサイズを取得
+    h_orig, w_orig = original_size
+    
+    # パディングされた部分を切り取って元のサイズに復元
+    return padded_image[:h_orig, :w_orig, ...]
