@@ -1,19 +1,27 @@
 
+import os
 import numpy as np
 import torch
 import cv2
 import time
 import splitimage
-from models.network_scunet import SCUNet as net
 
-def setup_model(model_path='model_zoo/scunet_color_real_gan.pth', device='cpu'):
+# 実行パス違い吸収
+_cwd = os.getcwd()
+if 'SCUNet' in os.getcwd():
+    from models.network_scunet import SCUNet
+else:
+    from .models.network_scunet import SCUNet
+    _cwd = os.path.join(_cwd, "SCUNet")
+
+def setup_model(model_path=os.path.join(_cwd, "model_zoo/scunet_color_real_gan.pth"), device='cpu'):
     """モデルを初期化してロードする"""
-    model = net(in_nc=3, config=[4]*7, dim=64)  # カラー入力用
+    model = SCUNet(in_nc=3, config=[4]*7, dim=64)  # カラー入力用
     model.load_state_dict(torch.load(model_path))
     model = model.eval().to(device)
     return model
 
-def denoise_image(model, np_image, device='cuda'):
+def denoise_image(model, np_image, device='cpu'):
     """
     numpy画像（float32, [0,1]範囲）をデノイズ
     入力: (H,W,3)のnumpy配列

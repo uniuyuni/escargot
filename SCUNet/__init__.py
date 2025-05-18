@@ -1,0 +1,1 @@
+from SCUNet.predict import *
