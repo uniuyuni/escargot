@@ -45,11 +45,11 @@ def denoise_image_helper(model, np_image, device='cpu'):
 
     denoised_images = []
     for i, image in enumerate(split_images):
-        print(f"SCUNet Denoise Predict {i+1} / {len(split_images)}")
+        print(f"SCUNet Predict {i+1} / {len(split_images)}")
         denoised_images.append(denoise_image(model, image, device))
 
     result = splitimage.combine_image_with_overlap(denoised_images, split_info)
-    print("Denoising completed with SCUNet")
+    print("Completed with SCUNet")
 
     return result
 
@@ -58,7 +58,8 @@ if __name__ == "__main__":
     input_rgb = cv2.imread("DSCF6765-small.jpg", cv2.IMREAD_COLOR_RGB).astype(np.float32) / 255.0
         
     # モデルセットアップ
-    device = 'cuda' if torch.cuda.is_available() else 'mps'
+    device = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
+    print( "Device set " + device)
     model = setup_model(device=device)
     
     # 時間計測
@@ -72,5 +73,5 @@ if __name__ == "__main__":
     # 結果表示
     view_bgr = cv2.cvtColor((result * 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
     cv2.imwrite("result.jpg", view_bgr)
-    cv2.imshow("SCUNet", view_bgr)
+    cv2.imshow("Result", view_bgr)
     cv2.waitKey(-1)
